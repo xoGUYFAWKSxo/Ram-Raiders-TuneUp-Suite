@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TuneUpEngine/TuneUpEngine.csproj" />
+  <Project Path="TuneUpUI/TuneUpUI.csproj" />
+</Solution>

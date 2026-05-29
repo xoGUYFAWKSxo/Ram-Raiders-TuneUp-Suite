@@ -1,0 +1,1231 @@
+<Window x:Class="TuneUpUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:TuneUpUI"
+        mc:Ignorable="d"
+        Title="Ram Raiders TuneUp Suite" 
+        Icon="/TuneUpIcon.ico"
+        Height="680" Width="1040"
+        Background="{StaticResource BrushBgDeep}"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        BorderBrush="#252535"
+        BorderThickness="1"
+        Loaded="Window_Loaded">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- Custom Title Bar -->
+            <RowDefinition Height="40"/>
+            <!-- Main Content Area -->
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid.ColumnDefinitions>
+            <!-- Sidebar -->
+            <ColumnDefinition Width="220"/>
+            <!-- Content -->
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- TITLE BAR (Spans both columns) -->
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource BrushBgDark}" 
+                BorderBrush="#252535" BorderThickness="0,0,0,1" MouseDown="TitleBar_MouseDown">
+            <Grid Margin="15,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="10" Height="10" Fill="{StaticResource BrushNeonAccent}" Margin="0,0,10,0"/>
+                    <TextBlock Text="RAM RAIDERS TUNEUP SUITE" Foreground="{StaticResource BrushTextMain}" 
+                               FontWeight="Bold" FontSize="12"/>
+                    <Border CornerRadius="4" Background="#1D2A3A" Margin="10,0" Padding="6,2">
+                        <TextBlock Text="PRO 2026" Foreground="{StaticResource BrushAccentCyan}" 
+                                   FontWeight="Bold" FontSize="9"/>
+                    </Border>
+                </StackPanel>
+
+                <!-- Window Control Buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="&#xE713;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource BrushTextMuted}" 
+                            Background="Transparent" BorderThickness="0" Width="30" Height="30" Cursor="Hand" 
+                            Click="SettingsButton_Click" ToolTip="Settings" Margin="0,0,5,0"/>
+                    <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource BrushTextMuted}" 
+                            Background="Transparent" BorderThickness="0" Width="30" Height="30" Cursor="Hand" 
+                            Click="MinButton_Click" ToolTip="Minimize"/>
+                    <Button Content="&#xE106;" FontFamily="Segoe MDL2 Assets" Foreground="#EF4444" 
+                            Background="Transparent" BorderThickness="0" Width="30" Height="30" Cursor="Hand" 
+                            Click="CloseButton_Click" ToolTip="Close"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- SIDEBAR -->
+        <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource BrushBgDark}" 
+                BorderBrush="#252535" BorderThickness="0,0,1,0" Padding="15,20">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Sidebar Header -->
+                <StackPanel Grid.Row="0" Margin="5,0,0,25">
+                    <TextBlock Text="SYSTEM HEALTH" Foreground="{StaticResource BrushTextMuted}" 
+                               FontSize="10" FontWeight="Bold"/>
+                </StackPanel>
+
+                <!-- Sidebar RadioButtons as Nav Items -->
+                <StackPanel Grid.Row="1">
+                    <RadioButton x:Name="NavDashboard" Style="{StaticResource SidebarButton}" IsChecked="True" Checked="NavButton_Checked" Tag="0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Dashboard"/>
+                        </StackPanel>
+                    </RadioButton>
+                    
+                    <RadioButton x:Name="NavCleaner" Style="{StaticResource SidebarButton}" Checked="NavButton_Checked" Tag="1">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74C;" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="System Cleaner"/>
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="NavRegistry" Style="{StaticResource SidebarButton}" Checked="NavButton_Checked" Tag="2">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Registry Guard"/>
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="NavRepair" Style="{StaticResource SidebarButton}" Checked="NavButton_Checked" Tag="3">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Component Repair"/>
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="NavMonitor" Style="{StaticResource SidebarButton}" Checked="NavButton_Checked" Tag="4">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9F5;" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Live Monitor"/>
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="NavHardware" Style="{StaticResource SidebarButton}" Checked="NavButton_Checked" Tag="6">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Gaming/OS Tweaks"/>
+                        </StackPanel>
+                    </RadioButton>
+
+                    <!-- 7. OS TOOLS -->
+                    <RadioButton x:Name="NavOsTools" Style="{StaticResource SidebarButton}" Checked="NavButton_Checked" Tag="7">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE82D;" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Windows Resources"/>
+                        </StackPanel>
+                    </RadioButton>
+
+                    <!-- 8. STORAGE TOOLS -->
+                    <RadioButton x:Name="NavStorage" Style="{StaticResource SidebarButton}" Checked="NavButton_Checked" Tag="8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE82D;" FontFamily="Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Storage Tools"/>
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+
+                <!-- Connection Status Footer -->
+                <Border Grid.Row="2" Background="#14141E" CornerRadius="8" Padding="10">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#EF4444" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="TxtStatus" Text="Engine Offline" Foreground="{StaticResource BrushTextMain}" FontSize="11" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <TextBlock Text="Named Pipe Local Server" Foreground="{StaticResource BrushTextMuted}" FontSize="9"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- MAIN CONTENT AREA -->
+        <Grid Grid.Row="1" Grid.Column="1" Margin="25">
+            <TabControl x:Name="ContentTabControl" Background="Transparent" BorderThickness="0" Padding="0">
+                <TabControl.ItemContainerStyle>
+                    <Style TargetType="TabItem">
+                        <Setter Property="Visibility" Value="Collapsed"/> <!-- Hide Tab Headers -->
+                    </Style>
+                </TabControl.ItemContainerStyle>
+
+                <!-- TAB 0: DASHBOARD -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Dynamic Health Stats Banner -->
+                        <Border Grid.Row="0" Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Metric 1: Physical Memory -->
+                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                    <TextBlock Text="AVAILABLE MEMORY" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock x:Name="TxtFreeRamPercent" Text="-- %" Foreground="{StaticResource BrushAccentCyan}" FontSize="28" FontWeight="Bold" Margin="0,5"/>
+                                    <TextBlock x:Name="TxtFreeRamBytes" Text="-- GB / -- GB" Foreground="{StaticResource BrushTextMain}" FontSize="12"/>
+                                </StackPanel>
+
+                                <!-- Metric 2: Standby List Size -->
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                    <TextBlock Text="STANDBY LIST SIZE" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock x:Name="TxtStandbyListSize" Text="-- MB" Foreground="{StaticResource BrushAccentPurple}" FontSize="28" FontWeight="Bold" Margin="0,5"/>
+                                    <TextBlock Text="Reclaimable inactive pages" Foreground="{StaticResource BrushTextMain}" FontSize="12"/>
+                                </StackPanel>
+
+                                <!-- Metric 3: Saved Total -->
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                    <TextBlock Text="TOTAL MEMORY RECLAIMED" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold"/>
+                                    <TextBlock x:Name="TxtTotalSaved" Text="0 MB" Foreground="{StaticResource BrushAccentGreen}" FontSize="28" FontWeight="Bold" Margin="0,5"/>
+                                    <TextBlock Text="Freed this session" Foreground="{StaticResource BrushTextMain}" FontSize="12"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="3*"/>
+                                <ColumnDefinition Width="2*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Column 1: Core Toggles & Actions (Scrollable for future expansions) -->
+                            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled" Margin="0,0,15,15">
+                                <StackPanel Margin="0,0,10,20">
+                                    <!-- Standby purge card -->
+                                    <Border Style="{StaticResource GlassCard}" Margin="0,0,0,15">
+                                        <StackPanel>
+                                            <TextBlock Text="Standby Page Cleaner" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,5"/>
+                                            <TextBlock Text="Clear standby cache list pages instantly. This is a non-placebo RAM release, which keeps working sets intact and flushes only dead standby cache layers back to system pool." 
+                                                       Foreground="{StaticResource BrushTextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,15"/>
+                                            <StackPanel>
+                                                <Button Content="Purge Standby Memory" Style="{StaticResource PremiumButton}" Width="200" Click="BtnPurgeMemory_Click" HorizontalAlignment="Left" Margin="0,0,0,15"/>
+                                                <CheckBox x:Name="ToggleAutoPurge" Style="{StaticResource PremiumToggle}" Checked="ToggleAutoPurge_Checked" Unchecked="ToggleAutoPurge_Unchecked">
+                                                    <StackPanel Margin="5,0,0,0">
+                                                        <TextBlock Text="Auto-Purge (Free &lt; 10%)" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                        <TextBlock Text="Automatically flushes the Standby List when available memory drops below 10%, eliminating game stutter caused by aggressive Windows memory caching." Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                </CheckBox>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ProBalance CPU card -->
+                                    <Border Style="{StaticResource GlassCard}" Margin="0,0,0,15">
+                                        <StackPanel>
+                                            <TextBlock Text="ProBalance CPU Priority Governor" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,5"/>
+                                            <TextBlock Text="Prevents system lag during background tasks. When a background thread spikes a CPU core above 95% for more than 2 seconds, the engine dynamically lowers its priority class to Below Normal." 
+                                                       Foreground="{StaticResource BrushTextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,15"/>
+                                            <CheckBox x:Name="ToggleProBalance" Style="{StaticResource PremiumToggle}" Content="Enable ProBalance Monitoring" 
+                                                      Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" Checked="ToggleProBalance_Checked" Unchecked="ToggleProBalance_Unchecked"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Game Mode Booster card -->
+                                    <Border Style="{StaticResource GlassCard}">
+                                        <StackPanel>
+                                            <TextBlock Text="Game Mode Booster" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,5"/>
+                                            <TextBlock Text="Intelligent foreground detection. When a game process takes focus, the governor raises its priority class to High and dynamically throttles background services to ensure minimum input lag and maximum frame rate." 
+                                                       Foreground="{StaticResource BrushTextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,15"/>
+                                            <CheckBox x:Name="ToggleGameMode" Style="{StaticResource PremiumToggle}" Content="Enable Game Mode Booster" 
+                                                      Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" Checked="ToggleGameMode_Checked" Unchecked="ToggleGameMode_Unchecked"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- Column 2: Quick Logs -->
+                            <Border Grid.Column="1" Style="{StaticResource GlassCard}">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="ENGINE ACTIVITY LOG" Foreground="White" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
+                                    <ListBox Grid.Row="1" x:Name="LstDashboardEvents" Background="Transparent" BorderThickness="0" Foreground="{StaticResource BrushTextMain}" FontSize="11">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </TabItem>
+
+                <!-- TAB 1: SYSTEM CLEANER -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock Text="Advanced System Cleaner" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="Locate and clean massive application caches, temporary structures, and logs using our custom, high-speed scanner engine." 
+                                       Foreground="{StaticResource BrushTextMuted}" FontSize="13" Margin="0,4,0,12"/>
+                            <!-- Scan type toggles -->
+                            <WrapPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <CheckBox x:Name="ChkTempFiles" Style="{StaticResource PremiumToggle}" Content="Scan Temp Files" Margin="0,0,20,0" ToolTip="Removes temporary system and application files to free up disk space and reduce clutter."/>
+                                <CheckBox x:Name="ChkWinUpdate" Style="{StaticResource PremiumToggle}" Content="Scan Windows Update Cache" Margin="0,0,20,0" ToolTip="Clears old, residual Windows Update downloaded files to reclaim gigabytes of storage."/>
+                                <CheckBox x:Name="ChkBrowserCache" Style="{StaticResource PremiumToggle}" Content="Scan Browser Cache" Margin="0,0,20,0" ToolTip="Wipes internet history and cache from major browsers to improve privacy and free up space."/>
+                                <CheckBox x:Name="ChkEmptyFolders" Style="{StaticResource PremiumToggle}" Content="Scan Empty User Folders" Margin="0,0,20,0" ToolTip="Identifies and safely removes empty, leftover folders from uninstalled applications."/>
+                                <CheckBox x:Name="ChkDuplicateFiles" Style="{StaticResource PremiumToggle}" Content="Scan Duplicate User Files" ToolTip="Finds duplicate files across your user directory to help you eliminate redundant data."/>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <!-- Rules Grid -->
+                        <Border Grid.Row="1" Style="{StaticResource GlassCard}">
+                            <ListView x:Name="LvwJunkItems" Background="Transparent" BorderThickness="0" 
+                                      Foreground="White" SelectionChanged="LvwJunkItems_SelectionChanged"
+                                      GridViewColumnHeader.Click="LvwJunkItems_ColumnHeaderClick">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="Select" Width="60">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Header="Category" Width="150">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Category}" Foreground="White"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Header="Cleaner Target" Width="250">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding RuleName}" Foreground="White" TextWrapping="Wrap"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Header="Size" Width="120">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding SizeDisplay}" Foreground="{StaticResource BrushAccentCyan}"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Header="Files Found" Width="90">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding FilePaths.Count}" Foreground="White"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </Border>
+
+                        <!-- File Detail Panel (shown on row selection) -->
+                        <Border x:Name="PnlFileDetail" Grid.Row="2" 
+                                Background="#12121E" BorderBrush="#252535" BorderThickness="1"
+                                CornerRadius="8" Margin="0,8,0,0" Padding="12,10"
+                                Visibility="Collapsed" MaxHeight="160">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Panel Header -->
+                                <Grid Grid.Row="0" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="13" 
+                                                   Foreground="{StaticResource BrushAccentCyan}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtDetailHeader" Text="Select a row to inspect its files" 
+                                                   Foreground="{StaticResource BrushAccentCyan}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="Click a path to open its location in Explorer" 
+                                               Foreground="{StaticResource BrushTextMuted}" FontSize="11" VerticalAlignment="Center"/>
+                                </Grid>
+
+                                <!-- Scrollable file path list -->
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl x:Name="IcFilePaths">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,2" Padding="8,5" Background="#1A1A2E" CornerRadius="4"
+                                                        Cursor="Hand" MouseLeftButtonUp="FilePathItem_Click">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="&#xE81D;" FontFamily="Segoe MDL2 Assets" 
+                                                                   Foreground="{StaticResource BrushTextMuted}" FontSize="12" 
+                                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding}" Foreground="White" 
+                                                                   FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Grid.Column="2" Text="&#xE713;" FontFamily="Segoe MDL2 Assets" 
+                                                                   Foreground="{StaticResource BrushAccentCyan}" FontSize="11"
+                                                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+
+                        <!-- Footer Actions -->
+                        <Border Grid.Row="3" Margin="0,10,0,0" Padding="10,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid VerticalAlignment="Center" Margin="0,0,20,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="TxtCleanerStatus" Text="Ready to scan file structures" Foreground="{StaticResource BrushTextMain}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    <ProgressBar Grid.Column="1" x:Name="ProgCleaner" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" Visibility="Collapsed"/>
+                                </Grid>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button x:Name="BtnToggleSelectJunk" Content="&#xE73A; Deselect All" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False"/>
+                                    <Button Content="Scan for Junk Files" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="160" Click="BtnScanJunk_Click"/>
+                                    <Button x:Name="BtnCleanJunk" Content="Empty Junk Files" Style="{StaticResource PremiumButton}" Width="160" IsEnabled="False" Click="BtnCleanJunk_Click"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+
+                <!-- TAB 2: REGISTRY GUARD -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+                            <TextBlock Text="Registry Integrity Guard" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="Ditch placebo registry sweepers. We scan exclusively for structural integrity defects: dead startup links, missing approved shell extensions, and broken COM/OLE servers that cause Windows Explorer lag." 
+                                       Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <!-- Issues List -->
+                        <Border Grid.Row="1" Style="{StaticResource GlassCard}">
+                            <Grid>
+                                <ListView x:Name="LvwRegistryIssues" Background="Transparent" BorderThickness="0" Foreground="White" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="Select" Width="60">
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                            <GridViewColumn Header="Issue Title" Width="220">
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Title}" Foreground="White" TextWrapping="Wrap"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                            <GridViewColumn Header="Registry Location" Width="240">
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding KeyPath}" Foreground="{StaticResource BrushTextMuted}" TextWrapping="Wrap"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                            <GridViewColumn Header="Target Path (Missing)" Width="200">
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding TargetPath}" Foreground="#EF4444" TextWrapping="Wrap"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                            </Grid>
+                        </Border>
+
+                        <!-- Footer Actions -->
+                        <Border Grid.Row="2" Margin="0,15,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock x:Name="TxtRegistryStatus" Text="No scan performed yet" Foreground="{StaticResource BrushTextMain}" FontSize="12" VerticalAlignment="Center"/>
+                                    <ProgressBar x:Name="ProgRegistry" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" Visibility="Collapsed"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button Content="Scan Registry Integrity" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="180" Click="BtnScanRegistry_Click"/>
+                                    <Button x:Name="BtnRepairRegistry" Content="Repair Defective Entries" Style="{StaticResource PremiumButton}" Width="180" IsEnabled="False" Click="BtnRepairRegistry_Click"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+                <!-- TAB 3: COMPONENT REPAIR -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+                            <TextBlock Text="System File Baseline Repair" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="Instead of blindly deleting system nodes, we interface with Windows CBS (Component Store) logs. If corruption is found, we trigger elevated system tools to verify and repair binaries directly from the Microsoft baseline." 
+                                       Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <!-- Logs list -->
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Style="{StaticResource GlassCard}">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="CBS Log Corruption Diagnostics" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,10"/>
+                                    <ListBox Grid.Row="1" x:Name="LstCbsCorruptions" Background="Transparent" BorderThickness="0" Foreground="{StaticResource BrushTextMain}" FontSize="11">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" Foreground="#EF4444" TextWrapping="Wrap" Margin="0,2"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <!-- Footer Actions -->
+                        <Border Grid.Row="3" Margin="0,15,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock x:Name="TxtComponentStatus" Text="Ready to analyze CBS logs" Foreground="{StaticResource BrushTextMain}" FontSize="12" VerticalAlignment="Center"/>
+                                    <ProgressBar x:Name="ProgComponent" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" Visibility="Collapsed"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button Content="Verify CBS Logs" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="180" Click="BtnScanComponent_Click"/>
+                                    <Button x:Name="BtnRepairComponent" Content="Run baseline Repair" Style="{StaticResource PremiumButton}" Width="180" Click="BtnRepairComponent_Click"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+                <!-- TAB 4: LIVE MONITOR -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+                            <TextBlock Text="Active Resource Monitoring Console" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="View full real-time event notifications from the background ProBalance governor and memory standby list manager." 
+                                       Foreground="{StaticResource BrushTextMuted}" FontSize="13" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <!-- DPC Latency Watchdog -->
+                        <Border Grid.Row="1" Style="{StaticResource GlassCard}" Margin="0,0,0,15">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="DPC Latency Watchdog" Foreground="White" FontSize="14" FontWeight="Bold"/>
+                                        <TextBlock x:Name="TxtLatencyStatus" Foreground="{StaticResource BrushTextMuted}" FontSize="12"
+                                                   Text="Monitor kernel driver interrupt latency. Spikes above 1,000&#x03BC;s indicate a problematic driver."/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button x:Name="BtnStartLatency" Content="&#xE768; Start Audit" Style="{StaticResource PremiumButton}"
+                                                Padding="12,5" FontSize="12" Margin="0,0,8,0" Click="BtnStartLatency_Click"/>
+                                        <Button x:Name="BtnStopLatency" Content="&#xE71A; Stop" Style="{StaticResource OutlineButton}"
+                                                Padding="12,5" FontSize="12" IsEnabled="False" Click="BtnStopLatency_Click"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Driver table header -->
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="70"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Driver" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" Text="Max DPC (&#x03BC;s)" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="2" Text="Avg DPC (&#x03BC;s)" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="3" Text="Status" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Center"/>
+                                </Grid>
+                                <Separator Background="#333350" Margin="0,0,0,6"/>
+
+                                <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl x:Name="IcLatencyDrivers">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,2,8,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                        <ColumnDefinition Width="70"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding FriendlyName}" Foreground="White" FontSize="12"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding MaxDpcMicroseconds, StringFormat='{}{0:F0}'}" 
+                                                               Foreground="{Binding IsSpike, Converter={x:Static local:BoolToColorConverter.Instance}}" 
+                                                               FontSize="12" TextAlignment="Right"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding AvgDpcMicroseconds, StringFormat='{}{0:F0}'}" 
+                                                               Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextAlignment="Right"/>
+                                                    <Border Grid.Column="3" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
+                                                            Background="{Binding IsSpike, Converter={x:Static local:BoolToBadgeConverter.Instance}}">
+                                                        <TextBlock Text="{Binding Status}" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Event Grid -->
+                        <Border Grid.Row="2" Style="{StaticResource GlassCard}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="Live Engine Output Stream" Foreground="White" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
+                                <ListBox Grid.Row="1" x:Name="LstMonitorEvents" Background="Transparent" BorderThickness="0" Foreground="{StaticResource BrushTextMain}" FontSize="12">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#1F1F2B" BorderThickness="0,0,0,1" Padding="0,5">
+                                                <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+
+                <!-- TAB 5: SETTINGS -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <!-- Header -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+                            <TextBlock Text="Application Preferences" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="Configure startup preferences, notification behaviors, and low-level system tray integration." 
+                                       Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        
+                        <!-- Cards container (Scrollable for flexibility) -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <!-- Card 1: Basic Settings -->
+                                <Border Grid.Column="0" Style="{StaticResource GlassCard}" Margin="0,0,10,0" VerticalAlignment="Top">
+                                    <StackPanel>
+                                        <TextBlock Text="Basic Settings" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,15"/>
+                                        
+                                        <!-- Start on Startup -->
+                                        <CheckBox x:Name="ChkStartOnStartup" Style="{StaticResource PremiumToggle}" Margin="0,0,0,15" Checked="SettingToggle_Changed" Unchecked="SettingToggle_Changed">
+                                            <StackPanel Margin="5,0,0,0">
+                                                <TextBlock Text="Start on Startup" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                <TextBlock Text="Automatically launch Ram Raiders TuneUp Suite when Windows starts" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </CheckBox>
+                                        
+                                        <!-- Launch UI Minimized -->
+                                        <CheckBox x:Name="ChkLaunchUiMinimized" Style="{StaticResource PremiumToggle}" Margin="0,0,0,15" Checked="SettingToggle_Changed" Unchecked="SettingToggle_Changed">
+                                            <StackPanel Margin="5,0,0,0">
+                                                <TextBlock Text="Launch UI Minimized" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                <TextBlock Text="Launch the user interface minimized to the system tray" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </CheckBox>
+                                        
+                                        <!-- Minimize to Tray on Close -->
+                                        <CheckBox x:Name="ChkMinimizeToTrayOnClose" Style="{StaticResource PremiumToggle}" Checked="SettingToggle_Changed" Unchecked="SettingToggle_Changed">
+                                            <StackPanel Margin="5,0,0,0">
+                                                <TextBlock Text="Minimize to Tray on Close" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                <TextBlock Text="Hide the window instead of closing the application" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </CheckBox>
+                                    </StackPanel>
+                                </Border>
+                                
+                                <!-- Card 2: Notification settings -->
+                                <Border Grid.Column="1" Style="{StaticResource GlassCard}" Margin="10,0,0,0" VerticalAlignment="Top">
+                                    <StackPanel>
+                                        <TextBlock Text="Notification Settings" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,15"/>
+                                        
+                                        <!-- Enable Tray Notifications -->
+                                        <CheckBox x:Name="ChkEnableNotifications" Style="{StaticResource PremiumToggle}" Margin="0,0,0,15" Checked="SettingToggle_Changed" Unchecked="SettingToggle_Changed">
+                                            <StackPanel Margin="5,0,0,0">
+                                                <TextBlock Text="Enable Tray Notifications" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                <TextBlock Text="Display system tray notifications for background optimizations" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </CheckBox>
+                                        
+                                        <!-- ProBalance Toast -->
+                                        <CheckBox x:Name="ChkProBalanceToast" Style="{StaticResource PremiumToggle}" Margin="0,0,0,15" Checked="SettingToggle_Changed" Unchecked="SettingToggle_Changed">
+                                            <StackPanel Margin="5,0,0,0">
+                                                <TextBlock Text="ProBalance Toast Alerts" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                <TextBlock Text="Notify when a background process CPU priority is lowered" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </CheckBox>
+                                        
+                                        <!-- Memory Purge Toast -->
+                                        <CheckBox x:Name="ChkMemoryPurgeToast" Style="{StaticResource PremiumToggle}" Checked="SettingToggle_Changed" Unchecked="SettingToggle_Changed">
+                                            <StackPanel Margin="5,0,0,0">
+                                                <TextBlock Text="Memory Purge Alerts" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                <TextBlock Text="Notify when standby memory pages are flushed" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </CheckBox>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </ScrollViewer>
+                        
+                        <!-- Footer status indicator -->
+                        <Border Grid.Row="2" Margin="0,15,0,0" Padding="10">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource BrushAccentCyan}" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Settings are automatically saved and applied" Foreground="{StaticResource BrushTextMuted}" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+                                <!-- TAB 6: GAMING/OS TWEAKS -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+                            <TextBlock Text="Gaming &amp; OS Tweaks" Foreground="White" FontSize="28" FontWeight="Bold"/>
+                            <TextBlock Text="Fine-tune your Windows environment for maximum gaming performance and low latency." 
+                                       Foreground="{StaticResource BrushTextMuted}" FontSize="14" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="0,0,10,0">
+
+                                <!-- CATEGORY 1: System Tweaks -->
+                                <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,15">
+                                            <TextBlock Text="System Tweaks" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <Button Content="Apply All in this Category" Style="{StaticResource OutlineButton}" Padding="10,4" HorizontalAlignment="Right" Click="BtnApplyCategory_Click" Tag="SystemTweaks"/>
+                                        </Grid>
+                                        <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
+                                        
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable driver updates via Windows Update" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableDriverUpdates" Tag="DisableDriverUpdates" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable store apps auto updates" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableStoreUpdates" Tag="DisableStoreUpdates" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable Telemetry and Data Collection" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableTelemetry" Tag="DisableTelemetry" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Clear Virtual Memory Page File at Shutdown" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglClearPageFile" Tag="ClearPageFile" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- CATEGORY 2: Windows Usage Tweaks -->
+                                <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,15">
+                                            <TextBlock Text="Windows Usage Tweaks" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <Button Content="Apply All in this Category" Style="{StaticResource OutlineButton}" Padding="10,4" HorizontalAlignment="Right" Click="BtnApplyCategory_Click" Tag="WindowsUsage"/>
+                                        </Grid>
+                                        <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
+                                        
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable '- Shortcut' suffix for new shortcuts" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableShortcutSuffix" Tag="DisableShortcutSuffix" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable 'This App is Preventing Shutdown' Screen" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisablePreventShutdown" Tag="DisablePreventShutdown" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- CATEGORY 3: Security and Stability Tweaks -->
+                                <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,15">
+                                            <TextBlock Text="Security &amp; Stability Tweaks" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <Button Content="Apply All in this Category" Style="{StaticResource OutlineButton}" Padding="10,4" HorizontalAlignment="Right" Click="BtnApplyCategory_Click" Tag="SecurityStability"/>
+                                        </Grid>
+                                        <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
+                                        
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Close unresponsive processes to avoid system crashes" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglCloseUnresponsive" Tag="CloseUnresponsive" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable security warning for downloaded files" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableSecurityWarning" Tag="DisableSecurityWarning" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Add 'Take Ownership' option to File Explorer" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglTakeOwnership" Tag="TakeOwnership" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable SmartScreen in Windows 11" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableSmartScreen" Tag="DisableSmartScreen" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Show BSOD details instead of the sad smiley" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglShowBSODDetails" Tag="ShowBSODDetails" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Enable access to network drives from elevated apps" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglEnableNetworkDrivesElevated" Tag="EnableNetworkDrivesElevated" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable User Account Control (UAC) [HIGH RISK]" Foreground="#FF6666" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableUAC" Tag="DisableUAC" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Enable Anti-Adware feature in Windows Defender" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglEnableAntiAdware" Tag="EnableAntiAdware" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Force Windows to make crash dump upon program crash" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglForceCrashDump" Tag="ForceCrashDump" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- CATEGORY 4: Desktop Tweaks -->
+                                <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,15">
+                                            <TextBlock Text="Desktop Tweaks" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <Button Content="Apply All in this Category" Style="{StaticResource OutlineButton}" Padding="10,4" HorizontalAlignment="Right" Click="BtnApplyCategory_Click" Tag="DesktopTweaks"/>
+                                        </Grid>
+                                        <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
+                                        
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Speed up mouse hover action" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglSpeedUpMouseHover" Tag="SpeedUpMouseHover" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Speed up desktop and folders loading (icon cache)" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglSpeedUpDesktopLoading" Tag="SpeedUpDesktopLoading" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable Bing in Taskbar search" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableBingSearch" Tag="DisableBingSearch" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Add 'End Task' context menu item in Taskbar" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglTaskbarEndTask" Tag="TaskbarEndTask" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Show seconds in Taskbar clock" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglTaskbarSeconds" Tag="TaskbarSeconds" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- CATEGORY 5: File Explorer Tweaks -->
+                                <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,15">
+                                            <TextBlock Text="File Explorer Tweaks" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <Button Content="Apply All in this Category" Style="{StaticResource OutlineButton}" Padding="10,4" HorizontalAlignment="Right" Click="BtnApplyCategory_Click" Tag="FileExplorer"/>
+                                        </Grid>
+                                        <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
+                                        
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable 'You have new apps that can open this file'" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableNewAppPrompt" Tag="DisableNewAppPrompt" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Add Command Prompt As Administrator to Context Menu" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglCmdAdminContextMenu" Tag="CmdAdminContextMenu" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Enable Auto Completion in File Explorer" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglExplorerAutoComplete" Tag="ExplorerAutoComplete" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Show Drive Letters First" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglShowDriveLettersFirst" Tag="ShowDriveLettersFirst" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- CATEGORY 6: Windows Appearance Tweaks -->
+                                <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,15">
+                                            <TextBlock Text="Windows Appearance Tweaks" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <Button Content="Apply All in this Category" Style="{StaticResource OutlineButton}" Padding="10,4" HorizontalAlignment="Right" Click="BtnApplyCategory_Click" Tag="WindowsAppearance"/>
+                                        </Grid>
+                                        <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
+                                        
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Speed up Aero Snap" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglSpeedUpAeroSnap" Tag="SpeedUpAeroSnap" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Boost display speed of Windows Peek" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglSpeedUpWindowsPeek" Tag="SpeedUpWindowsPeek" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Speed up Windows menus cascading delay" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglSpeedUpMenus" Tag="SpeedUpMenus" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Enable Windows 10-like context menu" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglWin10ContextMenu" Tag="Win10ContextMenu" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable Ads in Windows 11" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableWin11Ads" Tag="DisableWin11Ads" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable blur on the Sign-in Screen" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglDisableSigninBlur" Tag="DisableSigninBlur" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Enable Battery Life Estimated Time" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglEnableBatteryEstimatedTime" Tag="EnableBatteryEstimatedTime" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Remove the Shortcut Arrow Icon" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <CheckBox Grid.Column="1" x:Name="TglRemoveShortcutArrow" Tag="RemoveShortcutArrow" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- RESTORE MISSING UI ELEMENTS FOR C# -->
+                                <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <TextBlock Text="Advanced Utilities" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,15"/>
+                                        <TextBlock x:Name="TxtMsiStatus" Text="MSI Interrupt Mode Status" Foreground="{StaticResource BrushTextMuted}" Margin="0,0,0,10"/>
+                                        
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                            <Button x:Name="BtnMsiScan" Content="Scan MSI Mode" Style="{StaticResource OutlineButton}" Click="BtnMsiScan_Click" Margin="0,0,10,0"/>
+                                            <Button x:Name="BtnMsiEnable" Content="Enable MSI Mode for GPU" Style="{StaticResource OutlineButton}" Click="BtnMsiEnable_Click"/>
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="TxtDebloatLoading" Text="AppX Loading Status" Foreground="{StaticResource BrushTextMuted}" Margin="0,0,0,10"/>
+                                        
+                                        <StackPanel x:Name="PnlServiceToggles" Margin="0,0,0,10">
+                                            <!-- Dummy Service Toggles (They are populated in code if missing) -->
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                            <Button x:Name="BtnScanAppx" Content="Scan AppX" Style="{StaticResource OutlineButton}" Click="BtnScanAppx_Click" Margin="0,0,10,0"/>
+                                            <Button x:Name="BtnRemoveAppx" Content="Remove AppX" Style="{StaticResource OutlineButton}" Click="BtnRemoveAppx_Click"/>
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="TxtNoAppx" Text="No packages found." Foreground="LightGreen" Margin="0,0,0,10" Visibility="Collapsed"/>
+                                        
+                                        <ItemsControl x:Name="IcAppxPackages" Margin="0,0,0,10">
+                                            <!-- Dynamically populated AppX packages -->
+                                        </ItemsControl>
+
+                                        <TextBlock Text="Network Stack Optimizer" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,15,0,10"/>
+                                        <TextBlock x:Name="TxtNetAutoTune" Text="AutoTune: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
+                                        <TextBlock x:Name="TxtNetEcn" Text="ECN: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
+                                        <TextBlock x:Name="TxtNetTimestamps" Text="Timestamps: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
+                                        <TextBlock x:Name="TxtNetRss" Text="RSS: Unknown" Foreground="{StaticResource BrushTextMuted}" Margin="0,0,0,10"/>
+                                        
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="BtnNetApply" Content="&#x26A1; Apply Optimizations" Style="{StaticResource OutlineButton}" Click="BtnNetApply_Click" Margin="0,0,10,0"/>
+                                            <Button x:Name="BtnNetRevert" Content="Revert Net Opt" Style="{StaticResource OutlineButton}" Click="BtnNetRevert_Click" Margin="0,0,10,0"/>
+                                            <Button x:Name="BtnNetRefresh" Style="{StaticResource OutlineButton}" Click="BtnNetRefresh_Click">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Refresh" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+                <!-- TAB 7: OS TOOLS -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <Border Grid.Row="0" Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                            <StackPanel>
+                                <TextBlock Text="Windows Resources" Foreground="White" FontSize="28" FontWeight="Bold" Margin="0,0,0,8"/>
+                                <TextBlock Text="Quick access to powerful built-in Windows management utilities." Foreground="{StaticResource BrushTextMuted}" FontSize="14"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Content Grid -->
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Button Grid.Row="0" Grid.Column="0" Content="Disk Management" Tag="diskmgmt.msc" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                            <Button Grid.Row="0" Grid.Column="1" Content="Computer Management" Tag="compmgmt.msc" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                            
+                            <Button Grid.Row="1" Grid.Column="0" Content="Task Manager" Tag="taskmgr" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                            <Button Grid.Row="1" Grid.Column="1" Content="Programs and Features" Tag="appwiz.cpl" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                            
+                            <Button Grid.Row="2" Grid.Column="0" Content="Device Manager" Tag="devmgmt.msc" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                            <Button Grid.Row="2" Grid.Column="1" Content="Event Viewer" Tag="eventvwr.msc" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                            
+                            <Button Grid.Row="3" Grid.Column="0" Content="System Properties" Tag="sysdm.cpl" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                            <Button Grid.Row="3" Grid.Column="1" Content="Control Panel" Tag="control" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+
+                            <Button Grid.Row="4" Grid.Column="0" Content="Registry Editor" Tag="regedit.exe" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                            <Button Grid.Row="4" Grid.Column="1" Content="Group Policy Editor" Tag="gpedit.msc" Style="{StaticResource OutlineButton}" Margin="10" Height="60" Click="BtnOsTool_Click"/>
+                        </Grid>
+                    </Grid>
+                </TabItem>
+
+                <!-- TAB 8: STORAGE TOOLS -->
+                <TabItem>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+                            <TextBlock Text="Storage Tools" Foreground="White" FontSize="28" FontWeight="Bold"/>
+                            <TextBlock Text="Move game directories to secondary drives using NTFS symbolic links â€” launchers never know the files moved." 
+                                       Foreground="{StaticResource BrushTextMuted}" FontSize="14" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <!-- Migrator Card -->
+                                <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <TextBlock Text="NTFS Symlink Game Migrator" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
+                                        <TextBlock Text="Select a source game directory and a destination on another drive. The engine will move the files, verify integrity, then create a transparent symbolic link at the original path." 
+                                                   Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,20"/>
+
+                                        <!-- Source Path -->
+                                        <TextBlock Text="Source Directory" Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,0,0,4"/>
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" Background="#12122A" BorderBrush="#333350" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,8,0">
+                                                <TextBlock x:Name="TxtMigSource" Foreground="White" FontSize="13" Text="No directory selected..."/>
+                                            </Border>
+                                            <Button Grid.Column="1" Content="Browse" Style="{StaticResource OutlineButton}" Padding="14,8" Click="BtnMigBrowseSource_Click"/>
+                                        </Grid>
+
+                                        <!-- Destination Path -->
+                                        <TextBlock Text="Destination Directory (on target drive)" Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,0,0,4"/>
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" Background="#12122A" BorderBrush="#333350" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,8,0">
+                                                <TextBlock x:Name="TxtMigDest" Foreground="White" FontSize="13" Text="No destination selected..."/>
+                                            </Border>
+                                            <Button Grid.Column="1" Content="Browse" Style="{StaticResource OutlineButton}" Padding="14,8" Click="BtnMigBrowseDest_Click"/>
+                                        </Grid>
+
+                                        <!-- Analysis Row -->
+                                        <TextBlock x:Name="TxtMigAnalysis" Foreground="#3B82F6" FontSize="13" Margin="0,0,0,12" Visibility="Collapsed"/>
+
+                                        <!-- Progress -->
+                                        <ProgressBar x:Name="ProgMigrate" Height="6" Margin="0,0,0,8"
+                                                     Foreground="#6366F1" Background="#1E1E3A" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="TxtMigProgress" Foreground="{StaticResource BrushTextMuted}" FontSize="12" 
+                                                   Margin="0,0,0,12" Visibility="Collapsed"/>
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="BtnMigAnalyze" Content="&#xE8B0; Analyze" Style="{StaticResource OutlineButton}"
+                                                    Padding="14,8" Margin="0,0,10,0" IsEnabled="False" Click="BtnMigAnalyze_Click"/>
+                                            <Button x:Name="BtnMigrate" Content="&#xE8DE; Migrate &amp; Symlink" Style="{StaticResource PremiumButton}"
+                                                    Padding="14,8" IsEnabled="False" Click="BtnMigrate_Click"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- History Card -->
+                                <Border Style="{StaticResource GlassCard}">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Previous Migrations" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                                            <Button Grid.Column="1" Content="&#xE72C; Refresh" Style="{StaticResource OutlineButton}"
+                                                    Padding="10,4" FontSize="12" Click="BtnMigRefreshHistory_Click"/>
+                                        </Grid>
+
+                                        <ItemsControl x:Name="IcMigrationHistory">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="#0D0D1F" CornerRadius="6" Padding="12,10" Margin="0,4">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding OriginalPath}" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
+                                                                <TextBlock Foreground="{StaticResource BrushTextMuted}" FontSize="11">
+                                                                    <Run Text="Ã¢â€ â€™ "/>
+                                                                    <Run Text="{Binding DestinationPath}"/>
+                                                                    <Run Text="  Ã¢â‚¬Â¢  "/>
+                                                                    <Run Text="{Binding SizeBytes, Converter={x:Static local:BytesConverter.Instance}}"/>
+                                                                    <Run Text="  Ã¢â‚¬Â¢  "/>
+                                                                    <Run Text="{Binding MigratedAt, StringFormat='{}{0:MMM dd, yyyy}'}"/>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                            <Border Grid.Column="1" CornerRadius="4" Padding="8,3" VerticalAlignment="Center"
+                                                                    Background="{Binding SymlinkActive, Converter={x:Static local:BoolToBadgeConverter.Instance}}">
+                                                                <TextBlock Foreground="White" FontSize="10" FontWeight="Bold"
+                                                                           Text="{Binding SymlinkActive, Converter={x:Static local:BoolToSymlinkLabelConverter.Instance}}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <TextBlock x:Name="TxtNoHistory" Text="No migrations recorded yet." 
+                                                   Foreground="{StaticResource BrushTextMuted}" FontSize="13" 
+                                                   HorizontalAlignment="Center" Margin="0,20" Visibility="Collapsed"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+
+            </TabControl>
+        </Grid>
+    </Grid>
+</Window>
+
+
+
+
+
+
