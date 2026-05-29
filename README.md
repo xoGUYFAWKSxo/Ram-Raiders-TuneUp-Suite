@@ -96,24 +96,3 @@ Simply double-click **`Start-TuneUp.bat`** in the root of the workspace folder. 
 1. Auto-compile the solution (`dotnet build`).
 2. Start the WPF Client GUI (`TuneUpUI.exe`).
 3. The GUI will automatically discover the background service, prompt for Administrator elevation (UAC prompt), and start `TuneUpEngine.exe` completely silently in the background.
-
----
-
-## Commercial Installer Compilation
-
-To generate the standalone **`RamRaidersTuneUpSuite_Setup.exe`** installer file:
-
-1. Open a terminal in the root workspace and compile published release binaries:
-   ```bash
-   dotnet publish TuneUpUI\TuneUpUI.csproj -c Release -o publish\UI -r win-x64 --self-contained false
-   dotnet publish TuneUpEngine\TuneUpEngine.csproj -c Release -o publish\Engine -r win-x64 --self-contained false
-   ```
-2. Consolidate them into the portable folder:
-   ```powershell
-   Copy-Item -Path "publish\UI\*" -Destination "publish\ReleaseSuite" -Recurse -Force
-   Copy-Item -Path "publish\Engine\*" -Destination "publish\ReleaseSuite" -Recurse -Force
-   ```
-3. Install the free compiler [Inno Setup (Stable Version)](https://jrsoftware.org/isdl.php).
-4. Open [**`installer.iss`**](installer.iss) in the compiler and click **Build** -> **Compile** (or press `F9`).
-5. Your self-contained, branded installer setup file is instantly created at:
-   `publish\Installer\RamRaidersTuneUpSuite_Setup.exe`
