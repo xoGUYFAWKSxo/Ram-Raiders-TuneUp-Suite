@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Join the waitlist for Ram Raiders TuneUp Suite — a native, high-performance C# & WPF Windows system optimization utility built without the bloat. Secure your spot today.">
+    <meta name="keywords" content="Windows TuneUp, PC Optimizer, RAM Purger, ProBalance CPU, Latency reduction, C# WPF utility, Windows Tweaking, Game Booster">
+    <meta name="author" content="Ram Raiders">
+    <title>Ram Raiders TuneUp Suite — Reclaim Your Windows Machine</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/TuneUpIcon.png">
+    
+    <!-- Force fresh resource delivery — prevent stale CDN/browser caching -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/styles.css?v=3">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header>
+        <div class="container nav-wrapper">
+            <div class="logo-container" id="app-logo-trigger">
+                <img src="assets/TuneUpIcon.png" alt="Ram Raiders TuneUp Logo" class="logo-img">
+                <div class="logo-text">RAM RAIDERS <span>TUNEUP</span></div>
+            </div>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                <div class="status-badge" style="background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.2); color: var(--accent-cyan);">
+                    <span>Powered by Google Antigravity</span>
+                </div>
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <span>v1.1 Alpha Waitlist</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <span class="hero-tag">Reclaim Your Machine</span>
+            <h1>A Native, High-Performance <span class="glow-text">Windows Tune-Up Suite</span> Built Without the Bloat.</h1>
+            <p class="hero-description">
+                Built with Google Antigravity, this is a professional-grade optimization and maintenance utility. Engineered in native C# and WPF to communicate silently over IPC with an elevated system engine, restoring absolute latency consistency, memory safety, and gaming responsiveness.
+            </p>
+
+            <!-- Remaining Seats Counter -->
+            <div class="seats-card glass-card">
+                <div class="seats-header">
+                    <span class="seats-title">Waitlist Reservations Taken</span>
+                    <span class="seats-number"><span id="seats-taken-val">9,142</span> / 10,000 Seats</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="seats-footer">
+                    <span>91% Capacitated</span>
+                    <span>Only <span id="seats-remaining-val">858</span> spots left</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Multi-Step Survey Wizard Section -->
+    <section class="survey-section" id="signup-gateway">
+        <div class="container">
+            <div class="survey-container glass-card">
+                
+                <!-- Steps Progress Indicator -->
+                <div class="steps-indicator">
+                    <div class="step-node active">1</div>
+                    <div class="step-node">2</div>
+                    <div class="step-node">3</div>
+                    <div class="step-node">4</div>
+                </div>
+
+                <!-- Slides Container -->
+                <div class="wizard-slider">
+                    
+                    <!-- Step 1: Pricing Model -->
+                    <div class="wizard-slide active" data-step="1">
+                        <h2 class="slide-title">What would you pay for a program like this as a "buy to own" software?</h2>
+                        <p class="slide-subtitle">We believe in true software ownership—one-time purchase, no subscription fees, and no mandatory cloud licenses.</p>
+                        <div class="options-list">
+                            <div class="option-card" data-value="$10 - $19">
+                                <div class="option-circle"></div>
+                                <span class="option-text">$10 - $19 (Entry Level)</span>
+                            </div>
+                            <div class="option-card" data-value="$20 - $29">
+                                <div class="option-circle"></div>
+                                <span class="option-text">$20 - $29 (Fair Valuation)</span>
+                            </div>
+                            <div class="option-card" data-value="$30 - $49">
+                                <div class="option-circle"></div>
+                                <span class="option-text">$30 - $49 (Pro Value)</span>
+                            </div>
+                            <div class="option-card" data-value="$50+">
+                                <div class="option-circle"></div>
+                                <span class="option-text">$50+ (Premium Supporter)</span>
+                            </div>
+                            <div class="option-card" data-value="Nothing / I only use free software">
+                                <div class="option-circle"></div>
+                                <span class="option-text">Nothing / I only use free software</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Computing Experience Impact -->
+                    <div class="wizard-slide" data-step="2">
+                        <h2 class="slide-title">How would a highly optimized OS impact your daily computing experience?</h2>
+                        <p class="slide-subtitle">We target low-level optimizations. Tell us where you want to feel the biggest performance boost.</p>
+                        <div class="options-list">
+                            <div class="option-card" data-value="Significantly improve gaming frame-rates and input latency">
+                                <div class="option-circle"></div>
+                                <span class="option-text">Significantly improve gaming frame-rates and input latency</span>
+                            </div>
+                            <div class="option-card" data-value="Make my older hardware feel snappy and usable again">
+                                <div class="option-circle"></div>
+                                <span class="option-text">Make my older hardware feel snappy and usable again</span>
+                            </div>
+                            <div class="option-card" data-value="Streamline my developer/creator productivity workflows">
+                                <div class="option-circle"></div>
+                                <span class="option-text">Streamline my developer/creator productivity workflows</span>
+                            </div>
+                            <div class="option-card" data-value="Minimal impact, but I like keeping things clean">
+                                <div class="option-circle"></div>
+                                <span class="option-text">Minimal impact, but I like keeping things clean</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Ecosystem Improvement vs Bloatware -->
+                    <div class="wizard-slide" data-step="3">
+                        <h2 class="slide-title">Do you see a native, C#/WPF tuner as an improvement or just more bloatware?</h2>
+                        <p class="slide-subtitle">Many system utility apps are written in heavy web tech (Electron) or filled with adware. We want to do better.</p>
+                        <div class="options-list">
+                            <div class="option-card" data-value="A major improvement — most tuners are bloated web-tech or adware, we need lightweight native tools!">
+                                <div class="option-circle"></div>
+                                <span class="option-text">A major improvement — we need lightweight, native, and clean utilities!</span>
+                            </div>
+                            <div class="option-card" data-value="Neutral — it depends on the performance gains and utility">
+                                <div class="option-circle"></div>
+                                <span class="option-text">Neutral — it depends entirely on real performance gains and utility</span>
+                            </div>
+                            <div class="option-card" data-value="Just more bloatware — Windows doesn't need external tuning utilities">
+                                <div class="option-circle"></div>
+                                <span class="option-text">Just more bloatware — Windows doesn't require third-party optimizers</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Contact details & Sign Up -->
+                    <div class="wizard-slide" data-step="4">
+                        <h2 class="slide-title">Reserve Your Seat on the Waitlist</h2>
+                        <p class="slide-subtitle">Secure your place in the upcoming beta. Enter your contact details below to confirm your spot.</p>
+                        
+                        <div class="form-group">
+                            <label for="contact-input" class="form-label">Email Address or Mobile Phone Number</label>
+                            <input type="text" id="contact-input" class="form-input" placeholder="e.g., you@domain.com or +1 (555) 012-3456" autocomplete="off">
+                        </div>
+
+                        <!-- Data Protection Reassurance Notice -->
+                        <div class="privacy-notice">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="feather feather-lock" style="color: var(--accent-cyan);">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            <span>
+                                <strong>Privacy First:</strong> All data collected is strictly used for waiting list confirmation and anonymous product research. We will **never** sell, distribute, or leverage your details for third-party commercial marketing.
+                            </span>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 2rem;">
+                            <input type="checkbox" id="privacy-check" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-cyan);">
+                            <label for="privacy-check" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer; user-select: none;">
+                                I agree to reserve my seat and participate in anonymous product development feedback.
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Step 5: Success State -->
+                    <div class="wizard-slide success-screen" data-step="5">
+                        <div class="success-icon">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="feather feather-check">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                        <h2 class="slide-title" style="color: var(--accent-green);">Reservation Confirmed!</h2>
+                        <p class="slide-subtitle" style="max-width: 480px; margin: 0.5rem auto 1.5rem;">
+                            Welcome to the elite cohort. You have successfully bypassed the queue and secured your priority beta slot.
+                        </p>
+
+                        <div class="success-badge-card">
+                            <div class="success-pos-label">Your Reserved Waitlist Position</div>
+                            <div class="success-pos-number" id="user-position-value">9,143</div>
+                        </div>
+
+                        <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 500px; margin: 0 auto;">
+                            We will send an automated notification to your email or phone the moment the next beta phase is opened. Get ready to experience your hardware running at absolute speed.
+                        </p>
+                    </div>
+
+                </div>
+
+                <!-- Wizard Navigation Footer Row -->
+                <div class="wizard-footer">
+                    <button class="btn btn-outline" id="btn-prev" style="visibility: hidden;">
+                        Back
+                    </button>
+                    <button class="btn btn-premium" id="btn-next" disabled>
+                        Next Question
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Tweaking Philosophy (Emotional Appeal) -->
+    <section class="philosophy" id="philosophy">
+        <div class="container">
+            <div class="philosophy-grid">
+                
+                <!-- Story Side -->
+                <div class="philosophy-story">
+                    <span class="philosophy-tag">The Philosophy</span>
+                    <h2>Reclaiming Control From a Bloated Software Era</h2>
+                    <p class="philosophy-p">
+                        Computers are meant to serve their users—not corporate telemetry pipelines, background search indexers, or artificial scheduling throttlers. As an enthusiast who has spent over a decade meticulously tweaking, striping, and rebuilding Windows environments to extract maximum efficiency, I grew tired of watching PC utilities slowly decay.
+                    </p>
+                    <p class="philosophy-p">
+                        Modern tuning software has turned into the very thing it was meant to destroy: bloated Electron web structures, subscription models, and invasive adware that collects your usage stats.
+                    </p>
+                    <p class="philosophy-p">
+                        <strong>Ram Raiders TuneUp was born from that exact frustration.</strong> It represents a love for raw, native performance. Every standby list manager, CPU governor, and hardware latency provisioner in this suite was programmed with a simple goal in mind: to give you back absolute authority over your physical hardware, with zero fluff.
+                    </p>
+                    
+                    <div class="philosophy-quote">
+                        "We aren't building a subscription trap or packaging ad-tech. We are returning the raw, responsive computing experience that modern OS structures have slowly chipped away."
+                    </div>
+                </div>
+
+                <!-- Graphics/Visual Side -->
+                <div>
+                    <div class="visual-art-card glass-card">
+                        <div class="art-glow-circle"></div>
+                        <div class="art-text-top">ACTIVE THREAD PRIORITY</div>
+                        <div class="art-quote-big">
+                            "ProBalance Priority Governor Activated"
+                        </div>
+                        <div class="art-text-bottom">
+                            <span class="art-chip">C# WPF</span>
+                            <span class="art-chip">0.12ms LATENCY</span>
+                            <span style="margin-left: auto; color: var(--accent-green); font-weight: 700;">100% RESPONSIBILITY</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Product Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            
+            <div class="section-header">
+                <span class="hero-tag" style="margin-bottom: 0.5rem;">Engineered Capabilities</span>
+                <h2>Zero Bloatware. Raw Optimization.</h2>
+                <p>Designed strictly for C# efficiency, bypassing web container packaging to communicate with our system kernel optimizer.</p>
+            </div>
+
+            <div class="features-grid">
+                
+                <!-- Memory Health -->
+                <div class="feature-card glass-card">
+                    <div class="feature-icon-wrapper">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                        </svg>
+                    </div>
+                    <h3>NtSetSystemInformation Memory Purge</h3>
+                    <p>Wipes inactive, blocked system standby memory lists instantly. Monitors free RAM every 30 seconds to automatically flush cache when capacity drops below 10%.</p>
+                </div>
+
+                <!-- CPU Governor -->
+                <div class="feature-card glass-card">
+                    <div class="feature-icon-wrapper">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                            <rect x="9" y="9" width="6" height="6"></rect>
+                            <line x1="9" y1="1" x2="9" y2="4"></line>
+                            <line x1="15" y1="1" x2="15" y2="4"></line>
+                            <line x1="9" y1="20" x2="9" y2="23"></line>
+                            <line x1="15" y1="20" x2="15" y2="23"></line>
+                            <line x1="20" y1="9" x2="23" y2="9"></line>
+                            <line x1="20" y1="15" x2="23" y2="15"></line>
+                            <line x1="1" y1="9" x2="4" y2="9"></line>
+                            <line x1="1" y1="15" x2="4" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h3>ProBalance CPU Priority Governor</h3>
+                    <p>Identifies CPU-hogging background tasks in milliseconds, temporarily throttling scheduling class assignments, allowing active foreground apps to run at 100% responsiveness.</p>
+                </div>
+
+                <!-- MSI Mode -->
+                <div class="feature-card glass-card">
+                    <div class="feature-icon-wrapper">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                    </div>
+                    <h3>MSI Interrupt Provisioning</h3>
+                    <p>Scans hardware registry definitions to force Message Signaled Interrupts (MSI) mode, resolving line-based IRQ sharing conflicts and drastically cutting micro-stuttering.</p>
+                </div>
+
+                <!-- System Cleaner -->
+                <div class="feature-card glass-card">
+                    <div class="feature-icon-wrapper">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <h3>Rule-Based Winapp2 Cleaner</h3>
+                    <p>Integrates safe community-sourced cleaner parameters to safely purge cache, indexers, and log directories. Includes recursive empty user folder pruning.</p>
+                </div>
+
+                <!-- Registry Guard -->
+                <div class="feature-card glass-card">
+                    <div class="feature-icon-wrapper">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                        </svg>
+                    </div>
+                    <h3>Registry Structural Integrity Guard</h3>
+                    <p>Targets and removes invalid COM, uninstall pathways, and runkey registrations linking to missing folders. Backs up keys locally prior to removal.</p>
+                </div>
+
+                <!-- Storage Tools -->
+                <div class="feature-card glass-card">
+                    <div class="feature-icon-wrapper">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                        </svg>
+                    </div>
+                    <h3>NTFS Directory Symbolic Linker</h3>
+                    <p>Seamlessly moves heavy installations and folders to secondary drives while drafting robust NTFS symlinks, so games and apps run normally without reinstalls.</p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Screenshot Gallery Section -->
+    <section class="screenshots-section" id="interface-showcase">
+        <div class="container">
+            
+            <div class="section-header">
+                <span class="hero-tag" style="margin-bottom: 0.5rem;">Visual Showcase</span>
+                <h2>A Sleek, Modern C# & WPF Client</h2>
+                <p>Enjoy absolute control through a gorgeous, glassmorphic layout tailored for high-fps desktop viewports.</p>
+            </div>
+
+            <!-- Carousel Gallery Container -->
+            <div class="gallery-wrapper">
+                <div class="gallery-viewport">
+                    <div class="gallery-track" id="gallery-track">
+                        
+                        <!-- Item 1: Dashboard -->
+                        <div class="gallery-item">
+                            <img src="assets/screenshots/dashboard.png?v=2" alt="Ram Raiders TuneUp Dashboard" class="gallery-img">
+                            <div class="gallery-overlay">
+                                <div class="gallery-title">Live System Dashboard</div>
+                                <div class="gallery-desc">Monitor hardware parameters, standby memory blocks, and toggle ProBalance/Game Booster controls.</div>
+                            </div>
+                        </div>
+
+                        <!-- Item 2: Cleaner -->
+                        <div class="gallery-item">
+                            <img src="assets/screenshots/cleaner.png?v=2" alt="Ram Raiders TuneUp Cleaner" class="gallery-img">
+                            <div class="gallery-overlay">
+                                <div class="gallery-title">System Rule Cleaner</div>
+                                <div class="gallery-desc">Review scan targets, read file listings before erasing, and safely purge system junk.</div>
+                            </div>
+                        </div>
+
+                        <!-- Item 3: Gaming & OS Tweaks -->
+                        <div class="gallery-item">
+                            <img src="assets/screenshots/gaming_tweaks.png?v=2" alt="Ram Raiders TuneUp Gaming Tweaks" class="gallery-img">
+                            <div class="gallery-overlay">
+                                <div class="gallery-title">Gaming & OS Tweaks</div>
+                                <div class="gallery-desc">Force Message Signaled Interrupts compliance, reduce scheduling latency class spikes, and apply Windows registry tweaks.</div>
+                            </div>
+                        </div>
+
+                        <!-- Item 4: Storage Link Migrator -->
+                        <div class="gallery-item">
+                            <img src="assets/screenshots/storage_tools.png?v=2" alt="Ram Raiders TuneUp Storage Linker" class="gallery-img">
+                            <div class="gallery-overlay">
+                                <div class="gallery-title">NTFS Directory Symbolic Linker</div>
+                                <div class="gallery-desc">Migrate heavy directories and game folders to secondary drives while establishing automatic, robust NTFS symbolic links.</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Carousel Controls -->
+                <div class="gallery-controls">
+                    <div class="gallery-dots">
+                        <span class="gallery-dot active"></span>
+                        <span class="gallery-dot"></span>
+                        <span class="gallery-dot"></span>
+                        <span class="gallery-dot"></span>
+                    </div>
+                    <div class="nav-arrows">
+                        <button class="arrow-btn" id="arrow-prev" aria-label="Previous screenshot">◀</button>
+                        <button class="arrow-btn" id="arrow-next" aria-label="Next screenshot">▶</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="logo-container" style="justify-content: center; margin-bottom: 1.5rem;">
+                <img src="assets/TuneUpIcon.png" alt="Ram Raiders TuneUp Logo" class="logo-img" style="width: 24px; height: 24px;">
+                <div class="logo-text" style="font-size: 1rem;">RAM RAIDERS <span>TUNEUP</span></div>
+            </div>
+            <p style="font-size: 0.85rem; max-width: 450px; margin: 0 auto;">
+                Created with passion by enthusiasts. Built for clean latency, maximum framerates, and complete software ownership.
+            </p>
+            <div class="footer-nav">
+                <a href="#signup-gateway">Join Waitlist</a>
+                <a href="#philosophy">Our Story</a>
+                <a href="#features">Features</a>
+                <a href="#interface-showcase">Screenshots</a>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                Built with the help of Google Antigravity.
+            </p>
+            <p class="copyright">
+                &copy; 2026 Ram Raiders Software. All rights reserved. Registered Windows systems are property of Microsoft Corp.
+            </p>
+            
+            <!-- Developer console accessible via Ctrl+Shift+D keyboard shortcut only -->
+        </div>
+    </footer>
+
+    <!-- Developer Admin Console Drawer (Slide out) -->
+    <div class="dev-drawer" id="dev-drawer">
+        <div class="dev-drawer-header">
+            <div class="dev-drawer-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan);">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                    <polyline points="2 17 12 22 22 17"></polyline>
+                    <polyline points="2 12 12 17 22 12"></polyline>
+                </svg>
+                <span>Waitlist Database Console</span>
+            </div>
+            <button class="close-drawer" id="close-dev" aria-label="Close admin drawer">&times;</button>
+        </div>
+        
+        <div class="dev-drawer-content">
+            
+            <!-- Quick analytical aggregated cards -->
+            <div class="db-stats-grid">
+                <div class="db-stat-card">
+                    <div class="db-stat-label">Total Submissions</div>
+                    <div class="db-stat-val" id="stat-total-val">0</div>
+                </div>
+                <div class="db-stat-card">
+                    <div class="db-stat-label">Waitlist Position</div>
+                    <div class="db-stat-val" id="stat-seats-val">0</div>
+                </div>
+            </div>
+
+            <!-- Database utility buttons -->
+            <div class="db-actions">
+                <button class="btn btn-premium" id="btn-export-csv" style="flex-grow:1;">
+                    Export to CSV
+                </button>
+                <button class="btn btn-outline" id="btn-reset-db" style="border-color: rgba(255, 74, 74, 0.2); color: var(--accent-red);">
+                    Reset Database
+                </button>
+            </div>
+
+            <!-- Survey Aggregations Visualization -->
+            <div class="glass-card" style="padding: 1.25rem; margin-bottom: 2rem; border-color: rgba(255,255,255,0.05); background: rgba(0,0,0,0.15);">
+                <h4 style="font-size: 0.85rem; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Q1: Value Model Preference</h4>
+                <div id="chart-q1"></div>
+            </div>
+
+            <div class="glass-card" style="padding: 1.25rem; margin-bottom: 2rem; border-color: rgba(255,255,255,0.05); background: rgba(0,0,0,0.15);">
+                <h4 style="font-size: 0.85rem; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Q2: Expected Performance Area</h4>
+                <div id="chart-q2"></div>
+            </div>
+
+            <div class="glass-card" style="padding: 1.25rem; margin-bottom: 2rem; border-color: rgba(255,255,255,0.05); background: rgba(0,0,0,0.15);">
+                <h4 style="font-size: 0.85rem; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Q3: Software Ecosystem Sentiment</h4>
+                <div id="chart-q3"></div>
+            </div>
+
+            <!-- Search Field -->
+            <div class="search-wrapper">
+                <label for="db-search" class="form-label">Search Waitlist Records</label>
+                <input type="text" id="db-search" class="form-input" placeholder="Search by email or phone number..." style="padding: 0.75rem 1rem;">
+            </div>
+
+            <!-- Records List Grid -->
+            <h4 style="font-size: 0.85rem; text-transform: uppercase; margin-bottom: 0.75rem; color: var(--text-muted);">Registered Waitlist Entries</h4>
+            <div class="records-container">
+                <div class="record-row-header">
+                    <span>Contact Info</span>
+                    <span>Waitlist Position</span>
+                    <span style="justify-self: end;">Inspect</span>
+                </div>
+                <div class="records-list" id="records-list">
+                    <!-- Dynamic rendering -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Backdrop overlay click close drawer -->
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+    <!-- Core Scripts -->
+    <script src="js/database.js?v=6"></script>
+    <script src="js/app.js?v=6"></script>
+</body>
+</html>
