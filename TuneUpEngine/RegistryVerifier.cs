@@ -231,58 +231,58 @@ namespace TuneUpEngine
             if (string.IsNullOrEmpty(rawCommand)) return string.Empty;
 
             rawCommand = rawCommand.Trim();
-            
-            // If quoted, extract content inside quotes
+
+            // If quoted, the executable is exactly what is inside the first pair of quotes.
             if (rawCommand.StartsWith("\""))
             {
                 int endQuoteIndex = rawCommand.IndexOf("\"", 1);
                 if (endQuoteIndex > 0)
                 {
-                    return rawCommand.Substring(1, endQuoteIndex - 1);
+                    return Environment.ExpandEnvironmentVariables(rawCommand.Substring(1, endQuoteIndex - 1));
                 }
             }
 
-            // Otherwise, grab up to the first space or argument switch
-            string[] parts = rawCommand.Split(' ');
-            if (parts.Length > 0)
+            // Unquoted commands frequently contain spaces in the path itself, e.g.
+            //   C:\Program Files\App\app.exe --flag
+            // The old code split on the first space and returned "C:\Program", which does not exist,
+            // so a perfectly valid startup entry got reported as "broken" — and could then be deleted
+            // by the user. Instead, cut at the end of the first ".exe" token when one is present.
+            string expanded = Environment.ExpandEnvironmentVariables(rawCommand);
+            int exeIdx = expanded.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+            if (exeIdx >= 0)
             {
-                string path = parts[0];
-                // Check if it's a valid environment variable like %SystemRoot%
-                if (path.StartsWith("%"))
-                {
-                    path = Environment.ExpandEnvironmentVariables(path);
-                }
-                return path;
+                return expanded.Substring(0, exeIdx + 4);
             }
 
-            return rawCommand;
+            // No ".exe" found — fall back to the first whitespace-delimited token.
+            int spaceIdx = expanded.IndexOf(' ');
+            return spaceIdx > 0 ? expanded.Substring(0, spaceIdx) : expanded;
         }
 
         public bool Repair(List<RegistryIssue> issues, Action<string, int>? progressCallback = null)
         {
             int count = 0;
-            string backupDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RegistryBackups");
-            if (!Directory.Exists(backupDir))
-            {
-                Directory.CreateDirectory(backupDir);
-            }
 
-            string backupFile = Path.Combine(backupDir, $"backup_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
-            using (var writer = new StreamWriter(backupFile, false))
+            // Back up to the documented, user-visible location (the same folder the rest of the suite
+            // uses), NOT next to the executable where it would be wiped on reinstall.
+            string backupDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "RamRaidersTuneUpSuite", "RegistryBackups");
+            Directory.CreateDirectory(backupDir);
+
+            string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string manifestFile = Path.Combine(backupDir, $"RegistryRepair_{stamp}.txt");
+            using (var writer = new StreamWriter(manifestFile, false))
             {
-                writer.WriteLine($"; TuneUp Registry Repair Backup - Executed {DateTime.Now}");
-                writer.WriteLine("; Revert changes by manually adding these back if required.");
+                writer.WriteLine($"; Ram Raiders TuneUp Registry Repair - Executed {DateTime.Now}");
+                writer.WriteLine("; Each repaired key was exported to a .reg file in this folder before deletion.");
+                writer.WriteLine("; To undo a repair, double-click the matching .reg file to re-import the key.");
                 writer.WriteLine();
 
                 foreach (var issue in issues)
                 {
                     progressCallback?.Invoke($"Repairing {issue.Title}", (count * 100) / issues.Count);
                     count++;
-
-                    // Back up to log file
-                    writer.WriteLine($"[{issue.KeyPath}]");
-                    writer.WriteLine($"\"{issue.ValueName}\"=\"{issue.TargetPath}\"");
-                    writer.WriteLine();
 
                     try
                     {
@@ -293,46 +293,73 @@ namespace TuneUpEngine
                         RegistryKey rootKey = null;
                         if (hive == "HKCU") rootKey = Registry.CurrentUser;
                         else if (hive == "HKLM") rootKey = Registry.LocalMachine;
+                        if (rootKey == null) continue;
 
-                        if (rootKey != null)
+                        if (issue.IssueType == "COM")
                         {
-                            if (issue.IssueType == "COM")
+                            // For a dead COM server we remove the whole CLSID key (not just the
+                            // InprocServer32/LocalServer32 child), so export the CLSID key itself.
+                            string clsidKeyPath = subkey.Substring(0, subkey.LastIndexOf('\\'));
+                            string fullClsidPath = $@"{hive}\{clsidKeyPath}";
+
+                            string regBackup = Path.Combine(backupDir, $"{stamp}_{count}_COM.reg");
+                            ExportKeyToReg(fullClsidPath, regBackup);
+                            writer.WriteLine($"[DELETE TREE] {fullClsidPath}  ->  {Path.GetFileName(regBackup)}");
+
+                            rootKey.DeleteSubKeyTree(clsidKeyPath, false);
+                        }
+                        else
+                        {
+                            // Export the containing key before removing the offending value.
+                            string regBackup = Path.Combine(backupDir, $"{stamp}_{count}_{issue.IssueType}.reg");
+                            ExportKeyToReg(issue.KeyPath, regBackup);
+                            writer.WriteLine($"[DELETE VALUE] {issue.KeyPath}\\{issue.ValueName}  ->  {Path.GetFileName(regBackup)}");
+
+                            using (var key = rootKey.OpenSubKey(subkey, true))
                             {
-                                // COM keys have the target as default property in subkey (e.g. InprocServer32). 
-                                // We can delete the entire InprocServer32 / LocalServer32 subkey or the CLSID itself.
-                                // It's safer to delete the CLSID key.
-                                string clsidKeyPath = subkey.Substring(0, subkey.LastIndexOf('\\'));
-                                rootKey.DeleteSubKeyTree(clsidKeyPath, false);
-                            }
-                            else
-                            {
-                                using (var key = rootKey.OpenSubKey(subkey, true))
-                                {
-                                    if (key != null)
-                                    {
-                                        if (string.IsNullOrEmpty(issue.ValueName))
-                                        {
-                                            // Delete the default value
-                                            key.DeleteValue("", false);
-                                        }
-                                        else
-                                        {
-                                            key.DeleteValue(issue.ValueName, false);
-                                        }
-                                    }
-                                }
+                                key?.DeleteValue(string.IsNullOrEmpty(issue.ValueName) ? "" : issue.ValueName, false);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        writer.WriteLine($"; ERROR: Failed to repair - {ex.Message}");
+                        writer.WriteLine($"; ERROR: Failed to repair '{issue.Title}' - {ex.Message}");
                     }
                 }
             }
 
             progressCallback?.Invoke("Repair Complete", 100);
             return true;
+        }
+
+        // Exports a registry key to a .reg file via reg.exe so the repair is genuinely reversible
+        // (double-clicking the .reg re-imports the key). reg.exe accepts the short hive names
+        // (HKLM, HKCU, ...) used in our KeyPath strings.
+        private void ExportKeyToReg(string fullKeyPath, string regFilePath)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "reg.exe",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                psi.ArgumentList.Add("export");
+                psi.ArgumentList.Add(fullKeyPath);
+                psi.ArgumentList.Add(regFilePath);
+                psi.ArgumentList.Add("/y");
+
+                using var p = System.Diagnostics.Process.Start(psi);
+                p?.WaitForExit(10000);
+            }
+            catch
+            {
+                // Export is best-effort; a failed export must not block the repair, but the manifest
+                // line still records what was removed.
+            }
         }
     }
 }

@@ -117,9 +117,13 @@ namespace TuneUpEngine
                 IsDefault = true,
                 FileKeys = new List<string>
                 {
-                    "%WinDir%\\Logs|*.*|RECURSE",
+                    // NOTE: deliberately does NOT target %WinDir%\System32\winevt\Logs\*.evtx. Those are
+                    // the Windows Event Logs (Security/System/Application history) — deleting them wipes
+                    // audit and troubleshooting data and is not "junk" cleaning. (The correct way to clear
+                    // an event log is `wevtutil cl`, which is out of scope for a file cleaner.)
                     "%LocalAppData%\\Microsoft\\Windows\\WER|*.*|RECURSE",
-                    "%WinDir%\\System32\\winevt\\Logs|*.evtx"
+                    "%WinDir%\\Logs\\CBS|*.log|RECURSE",
+                    "%WinDir%\\Logs\\DISM|*.log|RECURSE"
                 }
             });
 

@@ -1007,7 +1007,8 @@
                                         
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                             <Button x:Name="BtnMsiScan" Content="Scan MSI Mode" Style="{StaticResource OutlineButton}" Click="BtnMsiScan_Click" Margin="0,0,10,0"/>
-                                            <Button x:Name="BtnMsiEnable" Content="Enable MSI Mode for GPU" Style="{StaticResource OutlineButton}" Click="BtnMsiEnable_Click"/>
+                                            <Button x:Name="BtnMsiEnable" Content="Enable MSI Mode" Style="{StaticResource OutlineButton}" Click="BtnMsiEnable_Click" Margin="0,0,10,0"/>
+                                            <Button x:Name="BtnMsiRevert" Content="Revert MSI Mode" Style="{StaticResource OutlineButton}" Click="BtnMsiRevert_Click"/>
                                         </StackPanel>
 
                                         <TextBlock x:Name="TxtDebloatLoading" Text="AppX Loading Status" Foreground="{StaticResource BrushTextMuted}" Margin="0,0,0,10"/>

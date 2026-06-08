@@ -231,7 +231,7 @@ namespace TuneUpEngine
             }
         }
 
-        private static CpuArchitecture DetectArchitecture(string cpuModel)
+        internal static CpuArchitecture DetectArchitecture(string cpuModel)
         {
             if (string.IsNullOrEmpty(cpuModel)) return CpuArchitecture.Unknown;
             string model = cpuModel.ToUpperInvariant();
@@ -240,8 +240,11 @@ namespace TuneUpEngine
             // Also includes Core Ultra (Meteor Lake, Arrow Lake, Lunar Lake)
             if (model.Contains("INTEL"))
             {
-                // Core Ultra = always hybrid (Meteor Lake+)
-                if (Regex.IsMatch(model, @"CORE\s+ULTRA"))
+                // Core Ultra = always hybrid (Meteor Lake and newer). Match on "ULTRA" alone: the
+                // model string carries trademark noise between the words — e.g.
+                // "Intel(R) Core(TM) Ultra 7 155H" — so a "CORE\s+ULTRA" pattern misses the "(TM)".
+                // "Ultra" is unique to Intel's hybrid Core Ultra line, so this stays specific.
+                if (model.Contains("ULTRA"))
                     return CpuArchitecture.IntelHybrid;
 
                 // 12th Gen: i3/i5/i7/i9 12xxx

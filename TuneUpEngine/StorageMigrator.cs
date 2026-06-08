@@ -45,7 +45,7 @@ namespace TuneUpEngine
 
         private static readonly string HistoryFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "TuneUpPremiumSuite", "migration_history.json");
+            "RamRaidersTuneUpSuite", "migration_history.json");
 
         // ── Analysis ────────────────────────────────────────────────────────────
 
@@ -125,12 +125,17 @@ namespace TuneUpEngine
                 }
 
                 // Phase 2: Verify
+                // The next phase irreversibly deletes the source, so verification must be exact.
+                // An aggregate size check (the previous approach) can pass even when an individual
+                // file was truncated or skipped — its shortfall hides inside a 1% tolerance — and
+                // the original would then be destroyed. Instead, confirm every source file is present
+                // at the destination with a matching length, and that the file counts agree exactly.
                 progressCallback?.Invoke("Verifying destination integrity...", 90);
-                long destSize = CalculateDirectorySize(destinationPath);
-                if (destSize < sourceSize * 0.99) // Allow 1% tolerance for metadata
+                var (verified, detail) = VerifyCopy(sourcePath, destinationPath);
+                if (!verified)
                 {
                     try { Directory.Delete(destinationPath, recursive: true); } catch { }
-                    return $"Error: Verification failed. Source={FormatBytes(sourceSize)}, Dest={FormatBytes(destSize)}. Destination cleaned up.";
+                    return $"Error: Verification failed ({detail}). Destination cleaned up; original left untouched.";
                 }
 
                 // Phase 3: Delete source
@@ -218,6 +223,44 @@ namespace TuneUpEngine
                 string destDir = Path.Combine(dst, Path.GetFileName(dir));
                 CopyDirectory(dir, destDir, ref bytesCopied, totalBytes, progress, ct);
             }
+        }
+
+        // Confirms the destination is a faithful copy of the source before the source is deleted.
+        // Every source file must exist at the destination with an identical length, and the total
+        // file counts must match exactly (so the destination has no missing — or extra — files).
+        // Returns ok=false with a human-readable reason on the first discrepancy found.
+        private static (bool ok, string detail) VerifyCopy(string src, string dst)
+        {
+            int srcCount = 0;
+            foreach (var srcFile in Directory.EnumerateFiles(src, "*.*", SearchOption.AllDirectories))
+            {
+                srcCount++;
+                string rel = Path.GetRelativePath(src, srcFile);
+                string dstFile = Path.Combine(dst, rel);
+
+                if (!File.Exists(dstFile))
+                    return (false, $"missing at destination: {rel}");
+
+                long srcLen, dstLen;
+                try
+                {
+                    srcLen = new FileInfo(srcFile).Length;
+                    dstLen = new FileInfo(dstFile).Length;
+                }
+                catch (Exception ex)
+                {
+                    return (false, $"could not read '{rel}': {ex.Message}");
+                }
+
+                if (srcLen != dstLen)
+                    return (false, $"size mismatch for '{rel}': source {FormatBytes(srcLen)}, dest {FormatBytes(dstLen)}");
+            }
+
+            int dstCount = Directory.EnumerateFiles(dst, "*.*", SearchOption.AllDirectories).Count();
+            if (dstCount != srcCount)
+                return (false, $"file count mismatch: source {srcCount}, destination {dstCount}");
+
+            return (true, $"{srcCount} files verified");
         }
 
         private static long CalculateDirectorySize(string path)

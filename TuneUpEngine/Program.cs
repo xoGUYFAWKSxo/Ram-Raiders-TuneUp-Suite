@@ -23,10 +23,12 @@ namespace TuneUpEngine
             var downloader = new Winapp2Downloader();
             var latencyAuditor = new LatencyAuditor();
 
-            // Set default settings
-            governor.IsEnabled = true;
-            memoryManager.IsAutoPurging = false;
-            gameMode.IsEnabled = true; // Game boost enabled by default
+            // Restore the user's last feature-toggle choices (falls back to sensible defaults on a
+            // first run: ProBalance on, AutoPurge off, GameMode on).
+            var engineSettings = EngineSettings.Load();
+            governor.IsEnabled = engineSettings.ProBalanceEnabled;
+            memoryManager.IsAutoPurging = engineSettings.AutoPurgeEnabled;
+            gameMode.IsEnabled = engineSettings.GameModeEnabled;
 
             // Load any previously synced winapp2.ini definitions on startup
             string winapp2Path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "winapp2.ini");
@@ -36,7 +38,7 @@ namespace TuneUpEngine
             }
 
             // 3. Initialize IPC Server
-            var ipcServer = new IpcServer(governor, memoryManager, cleaner, integrityAgent, registryVerifier, gameMode, downloader, latencyAuditor);
+            var ipcServer = new IpcServer(governor, memoryManager, cleaner, integrityAgent, registryVerifier, gameMode, downloader, latencyAuditor, engineSettings);
 
             if (isServiceMode)
             {

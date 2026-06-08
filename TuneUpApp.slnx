@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="TuneUpEngine/TuneUpEngine.csproj" />
   <Project Path="TuneUpUI/TuneUpUI.csproj" />
+  <Project Path="TuneUpEngine.Tests/TuneUpEngine.Tests.csproj" />
 </Solution>

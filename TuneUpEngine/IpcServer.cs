@@ -49,12 +49,21 @@ namespace TuneUpEngine
         private readonly GameModeManager _gameMode;
         private readonly Winapp2Downloader _downloader;
         private readonly LatencyAuditor _latencyAuditor;
+        private readonly EngineSettings _settings;
         private Thread _serverThread;
         private bool _isRunning = false;
 
         private readonly List<string> _eventLogs = new List<string>();
         private readonly object _logLock = new object();
         private long _totalMemoryFreed = 0;
+
+        // One write-gate per client connection, keyed by that connection's StreamWriter. Several
+        // command handlers (MigrateDirectory, RemoveAppxPackage, the network ops, definition sync)
+        // stream progress from a background Task while the session's read loop is still running, so
+        // SendResponse can be entered concurrently for the same connection. Serializing per writer
+        // guarantees whole JSON lines are never interleaved on the pipe. ConditionalWeakTable keys on
+        // reference identity and drops the entry when the writer is collected — nothing to clean up.
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<StreamWriter, object> _writerLocks = new();
 
         public IpcServer(
             ProBalanceGovernor governor, 
@@ -64,7 +73,8 @@ namespace TuneUpEngine
             RegistryVerifier registryVerifier,
             GameModeManager gameMode,
             Winapp2Downloader downloader,
-            LatencyAuditor latencyAuditor)
+            LatencyAuditor latencyAuditor,
+            EngineSettings settings)
         {
             _governor = governor;
             _memoryManager = memoryManager;
@@ -74,6 +84,7 @@ namespace TuneUpEngine
             _gameMode = gameMode;
             _downloader = downloader;
             _latencyAuditor = latencyAuditor;
+            _settings = settings;
 
             // Register events to push to event log
             _governor.OnProcessThrottled += (name, pid, reason) =>
@@ -145,8 +156,22 @@ namespace TuneUpEngine
                     if (OperatingSystem.IsWindows())
                     {
                         var security = new PipeSecurity();
-                        
-                        // Grant FullControl to the elevated current user identity to allow creating subsequent concurrent server pipe instances
+
+                        // This pipe is owned by the ELEVATED engine and accepts commands that
+                        // delete files, write HKLM, disable services, remove AppX packages and
+                        // run DISM/SFC. Granting access to 'Everyone' (as a previous revision did)
+                        // would let ANY local process — including a low-privilege or sandboxed one —
+                        // drive the elevated engine, which is a local privilege-escalation vector.
+                        //
+                        // Instead we grant the minimum needed for the legitimate UI to connect:
+                        //   1. The engine's own identity (the user who launched/elevated it, or
+                        //      SYSTEM in service mode) FullControl, so the server can spin up
+                        //      additional concurrent pipe instances.
+                        //   2. Interactive logon users ReadWrite, so the desktop UI — which runs at
+                        //      the user's normal (non-elevated) integrity — can connect. The
+                        //      Interactive SID excludes remote, network, service, batch and
+                        //      anonymous logons. Low-integrity / sandboxed processes are additionally
+                        //      blocked by the pipe's default medium mandatory label (no write-up).
                         var currentUser = WindowsIdentity.GetCurrent().User;
                         if (currentUser != null)
                         {
@@ -156,9 +181,9 @@ namespace TuneUpEngine
                                 AccessControlType.Allow));
                         }
 
-                        var everyoneSid = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+                        var interactiveSid = new SecurityIdentifier(WellKnownSidType.InteractiveSid, null);
                         security.AddAccessRule(new PipeAccessRule(
-                            everyoneSid,
+                            interactiveSid,
                             PipeAccessRights.ReadWrite,
                             AccessControlType.Allow));
 
@@ -236,14 +261,20 @@ namespace TuneUpEngine
 
         private void SendResponse(StreamWriter writer, IpcResponse response)
         {
-            try
+            // Serialize all writes to this connection so a background handler's progress update can
+            // never interleave mid-line with another response on the same pipe.
+            object gate = _writerLocks.GetValue(writer, _ => new object());
+            lock (gate)
             {
-                string json = JsonSerializer.Serialize(response);
-                Console.WriteLine($"[Engine IPC] Sending response: {response.Status}");
-                writer.WriteLine(json);
-                writer.Flush();
+                try
+                {
+                    string json = JsonSerializer.Serialize(response);
+                    Console.WriteLine($"[Engine IPC] Sending response: {response.Status}");
+                    writer.WriteLine(json);
+                    writer.Flush();
+                }
+                catch (Exception ex) { Console.WriteLine($"[Engine IPC] SendResponse Error: {ex.Message}"); }
             }
-            catch (Exception ex) { Console.WriteLine($"[Engine IPC] SendResponse Error: {ex.Message}"); }
         }
 
         private void HandleRequest(IpcRequest request, StreamWriter writer)
@@ -282,6 +313,8 @@ namespace TuneUpEngine
                 case "SetGovernorState":
                     bool govEnabled = bool.Parse(request.Payload);
                     _governor.IsEnabled = govEnabled;
+                    _settings.ProBalanceEnabled = govEnabled;
+                    _settings.Save();
                     LogEvent($"ProBalance governor state set to: {(govEnabled ? "ENABLED" : "DISABLED")}");
                     SendResponse(writer, new IpcResponse { Status = "Success" });
                     break;
@@ -289,6 +322,8 @@ namespace TuneUpEngine
                 case "SetAutoPurgeState":
                     bool purgeEnabled = bool.Parse(request.Payload);
                     _memoryManager.IsAutoPurging = purgeEnabled;
+                    _settings.AutoPurgeEnabled = purgeEnabled;
+                    _settings.Save();
                     LogEvent($"Standby list auto-purging set to: {(purgeEnabled ? "ENABLED" : "DISABLED")}");
                     SendResponse(writer, new IpcResponse { Status = "Success" });
                     break;
@@ -296,6 +331,8 @@ namespace TuneUpEngine
                 case "SetGameModeState":
                     bool gameEnabled = bool.Parse(request.Payload);
                     _gameMode.IsEnabled = gameEnabled;
+                    _settings.GameModeEnabled = gameEnabled;
+                    _settings.Save();
                     LogEvent($"Game Mode Booster set to: {(gameEnabled ? "ENABLED" : "DISABLED")}");
                     SendResponse(writer, new IpcResponse { Status = "Success" });
                     break;
@@ -309,6 +346,17 @@ namespace TuneUpEngine
                     string provisionResult = HardwareController.EnableMSI();
                     LogEvent($"MSI Provisioning Executed: {provisionResult}");
                     SendResponse(writer, new IpcResponse { Status = "Success", Payload = provisionResult });
+                    break;
+
+                case "RevertMSIInterrupts":
+                    string msiRevertResult = HardwareController.RevertMSI();
+                    LogEvent($"MSI Revert Executed: {msiRevertResult}");
+                    SendResponse(writer, new IpcResponse
+                    {
+                        Status = msiRevertResult.StartsWith("Error") ? "Error" : "Success",
+                        Payload = msiRevertResult,
+                        Message = msiRevertResult
+                    });
                     break;
 
                 case "UpdateCleanerDefinitions":

@@ -101,6 +101,8 @@ namespace TuneUpEngine
                 });
 
                 // Stage 2: Running SFC Scannow
+                // sfc.exe writes its output as UTF-16; without the matching encoding the text comes
+                // back full of NUL bytes and the progress regex below never matches.
                 progressCallback?.Invoke("Running System File Checker (SFC)...", 50.0);
                 ExecuteCommand("sfc.exe", "/scannow", (line) =>
                 {
@@ -110,7 +112,7 @@ namespace TuneUpEngine
                     {
                         progressCallback?.Invoke($"SFC Verification in Progress: {percent:F0}%", 50.0 + (percent * 0.5)); // Map to 50-100%
                     }
-                });
+                }, System.Text.Encoding.Unicode);
 
                 progressCallback?.Invoke("System Integrity Repair Complete", 100.0);
             }
@@ -120,7 +122,8 @@ namespace TuneUpEngine
             }
         }
 
-        private void ExecuteCommand(string exe, string args, Action<string> outputLineCallback)
+        private void ExecuteCommand(string exe, string args, Action<string> outputLineCallback,
+            System.Text.Encoding outputEncoding = null)
         {
             var psi = new ProcessStartInfo
             {
@@ -129,26 +132,47 @@ namespace TuneUpEngine
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                CreateNoWindow = true,
-                Verb = "runas" // Elevate privilege
+                CreateNoWindow = true
+                // NOTE: no Verb is set. A verb such as "runas" only applies when UseShellExecute is
+                // true; with UseShellExecute=false it is silently ignored. The engine already runs
+                // elevated, so DISM/SFC inherit its administrator token without any verb.
             };
 
-            using (var process = new Process { StartInfo = psi })
+            // Some tools (notably sfc.exe) emit UTF-16; the caller can specify the matching encoding
+            // so the redirected text decodes correctly instead of arriving riddled with NUL bytes.
+            if (outputEncoding != null)
             {
-                process.Start();
-
-                // Read output line by line
-                while (!process.StandardOutput.EndOfStream)
-                {
-                    string line = process.StandardOutput.ReadLine();
-                    if (!string.IsNullOrEmpty(line))
-                    {
-                        outputLineCallback?.Invoke(line);
-                    }
-                }
-
-                process.WaitForExit();
+                psi.StandardOutputEncoding = outputEncoding;
+                psi.StandardErrorEncoding = outputEncoding;
             }
+
+            using var process = new Process { StartInfo = psi };
+
+            // Both stdout AND stderr must be drained concurrently. The previous code read only stdout
+            // to EOF; if the child wrote enough to stderr to fill that pipe's buffer, the child would
+            // block on the stderr write while we blocked reading stdout — a classic redirection
+            // deadlock that hangs the repair indefinitely. Reading both via the async events lets the
+            // thread pool keep both pipes drained.
+            process.OutputDataReceived += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(e.Data))
+                    outputLineCallback?.Invoke(e.Data);
+            };
+            process.ErrorDataReceived += (s, e) =>
+            {
+                // Surface stderr through the same callback (so failures are visible in the progress
+                // stream) and, crucially, keep the stderr pipe continuously drained.
+                if (!string.IsNullOrEmpty(e.Data))
+                    outputLineCallback?.Invoke(e.Data);
+            };
+
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            // Parameterless WaitForExit() also waits for the async output handlers to finish, so all
+            // buffered output is delivered before this method returns.
+            process.WaitForExit();
         }
 
         private string CleanLogLine(string rawLine)

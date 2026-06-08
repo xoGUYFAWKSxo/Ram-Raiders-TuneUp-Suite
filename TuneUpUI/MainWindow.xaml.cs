@@ -1172,6 +1172,36 @@ namespace TuneUpUI
             }
         }
 
+        private void BtnMsiRevert_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "This will restore the MSI interrupt settings to the state captured in the most recent " +
+                "backup taken before MSI mode was last enabled. A reboot is required for the change to apply.\n\n" +
+                "Proceed with the revert?",
+                "Revert MSI Mode",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                BtnMsiRevert.IsEnabled = false;
+                BtnMsiEnable.IsEnabled = false;
+                BtnMsiScan.IsEnabled = false;
+                TxtMsiStatus.Text = "Reverting MSI tweaks...";
+
+                SendAsyncIpcRequest("RevertMSIInterrupts", "",
+                    progress => { },
+                    completed =>
+                    {
+                        BtnMsiScan.IsEnabled = true;
+                        BtnMsiRevert.IsEnabled = true;
+                        TxtMsiStatus.Text = completed.Status == "Success"
+                            ? completed.Payload
+                            : "Error: " + completed.Message;
+                    });
+            }
+        }
+
         private void BtnOsTool_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn && btn.Tag is string command)

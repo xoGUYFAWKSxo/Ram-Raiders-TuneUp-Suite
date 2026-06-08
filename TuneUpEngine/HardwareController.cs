@@ -1,18 +1,38 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
 using Microsoft.Win32;
 
 namespace TuneUpEngine
 {
+    // Records the prior MSISupported state of a single device so a Force-MSI run can be undone.
+    public class MsiBackupEntry
+    {
+        // Full registry path (under HKLM) to the device's MessageSignaledInterruptProperties key.
+        public string MsiPropertiesKeyPath { get; set; }
+        public string DeviceDesc { get; set; }
+        public bool HadValue { get; set; }      // whether MSISupported already existed before our change
+        public int PreviousValue { get; set; }  // its prior value, when HadValue is true
+    }
+
     public class HardwareController
     {
+        private const string PciRoot = @"SYSTEM\CurrentControlSet\Enum\PCI";
+
+        // Timestamped MSI backups live alongside the Registry Guard backups, so every reversible
+        // change this suite makes ends up in one predictable place.
+        private static string BackupDir => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "RamRaidersTuneUpSuite", "RegistryBackups");
+
         public static string CheckMsiCompliance()
         {
             var compliantDevices = new List<string>();
             try
             {
-                using (var pciKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\PCI"))
+                using (var pciKey = Registry.LocalMachine.OpenSubKey(PciRoot))
                 {
                     if (pciKey == null) return "Error: Could not read PCI registry.";
 
@@ -26,10 +46,10 @@ namespace TuneUpEngine
                                 using (var instKey = devKey.OpenSubKey(instId))
                                 {
                                     if (instKey == null) continue;
-                                    
+
                                     string className = instKey.GetValue("Class") as string;
                                     string devDesc = instKey.GetValue("DeviceDesc") as string;
-                                    
+
                                     if (className == "Display" || className == "Net")
                                     {
                                         // Found a relevant device. Check if it has Interrupt Management
@@ -54,7 +74,7 @@ namespace TuneUpEngine
                         }
                     }
                 }
-                
+
                 if (compliantDevices.Count > 0)
                 {
                     return "Compliant: " + string.Join(", ", compliantDevices);
@@ -70,50 +90,125 @@ namespace TuneUpEngine
         public static string EnableMSI()
         {
             int updatedCount = 0;
+            int skipped = 0;
+            var backup = new List<MsiBackupEntry>();
             try
             {
-                using (var pciKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\PCI", true))
+                using (var pciKey = Registry.LocalMachine.OpenSubKey(PciRoot, true))
                 {
                     if (pciKey == null) return "Error: Could not read PCI registry.";
 
                     foreach (var devId in pciKey.GetSubKeyNames())
                     {
-                        using (var devKey = pciKey.OpenSubKey(devId, true))
+                        using var devKey = pciKey.OpenSubKey(devId, true);
+                        if (devKey == null) continue;
+
+                        foreach (var instId in devKey.GetSubKeyNames())
                         {
-                            if (devKey == null) continue;
-                            foreach (var instId in devKey.GetSubKeyNames())
+                            using var instKey = devKey.OpenSubKey(instId, true);
+                            if (instKey == null) continue;
+
+                            string className = instKey.GetValue("Class") as string;
+                            if (className != "Display" && className != "Net") continue;
+
+                            string devDesc = instKey.GetValue("DeviceDesc") as string ?? instId;
+
+                            // GATE: only touch devices that already expose an Interrupt Management node —
+                            // the exact same heuristic CheckMsiCompliance() uses to report a device as
+                            // "compliant". The previous code created this node from scratch for EVERY
+                            // Display/Net device and wrote MSISupported unconditionally, which is what
+                            // risked unbootable systems / black screens on hardware that can't do MSI.
+                            using var paramKey = instKey.OpenSubKey("Device Parameters", writable: true);
+                            if (paramKey == null) { skipped++; continue; }
+
+                            using var imKey = paramKey.OpenSubKey("Interrupt Management", writable: true);
+                            if (imKey == null) { skipped++; continue; }
+
+                            using var msiKey = imKey.CreateSubKey("MessageSignaledInterruptProperties");
+                            if (msiKey == null) { skipped++; continue; }
+
+                            // Record the prior state BEFORE writing, so this run can be reverted.
+                            object existing = msiKey.GetValue("MSISupported");
+                            backup.Add(new MsiBackupEntry
                             {
-                                using (var instKey = devKey.OpenSubKey(instId, true))
-                                {
-                                    if (instKey == null) continue;
-                                    
-                                    string className = instKey.GetValue("Class") as string;
-                                    
-                                    if (className == "Display" || className == "Net")
-                                    {
-                                        using (var paramKey = instKey.CreateSubKey("Device Parameters"))
-                                        {
-                                            using (var imKey = paramKey.CreateSubKey("Interrupt Management"))
-                                            {
-                                                using (var msiKey = imKey.CreateSubKey("MessageSignaledInterruptProperties"))
-                                                {
-                                                    msiKey.SetValue("MSISupported", 1, RegistryValueKind.DWord);
-                                                    updatedCount++;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                                MsiPropertiesKeyPath =
+                                    $@"{PciRoot}\{devId}\{instId}\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties",
+                                DeviceDesc = devDesc.Contains(';') ? devDesc.Split(';')[^1] : devDesc,
+                                HadValue = existing != null,
+                                PreviousValue = existing is int v ? v : 0
+                            });
+
+                            msiKey.SetValue("MSISupported", 1, RegistryValueKind.DWord);
+                            updatedCount++;
                         }
                     }
                 }
-                return $"Success: Enabled MSI for {updatedCount} devices. Reboot required.";
+
+                if (updatedCount == 0)
+                {
+                    return $"No compliant Display/Network devices required changes " +
+                           $"({skipped} device(s) skipped — no MSI support node present).";
+                }
+
+                string backupPath = SaveBackup(backup);
+                return $"Success: Enabled MSI for {updatedCount} compliant device(s) " +
+                       $"({skipped} skipped). Backup saved as {Path.GetFileName(backupPath)}. Reboot required.";
             }
             catch (Exception ex)
             {
                 return $"Error: {ex.Message}";
             }
+        }
+
+        // Restores MSISupported to its pre-tweak state using the most recent backup: the value is
+        // either set back to what it was, or removed entirely if we were the ones who created it.
+        public static string RevertMSI()
+        {
+            try
+            {
+                if (!Directory.Exists(BackupDir))
+                    return "No MSI backup found to revert.";
+
+                var latest = new DirectoryInfo(BackupDir)
+                    .GetFiles("MSI_Backup_*.json")
+                    .OrderByDescending(f => f.LastWriteTimeUtc)
+                    .FirstOrDefault();
+
+                if (latest == null)
+                    return "No MSI backup found to revert.";
+
+                var entries = JsonSerializer.Deserialize<List<MsiBackupEntry>>(
+                                  File.ReadAllText(latest.FullName)) ?? new List<MsiBackupEntry>();
+
+                int reverted = 0;
+                foreach (var e in entries)
+                {
+                    using var key = Registry.LocalMachine.OpenSubKey(e.MsiPropertiesKeyPath, writable: true);
+                    if (key == null) continue;
+
+                    if (e.HadValue)
+                        key.SetValue("MSISupported", e.PreviousValue, RegistryValueKind.DWord);
+                    else
+                        key.DeleteValue("MSISupported", throwOnMissingValue: false);
+
+                    reverted++;
+                }
+
+                return $"Success: Reverted MSI settings for {reverted} device(s) from {latest.Name}. Reboot required.";
+            }
+            catch (Exception ex)
+            {
+                return $"Error: {ex.Message}";
+            }
+        }
+
+        private static string SaveBackup(List<MsiBackupEntry> backup)
+        {
+            Directory.CreateDirectory(BackupDir);
+            string path = Path.Combine(BackupDir, $"MSI_Backup_{DateTime.Now:yyyyMMdd_HHmmss}.json");
+            File.WriteAllText(path, JsonSerializer.Serialize(backup,
+                new JsonSerializerOptions { WriteIndented = true }));
+            return path;
         }
     }
 }

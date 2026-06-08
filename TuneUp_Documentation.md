@@ -295,7 +295,7 @@ Allows users to analyze their directories and migrate large folders (such as gam
 ## File & Folder Structure
 
 ```
-New Project/
+Ram Raiders TuneUp Suite/
 ├── TuneUpEngine/                     # Backend service (runs elevated)
 │   ├── Program.cs                    # Entry point; initializes all modules
 │   ├── IpcServer.cs                  # Named pipe server; routes all UI commands

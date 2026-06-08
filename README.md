@@ -63,7 +63,7 @@ A professional-grade, high-performance Windows system optimization and maintenan
 ## Project Structure
 
 ```
-New Project/
+Ram Raiders TuneUp Suite/
 ├── TuneUpEngine/                     # Elevated Backend Engine
 │   ├── Program.cs                    # Main entry point & service wrappers
 │   ├── IpcServer.cs                  # Named Pipe server & JSON serializers
@@ -77,6 +77,8 @@ New Project/
 │   ├── Converters.cs                 # Custom WPF bindings & size formatting
 │   └── TrayIconHelper.cs             # System tray wrapper, notifications, & context menus
 │
+├── TuneUpEngine.Tests/              # xUnit unit tests for engine logic
+├── docs/                            # Static landing/waitlist site (GitHub Pages)
 ├── Start-TuneUp.bat                  # Developer launcher batch script
 ├── TuneUpApp.slnx                    # Solution manifest
 ├── TuneUp_Documentation.md           # Deep application technical documentation

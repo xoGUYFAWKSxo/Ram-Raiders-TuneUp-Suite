@@ -28,13 +28,12 @@ namespace TuneUpEngine
         {
             try
             {
-                // Enable modules
-                _governor.IsEnabled = true;
-                _memoryManager.IsAutoPurging = false; // Keep auto-purge off by default until UI configures it
-
-                // Start IPC Pipe Server
+                // Module enable/disable state was already applied from persisted EngineSettings in
+                // Program.Main before the service was constructed, so we must NOT re-force it here
+                // (doing so would clobber the user's saved choices). We only need to bring the IPC
+                // pipe online.
                 _ipcServer.Start();
-                
+
                 Console.WriteLine("[Service] TuneUp background service successfully started.");
             }
             catch (Exception ex)

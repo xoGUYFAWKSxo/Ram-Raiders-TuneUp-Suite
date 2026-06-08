@@ -289,29 +289,91 @@ namespace TuneUpEngine
 
         public static string RemoveAppxPackage(string packageFullName, Action<string> progressCallback)
         {
+            // The package identity arrives over IPC and is interpolated into a PowerShell
+            // command below, so it MUST be validated first. Without validation, a crafted
+            // name (e.g. one containing a quote) could break out of the string literal and
+            // execute arbitrary code in this ELEVATED process. Two independent gates:
+            //   1. Allowlist — the identity must be a package this tool actually offers to
+            //      remove (a curated Microsoft prefix or a known OEM prefix). Anything else
+            //      is refused outright.
+            //   2. Character whitelist — even an allowlisted value may only contain the
+            //      characters legal in an AppX identity name, so it cannot carry shell or
+            //      PowerShell metacharacters.
+            if (string.IsNullOrWhiteSpace(packageFullName))
+                return "Error: No package specified.";
+
+            // The UI sends the full package name (e.g. "Microsoft.BingWeather_4.x_x64__8wek...").
+            // The identity is everything before the first underscore.
+            string identity = packageFullName.Split('_')[0];
+
+            if (!IsSafePackageIdentity(identity) || !IsKnownRemovablePackage(identity))
+                return $"Error: '{packageFullName}' is not a recognized removable package. Removal refused.";
+
             // Use PowerShell to remove the package (avoids WinRT/COM complexity while keeping elevation)
             try
             {
-                progressCallback?.Invoke($"Removing {packageFullName}...");
+                progressCallback?.Invoke($"Removing {identity}...");
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "powershell.exe",
-                    Arguments = $"-NoProfile -NonInteractive -Command \"Get-AppxPackage '{packageFullName.Split('_')[0]}*' | Remove-AppxPackage -ErrorAction SilentlyContinue\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
+                // Build the argument vector explicitly (ArgumentList handles quoting), and embed
+                // the identity only after the validation above. Because 'identity' is restricted
+                // to [A-Za-z0-9.-], placing it inside a single-quoted PowerShell literal cannot
+                // inject code.
+                psi.ArgumentList.Add("-NoProfile");
+                psi.ArgumentList.Add("-NonInteractive");
+                psi.ArgumentList.Add("-Command");
+                psi.ArgumentList.Add(
+                    $"Get-AppxPackage '{identity}*' | Remove-AppxPackage -ErrorAction SilentlyContinue");
+
                 using var proc = System.Diagnostics.Process.Start(psi);
                 proc.WaitForExit(30000);
                 return proc.ExitCode == 0
-                    ? $"Successfully removed: {packageFullName}"
-                    : $"Removal returned exit code {proc.ExitCode} for: {packageFullName}";
+                    ? $"Successfully removed: {identity}"
+                    : $"Removal returned exit code {proc.ExitCode} for: {identity}";
             }
             catch (Exception ex)
             {
-                return $"Error removing {packageFullName}: {ex.Message}";
+                return $"Error removing {identity}: {ex.Message}";
             }
+        }
+
+        // Only the characters that are legal in an AppX package identity name. This deliberately
+        // excludes quotes, spaces, semicolons, pipes, ampersands and every other shell/PowerShell
+        // metacharacter, so a validated identity is safe to embed in a command string.
+        internal static bool IsSafePackageIdentity(string identity)
+        {
+            if (string.IsNullOrEmpty(identity)) return false;
+            foreach (char c in identity)
+            {
+                bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                          (c >= '0' && c <= '9') || c == '.' || c == '-';
+                if (!ok) return false;
+            }
+            return true;
+        }
+
+        // The identity must correspond to something this tool actually surfaces for removal:
+        // a curated Microsoft package prefix (exact match) or a known OEM prefix. This prevents
+        // the elevated engine from being asked to uninstall arbitrary packages.
+        internal static bool IsKnownRemovablePackage(string identity)
+        {
+            foreach (var (prefix, _, _) in _curatedPackages)
+            {
+                if (identity.Equals(prefix, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            foreach (var oemPrefix in _oemPackagePrefixes)
+            {
+                if (identity.StartsWith(oemPrefix, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
     }
 }

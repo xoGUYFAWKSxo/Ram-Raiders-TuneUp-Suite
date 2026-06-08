@@ -122,14 +122,20 @@ namespace TuneUpEngine
                     CreateNoWindow = true
                 })?.WaitForExit();
                 
-                // 5. Ultimate Power Plan Import
-                Process.Start(new ProcessStartInfo
+                // 5. Ultimate Power Plan Import — only if it isn't already present. `powercfg
+                // -duplicatescheme` mints a NEW plan on every call, so running it on each enable
+                // (Game Mode is on by default, so that's every engine start) would steadily fill the
+                // user's power-plan list with duplicate "Ultimate Performance" entries.
+                if (!UltimatePlanExists())
                 {
-                    FileName = "powercfg",
-                    Arguments = $"-duplicatescheme {UltimatePowerPlanGuid}",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                })?.WaitForExit();
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "powercfg",
+                        Arguments = $"-duplicatescheme {UltimatePowerPlanGuid}",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    })?.WaitForExit();
+                }
             }
             catch (Exception ex)
             {
@@ -349,6 +355,35 @@ namespace TuneUpEngine
             {
                 _lastBoostedPid = 0;
                 _lastBoostedName = "";
+            }
+        }
+
+        // Returns true if the Ultimate Performance power plan is already in the system's plan list,
+        // so we don't duplicate it again.
+        private bool UltimatePlanExists()
+        {
+            try
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "powercfg",
+                        Arguments = "/list",
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                process.Start();
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(5000);
+                return output.IndexOf(UltimatePowerPlanGuid, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch
+            {
+                // If we can't tell, assume it exists so we err on the side of NOT creating duplicates.
+                return true;
             }
         }
 

@@ -59,6 +59,38 @@ namespace TuneUpEngine
             return results;
         }
 
+        // True if the directory is a reparse point (symlink/junction). We never descend into or flag
+        // these: doing so risks infinite loops and touches content that physically lives elsewhere
+        // (for example a folder the Storage Migrator moved to another drive and symlinked back).
+        private static bool IsReparsePoint(string dir)
+        {
+            try { return (File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0; }
+            catch { return false; }
+        }
+
+        // Manual recursive file walk that skips reparse-point directories (Directory.EnumerateFiles
+        // with AllDirectories follows them, which is what we must avoid).
+        private static IEnumerable<string> EnumerateFilesSafe(string root)
+        {
+            var stack = new Stack<string>();
+            stack.Push(root);
+            while (stack.Count > 0)
+            {
+                string dir = stack.Pop();
+
+                string[] files = null;
+                try { files = Directory.GetFiles(dir); } catch { }
+                if (files != null)
+                    foreach (var f in files) yield return f;
+
+                string[] subdirs = null;
+                try { subdirs = Directory.GetDirectories(dir); } catch { }
+                if (subdirs != null)
+                    foreach (var d in subdirs)
+                        if (!IsReparsePoint(d)) stack.Push(d);
+            }
+        }
+
         private bool FindEmptyFolders(string currentDir, List<string> emptyFolders, string[] userFolders)
         {
             try
@@ -66,6 +98,9 @@ namespace TuneUpEngine
                 bool isEmpty = true;
                 foreach (var dir in Directory.GetDirectories(currentDir))
                 {
+                    // A symlinked/junctioned folder is not "empty" and must not be recursed into.
+                    if (IsReparsePoint(dir)) { isEmpty = false; continue; }
+
                     bool subIsEmpty = FindEmptyFolders(dir, emptyFolders, userFolders);
                     if (!subIsEmpty) isEmpty = false;
                 }
@@ -103,7 +138,7 @@ namespace TuneUpEngine
                 
                 try
                 {
-                    foreach (var file in Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories))
+                    foreach (var file in EnumerateFilesSafe(folder))
                     {
                         try
                         {
@@ -124,58 +159,104 @@ namespace TuneUpEngine
             // Only process sizes with > 1 file
             var potentialDuplicates = filesBySize.Where(kvp => kvp.Value.Count > 1).ToList();
             int current = 0;
-            
+
+            // Files reported here can be deleted by the user, so they must be TRUE byte-for-byte
+            // duplicates — not just files that happen to share a size or a common header. We confirm
+            // identity in three escalating stages so the expensive work only happens when needed:
+            //   1. Same size            (already grouped above — cheapest, no I/O)
+            //   2. Same first-1MB hash  (one short read — weeds out files with different headers)
+            //   3. Same full-file hash  (full read — proves the entire contents are identical)
+            // A pair is only reported when it matches at every stage.
             foreach (var group in potentialDuplicates)
             {
                 current++;
                 if (current % 10 == 0)
                     progressCallback?.Invoke($"Hashing potential duplicates... {current}/{potentialDuplicates.Count}");
 
-                var hashGroups = new Dictionary<string, List<string>>();
-
-                foreach (var file in group.Value)
-                {
-                    string hash = GetFastFileHash(file);
-                    if (hash == null) continue;
-
-                    if (!hashGroups.ContainsKey(hash))
-                        hashGroups[hash] = new List<string>();
-                    
-                    hashGroups[hash].Add(file);
-                }
-
                 int dupSetIndex = 1;
-                foreach (var hGroup in hashGroups.Where(kvp => kvp.Value.Count > 1))
+                void EmitSet(List<string> files)
                 {
                     results.Add(new ScanItem
                     {
                         Category = "Duplicate Files",
                         RuleName = $"Duplicate Set {current}-{dupSetIndex} ({FormatSize(group.Key)})",
-                        FilePaths = hGroup.Value,
-                        TotalSizeBytes = group.Key * (hGroup.Value.Count - 1) // Size that can be freed
+                        FilePaths = files,
+                        TotalSizeBytes = group.Key * (files.Count - 1) // Size that can be freed
                     });
                     dupSetIndex++;
+                }
+
+                // Stage 2: pre-filter on the first 1 MB.
+                var partialGroups = new Dictionary<string, List<string>>();
+                foreach (var file in group.Value)
+                {
+                    string ph = GetPartialHash(file);
+                    if (ph == null) continue;
+                    if (!partialGroups.TryGetValue(ph, out var list))
+                        partialGroups[ph] = list = new List<string>();
+                    list.Add(file);
+                }
+
+                // If the files are no larger than the pre-filter window, the first-1MB hash already
+                // covers the whole file, so a stage-2 match is already a confirmed duplicate.
+                bool partialCoversWholeFile = group.Key <= 1024 * 1024;
+
+                foreach (var partialGroup in partialGroups.Where(kvp => kvp.Value.Count > 1))
+                {
+                    if (partialCoversWholeFile)
+                    {
+                        EmitSet(partialGroup.Value);
+                        continue;
+                    }
+
+                    // Stage 3: confirm true byte-for-byte identity with a full-file hash. Only files
+                    // that already match on both size and first-1MB reach this expensive read.
+                    var fullGroups = new Dictionary<string, List<string>>();
+                    foreach (var file in partialGroup.Value)
+                    {
+                        string fh = GetFullHash(file);
+                        if (fh == null) continue;
+                        if (!fullGroups.TryGetValue(fh, out var list))
+                            fullGroups[fh] = list = new List<string>();
+                        list.Add(file);
+                    }
+
+                    foreach (var confirmed in fullGroups.Where(kvp => kvp.Value.Count > 1))
+                        EmitSet(confirmed.Value);
                 }
             }
 
             return results;
         }
 
-        private string GetFastFileHash(string path)
+        // Pre-filter hash: SHA-256 of the first 1 MB. A cheap way to separate files that merely
+        // share a size before committing to a full read. Files that differ here cannot be duplicates.
+        internal string GetPartialHash(string path)
         {
             try
             {
-                // Hash first 1MB for speed
-                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                {
-                    byte[] buffer = new byte[1024 * 1024];
-                    int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                    using (var md5 = MD5.Create())
-                    {
-                        byte[] hash = md5.ComputeHash(buffer, 0, bytesRead);
-                        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-                    }
-                }
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                byte[] buffer = new byte[1024 * 1024];
+                int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                using var sha = SHA256.Create();
+                return Convert.ToHexString(sha.ComputeHash(buffer, 0, bytesRead));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // Confirmation hash: SHA-256 over the entire file. Two files of identical size whose full-file
+        // hashes match are treated as byte-for-byte duplicates. SHA-256 (vs. the old first-1MB MD5)
+        // removes both the header-collision false positives and the weak-hash concern.
+        internal string GetFullHash(string path)
+        {
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var sha = SHA256.Create();
+                return Convert.ToHexString(sha.ComputeHash(stream));
             }
             catch
             {
