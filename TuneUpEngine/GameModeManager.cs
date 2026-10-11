@@ -23,13 +23,24 @@ namespace TuneUpEngine
         private Thread _boosterThread;
         private readonly object _lock = new object();
         
-        private int _lastBoostedPid = 0;
+        private volatile int _lastBoostedPid = 0;
         private string _lastBoostedName = "";
         private ProcessPriorityClass _lastOriginalPriority = ProcessPriorityClass.Normal;
         private IntPtr _lastOriginalAffinity;
-        
+
+        // PID of the game currently boosted (0 when none). Read by ProBalance so it never throttles it.
+        public int BoostedProcessId => _lastBoostedPid;
+
         private string _originalPowerPlanGuid = "";
-        private const string UltimatePowerPlanGuid = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+
+        // e9a42b02-… is Windows' hidden Ultimate Performance *template*. `powercfg -duplicatescheme`
+        // copies it to a brand-new random GUID, so the template GUID normally never appears in
+        // `powercfg /list` and can't be activated. The old code checked for and activated the template
+        // GUID, so it duplicated the plan on every enable and then failed to switch to it. We now copy
+        // the template to a fixed GUID that belongs to this app, which we can find and activate.
+        private const string UltimateTemplateGuid = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+        private const string AppUltimatePlanGuid = "5c6a6e1d-7b0a-4d8e-9f3a-52a1d0c7e4b9";
+        private string _ultimatePlanGuid = ""; // Resolved plan to activate while a game is boosted
         private int _cachedSystemResponsiveness = 20;
         private int _cachedGpuPriority = 8;
         private int _cachedGamePriority = 2;
@@ -122,20 +133,9 @@ namespace TuneUpEngine
                     CreateNoWindow = true
                 })?.WaitForExit();
                 
-                // 5. Ultimate Power Plan Import — only if it isn't already present. `powercfg
-                // -duplicatescheme` mints a NEW plan on every call, so running it on each enable
-                // (Game Mode is on by default, so that's every engine start) would steadily fill the
-                // user's power-plan list with duplicate "Ultimate Performance" entries.
-                if (!UltimatePlanExists())
-                {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "powercfg",
-                        Arguments = $"-duplicatescheme {UltimatePowerPlanGuid}",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    })?.WaitForExit();
-                }
+                // 5. Ultimate Power Plan — resolve (creating it at most once) the plan to activate
+                // while a game is boosted.
+                _ultimatePlanGuid = EnsureUltimatePlan();
             }
             catch (Exception ex)
             {
@@ -271,8 +271,11 @@ namespace TuneUpEngine
                             _lastBoostedName = procName;
                             
                             // Apply Active Enhancements
-                            _originalPowerPlanGuid = GetActivePowerPlanGuid();
-                            SetPowerPlan(UltimatePowerPlanGuid);
+                            if (!string.IsNullOrEmpty(_ultimatePlanGuid))
+                            {
+                                _originalPowerPlanGuid = GetActivePowerPlanGuid();
+                                SetPowerPlan(_ultimatePlanGuid);
+                            }
                             NtSetTimerResolution(5000, true, out uint _); // 0.5ms Timer
 
                             OnGameBoosted?.Invoke(procName, proc.Id);
@@ -335,6 +338,7 @@ namespace TuneUpEngine
                 if (!string.IsNullOrEmpty(_originalPowerPlanGuid))
                 {
                     SetPowerPlan(_originalPowerPlanGuid);
+                    _originalPowerPlanGuid = "";
                 }
 
                 using (var proc = Process.GetProcessById(_lastBoostedPid))
@@ -358,13 +362,54 @@ namespace TuneUpEngine
             }
         }
 
-        // Returns true if the Ultimate Performance power plan is already in the system's plan list,
-        // so we don't duplicate it again.
-        private bool UltimatePlanExists()
+        // Returns the GUID of an Ultimate Performance plan that is actually present in the plan list,
+        // creating our own copy of the template only if none exists. Returns "" if no usable plan can
+        // be found or created, in which case Game Mode simply leaves the power plan alone.
+        private string EnsureUltimatePlan()
+        {
+            string list = ListPowerPlans();
+            if (list == null) return ""; // Can't tell what exists — don't create anything.
+
+            string existing = FindUltimatePlanGuid(list);
+            if (!string.IsNullOrEmpty(existing)) return existing;
+
+            RunPowercfg($"-duplicatescheme {UltimateTemplateGuid} {AppUltimatePlanGuid}");
+
+            list = ListPowerPlans();
+            return list != null && list.Contains(AppUltimatePlanGuid, StringComparison.OrdinalIgnoreCase)
+                ? AppUltimatePlanGuid
+                : "";
+        }
+
+        // Prefers, in order: the copy this app created, the template itself (present on some
+        // editions), then any plan the user already made from it. The last check matches the plan
+        // name, which is only reliable on English Windows — elsewhere we fall through to creating
+        // our own copy once, which is still a single plan rather than one per engine start.
+        internal static string FindUltimatePlanGuid(string powercfgListOutput)
+        {
+            if (string.IsNullOrEmpty(powercfgListOutput)) return "";
+
+            if (powercfgListOutput.Contains(AppUltimatePlanGuid, StringComparison.OrdinalIgnoreCase))
+                return AppUltimatePlanGuid;
+            if (powercfgListOutput.Contains(UltimateTemplateGuid, StringComparison.OrdinalIgnoreCase))
+                return UltimateTemplateGuid;
+
+            foreach (var line in powercfgListOutput.Split('\n'))
+            {
+                if (!line.Contains("(Ultimate Performance)", StringComparison.OrdinalIgnoreCase)) continue;
+                var match = System.Text.RegularExpressions.Regex.Match(line,
+                    @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+                if (match.Success) return match.Value;
+            }
+
+            return "";
+        }
+
+        private static string ListPowerPlans()
         {
             try
             {
-                var process = new Process
+                using var process = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
@@ -378,13 +423,27 @@ namespace TuneUpEngine
                 process.Start();
                 string output = process.StandardOutput.ReadToEnd();
                 process.WaitForExit(5000);
-                return output.IndexOf(UltimatePowerPlanGuid, StringComparison.OrdinalIgnoreCase) >= 0;
+                return output;
             }
             catch
             {
-                // If we can't tell, assume it exists so we err on the side of NOT creating duplicates.
-                return true;
+                return null;
             }
+        }
+
+        private static void RunPowercfg(string arguments)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powercfg",
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                })?.WaitForExit(10000);
+            }
+            catch { }
         }
 
         private string GetActivePowerPlanGuid()

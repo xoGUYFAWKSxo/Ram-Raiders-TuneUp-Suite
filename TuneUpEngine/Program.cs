@@ -25,6 +25,9 @@ namespace TuneUpEngine
 
             // Restore the user's last feature-toggle choices (falls back to sensible defaults on a
             // first run: ProBalance on, AutoPurge off, GameMode on).
+            // ProBalance must never throttle the game Game Mode has just boosted.
+            governor.IsProcessExempt = pid => pid != 0 && pid == gameMode.BoostedProcessId;
+
             var engineSettings = EngineSettings.Load();
             governor.IsEnabled = engineSettings.ProBalanceEnabled;
             memoryManager.IsAutoPurging = engineSettings.AutoPurgeEnabled;

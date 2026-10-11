@@ -221,56 +221,61 @@ namespace TuneUpUI
             return null;
         }
 
+        // Sends a command whose handler may stream "Progress" lines before its final reply, and blocks
+        // until that final (non-Progress) reply arrives. Any command that reports progress MUST use
+        // this rather than SendIpcRequest, which reads exactly one line — for these commands that
+        // line is the first progress update, so the caller would treat "Copying files..." as the
+        // result and close the pipe while the operation was still running.
+        // onProgress is invoked on the calling (background) thread.
+        private IpcResponse SendIpcRequestStreaming(string command, string payload, Action<IpcResponse> onProgress)
+        {
+            try
+            {
+                using (var client = new NamedPipeClientStream(".", "TuneUpEnginePipe", PipeDirection.InOut))
+                {
+                    client.Connect(5000); // 5-second timeout for heavy active tasks
+
+                    var writer = new StreamWriter(client, Encoding.UTF8);
+                    var reader = new StreamReader(client, Encoding.UTF8);
+
+                    var req = new IpcRequest { Command = command, Payload = payload };
+                    writer.WriteLine(JsonSerializer.Serialize(req));
+                    writer.Flush();
+
+                    while (client.IsConnected)
+                    {
+                        string respJson = reader.ReadLine();
+                        if (string.IsNullOrEmpty(respJson)) break;
+
+                        var resp = JsonSerializer.Deserialize<IpcResponse>(respJson);
+                        if (resp == null) break;
+
+                        if (resp.Status == "Progress")
+                            onProgress?.Invoke(resp);
+                        else
+                            return resp;
+                    }
+                }
+
+                return new IpcResponse { Status = "Error", Message = "The engine closed the connection before the operation finished." };
+            }
+            catch (Exception ex)
+            {
+                return new IpcResponse { Status = "Error", Message = $"Failed to communicate with engine: {ex.Message}" };
+            }
+        }
+
         private void SendAsyncIpcRequest(
-            string command, 
-            string payload, 
-            Action<IpcResponse> progressCallback, 
+            string command,
+            string payload,
+            Action<IpcResponse> progressCallback,
             Action<IpcResponse> completedCallback)
         {
             Task.Run(() =>
             {
-                try
-                {
-                    using (var client = new NamedPipeClientStream(".", "TuneUpEnginePipe", PipeDirection.InOut))
-                    {
-                        client.Connect(5000); // 5-second timeout for heavy active tasks
-                        
-                        var writer = new StreamWriter(client, Encoding.UTF8);
-                        var reader = new StreamReader(client, Encoding.UTF8);
-                        
-                        var req = new IpcRequest { Command = command, Payload = payload };
-                        string json = JsonSerializer.Serialize(req);
-                        writer.WriteLine(json);
-                        writer.Flush();
-
-                        while (client.IsConnected)
-                        {
-                            string respJson = reader.ReadLine();
-                            if (string.IsNullOrEmpty(respJson)) break;
-
-                            var resp = JsonSerializer.Deserialize<IpcResponse>(respJson);
-                            if (resp == null) break;
-
-                            if (resp.Status == "Progress")
-                            {
-                                Dispatcher.Invoke(() => progressCallback(resp));
-                            }
-                            else
-                            {
-                                Dispatcher.Invoke(() => completedCallback(resp));
-                                break;
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Dispatcher.Invoke(() => completedCallback(new IpcResponse
-                    {
-                        Status = "Error",
-                        Message = $"Failed to communicate with engine: {ex.Message}"
-                    }));
-                }
+                var final = SendIpcRequestStreaming(command, payload,
+                    progress => Dispatcher.Invoke(() => progressCallback(progress)));
+                Dispatcher.Invoke(() => completedCallback(final));
             });
         }
 
@@ -283,16 +288,17 @@ namespace TuneUpUI
                 return;
             }
             string timestamped = $"[{DateTime.Now:HH:mm:ss}] {message}";
-            if (LstMonitorEvents.ItemsSource is List<string> monitorList)
-            {
-                monitorList.Insert(0, timestamped);
-                LstMonitorEvents.Items.Refresh();
-            }
-            if (LstDashboardEvents?.ItemsSource is List<string> dashList)
-            {
+            var monitorList = LstMonitorEvents.ItemsSource as List<string>;
+            var dashList = LstDashboardEvents?.ItemsSource as List<string>;
+
+            // Both lists are normally bound to the same List instance — insert only once, or the
+            // event would appear twice.
+            monitorList?.Insert(0, timestamped);
+            if (dashList != null && !ReferenceEquals(dashList, monitorList))
                 dashList.Insert(0, timestamped);
-                LstDashboardEvents.Items.Refresh();
-            }
+
+            if (monitorList != null) LstMonitorEvents.Items.Refresh();
+            if (dashList != null) LstDashboardEvents.Items.Refresh();
         }
 
         private void EnsureEngineRunning()
@@ -433,8 +439,14 @@ namespace TuneUpUI
                 var logs = JsonSerializer.Deserialize<List<string>>(logsElement.GetRawText());
                 if (logs != null)
                 {
-                    // Update lists if content changed
-                    if (LstDashboardEvents.Items.Count != logs.Count)
+                    // Update lists if content changed. Comparing counts alone stopped working once the
+                    // engine's log reached its 100-entry cap — the count stays at 100 from then on,
+                    // so the lists froze. Every entry is timestamped, so a new newest line means new events.
+                    string shownNewest = LstDashboardEvents.Items.Count > 0
+                        ? LstDashboardEvents.Items[LstDashboardEvents.Items.Count - 1] as string
+                        : null;
+                    string newest = logs.Count > 0 ? logs[logs.Count - 1] : null;
+                    if (LstDashboardEvents.Items.Count != logs.Count || shownNewest != newest)
                     {
                         LstDashboardEvents.ItemsSource = logs;
                         LstMonitorEvents.ItemsSource = logs;
@@ -605,11 +617,12 @@ namespace TuneUpUI
             TxtCleanerStatus.Text = $"Scan complete. Found {_scannedJunkItems.Count} rules mapping to {totalBytes / (1024.0 * 1024.0):F1} MB. Check the items you want to clean, then click Empty Junk Files.";
             BtnCleanJunk.IsEnabled = _scannedJunkItems.Count > 0;
             BtnToggleSelectJunk.IsEnabled = _scannedJunkItems.Count > 0;
-            _junkAllSelected = true;
-            BtnToggleSelectJunk.Content = "✕ Deselect All";
+            // Scan results arrive unchecked, so the button's first action must be "Select All".
+            _junkAllSelected = false;
+            BtnToggleSelectJunk.Content = "✓ Select All";
         }
 
-        private bool _junkAllSelected = true;
+        private bool _junkAllSelected = false;
 
         private void BtnToggleSelectJunk_Click(object sender, RoutedEventArgs e)
         {
@@ -678,7 +691,7 @@ namespace TuneUpUI
             {
                 // Only show the detail panel for rows that have real inspectable paths
                 // (Winapp2 rules target many files — cap display to 200 for performance)
-                bool isAdvanced = selected.Category == "Empty Folders" || selected.Category == "Duplicate Files";
+                bool isAdvanced = selected.Category == "Empty Folders" || selected.Category == AdvancedScanner.DuplicateFilesCategory;
                 if (isAdvanced || selected.FilePaths.Count <= 200)
                 {
                     TxtDetailHeader.Text = $"{selected.RuleName}  —  {selected.FilePaths.Count} path(s)";
@@ -757,6 +770,16 @@ namespace TuneUpUI
                 return;
             }
 
+            long selectedBytes = selectedItems.Sum(i => i.TotalSizeBytes);
+            bool hasDuplicates = selectedItems.Any(i => i.Category == AdvancedScanner.DuplicateFilesCategory);
+            string confirmText =
+                $"Permanently delete {selectedItems.Count} selected item(s) (about {selectedBytes / (1024.0 * 1024.0):F1} MB)?" +
+                (hasDuplicates
+                    ? "\n\nFor each duplicate set, the first copy listed is kept and only the extra copies are deleted."
+                    : "");
+            if (MessageBox.Show(confirmText, "Confirm Clean", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+
             ProgCleaner.Visibility = Visibility.Visible;
             ProgCleaner.Value = 0;
             BtnCleanJunk.IsEnabled = false;
@@ -810,10 +833,13 @@ namespace TuneUpUI
                     ProgRegistry.Visibility = Visibility.Collapsed;
                     if (completed.Status == "Success")
                     {
-                        _scannedRegistryIssues = JsonSerializer.Deserialize<List<RegistryIssue>>(completed.Payload);
+                        _scannedRegistryIssues = JsonSerializer.Deserialize<List<RegistryIssue>>(completed.Payload) ?? new List<RegistryIssue>();
                         LvwRegistryIssues.ItemsSource = _scannedRegistryIssues;
-                        TxtRegistryStatus.Text = $"Scan complete. Identified {_scannedRegistryIssues.Count} real structural registry defects.";
+                        TxtRegistryStatus.Text = $"Scan complete. Found {_scannedRegistryIssues.Count} broken entries. Check the ones you want to remove, then click Repair.";
                         BtnRepairRegistry.IsEnabled = _scannedRegistryIssues.Count > 0;
+                        BtnToggleSelectRegistry.IsEnabled = _scannedRegistryIssues.Count > 0;
+                        _registryAllSelected = false;
+                        BtnToggleSelectRegistry.Content = "✓ Select All";
                     }
                     else
                     {
@@ -823,13 +849,45 @@ namespace TuneUpUI
             );
         }
 
+        private bool _registryAllSelected = false;
+
+        private void BtnToggleSelectRegistry_Click(object sender, RoutedEventArgs e)
+        {
+            if (_scannedRegistryIssues == null || _scannedRegistryIssues.Count == 0) return;
+
+            _registryAllSelected = !_registryAllSelected;
+            foreach (var issue in _scannedRegistryIssues)
+            {
+                issue.IsSelected = _registryAllSelected;
+            }
+
+            BtnToggleSelectRegistry.Content = _registryAllSelected ? "✕ Deselect All" : "✓ Select All";
+        }
+
         private void BtnRepairRegistry_Click(object sender, RoutedEventArgs e)
         {
+            // Only the entries the user ticked are repaired. Previously the whole scan result was sent
+            // regardless of the checkboxes (which were bound to a property RegistryIssue didn't have).
+            var selectedIssues = _scannedRegistryIssues.Where(i => i.IsSelected).ToList();
+            if (selectedIssues.Count == 0)
+            {
+                MessageBox.Show("No entries are selected. Check the boxes next to the entries you want to remove, or use 'Select All'.", "Nothing Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                $"Remove {selectedIssues.Count} registry entr{(selectedIssues.Count == 1 ? "y" : "ies")}?\n\n" +
+                "Each key is exported to a .reg backup first (in %AppData%\\RamRaidersTuneUpSuite\\RegistryBackups), " +
+                "so you can restore it by double-clicking the backup file.",
+                "Confirm Registry Repair", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes) return;
+
             ProgRegistry.Visibility = Visibility.Visible;
             ProgRegistry.Value = 0;
             BtnRepairRegistry.IsEnabled = false;
+            BtnToggleSelectRegistry.IsEnabled = false;
 
-            string payload = JsonSerializer.Serialize(_scannedRegistryIssues);
+            string payload = JsonSerializer.Serialize(selectedIssues);
 
             SendAsyncIpcRequest("RepairRegistry", payload,
                 (progress) =>
@@ -842,14 +900,17 @@ namespace TuneUpUI
                     ProgRegistry.Visibility = Visibility.Collapsed;
                     if (completed.Status == "Success")
                     {
-                        MessageBox.Show("Registry Integrity Repairs Complete!\nAll invalid/broken keys backed up and safely removed.", "Registry Restored", MessageBoxButton.OK, MessageBoxImage.Information);
+                        MessageBox.Show($"Registry repair complete.\n{selectedIssues.Count} selected entr{(selectedIssues.Count == 1 ? "y was" : "ies were")} backed up and removed.", "Registry Restored", MessageBoxButton.OK, MessageBoxImage.Information);
                         TxtRegistryStatus.Text = "Registry cleaned and backed up.";
                         LvwRegistryIssues.ItemsSource = null;
                         _scannedRegistryIssues.Clear();
+                        BtnToggleSelectRegistry.IsEnabled = false;
                     }
                     else
                     {
                         TxtRegistryStatus.Text = $"Repair Failed: {completed.Message}";
+                        BtnRepairRegistry.IsEnabled = true;
+                        BtnToggleSelectRegistry.IsEnabled = true;
                     }
                 }
             );
@@ -1246,6 +1307,14 @@ namespace TuneUpUI
                                 chk.IsChecked = kvp.Value;
                                 chk.Click += TweakToggle_Click;
                             }
+
+                            // Retired security-reducing tweaks are only shown while they are still
+                            // active on this PC, so the user can switch them off.
+                            if (RegistryTweaker.RetiredTweaks.Contains(kvp.Key) &&
+                                FindName("Row" + kvp.Key) is Grid row)
+                            {
+                                row.Visibility = kvp.Value ? Visibility.Visible : Visibility.Collapsed;
+                            }
                         }
                     });
                 }
@@ -1258,7 +1327,21 @@ namespace TuneUpUI
             if (sender is CheckBox chk && chk.Tag is string tweakName)
             {
                 bool enable = chk.IsChecked ?? false;
-                Task.Run(() => SendIpcRequest("SetRegistryTweak", $"{tweakName}|{enable}"));
+                Task.Run(() =>
+                {
+                    var resp = SendIpcRequest("SetRegistryTweak", $"{tweakName}|{enable}");
+                    if (resp?.Status != "Success")
+                    {
+                        // The toggle flipped optimistically; re-read the real state so it doesn't
+                        // claim a change that never happened.
+                        Dispatcher.Invoke(() => AppendMonitorEvent($"[Tweaks] Could not {(enable ? "apply" : "revert")} '{tweakName}'. Is the engine running as Administrator?"));
+                        FetchRegistryTweaks();
+                    }
+                    else if (RegistryTweaker.RetiredTweaks.Contains(tweakName))
+                    {
+                        FetchRegistryTweaks(); // Hide the retired row now that it's switched off.
+                    }
+                });
             }
         }
 
@@ -1276,8 +1359,9 @@ namespace TuneUpUI
                         tweaksToApply = new[] { "DisableShortcutSuffix", "DisablePreventShutdown" };
                         break;
                     case "SecurityStability":
-                        if (MessageBox.Show("This category contains high-risk tweaks (e.g. disabling UAC). Are you sure you want to apply all of them?", "Warning", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-                        tweaksToApply = new[] { "CloseUnresponsive", "DisableSecurityWarning", "TakeOwnership", "DisableSmartScreen", "ShowBSODDetails", "EnableNetworkDrivesElevated", "DisableUAC", "EnableAntiAdware", "ForceCrashDump" };
+                        // The retired security-reducing tweaks (UAC, SmartScreen, download zone
+                        // warning) are deliberately not part of "apply all".
+                        tweaksToApply = new[] { "CloseUnresponsive", "TakeOwnership", "ShowBSODDetails", "EnableNetworkDrivesElevated", "EnableAntiAdware", "ForceCrashDump" };
                         break;
                     case "DesktopTweaks":
                         tweaksToApply = new[] { "SpeedUpMouseHover", "SpeedUpDesktopLoading", "DisableBingSearch", "TaskbarEndTask", "TaskbarSeconds" };
@@ -1526,13 +1610,15 @@ namespace TuneUpUI
             BtnRemoveAppx.IsEnabled = false;
             BtnRemoveAppx.Content = $"Removing {selected.Count} package(s)...";
 
-            Task.Run(async () =>
+            Task.Run(() =>
             {
+                // Strictly one at a time: each removal is awaited to completion (the streaming call
+                // returns only on the final reply), instead of firing the next after a fixed delay.
                 foreach (var pkg in selected)
                 {
-                    var resp = SendIpcRequest("RemoveAppxPackage", pkg.PackageFullName);
+                    var resp = SendIpcRequestStreaming("RemoveAppxPackage", pkg.PackageFullName,
+                        progress => Dispatcher.Invoke(() => BtnRemoveAppx.Content = progress.Message));
                     Dispatcher.Invoke(() => AppendMonitorEvent(resp?.Message ?? $"Processed {pkg.FriendlyName}"));
-                    await Task.Delay(500);
                 }
                 Dispatcher.Invoke(() =>
                 {
@@ -1599,7 +1685,8 @@ namespace TuneUpUI
             BtnNetApply.Content = "Applying...";
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("ApplyNetworkOptimizations", null);
+                var resp = SendIpcRequestStreaming("ApplyNetworkOptimizations", null,
+                    progress => Dispatcher.Invoke(() => BtnNetApply.Content = progress.Message));
                 Dispatcher.Invoke(() =>
                 {
                     BtnNetApply.IsEnabled = true;
@@ -1615,7 +1702,8 @@ namespace TuneUpUI
             BtnNetRevert.IsEnabled = false;
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("RevertNetworkOptimizations", null);
+                var resp = SendIpcRequestStreaming("RevertNetworkOptimizations", null,
+                    progress => Dispatcher.Invoke(() => AppendMonitorEvent($"[NetOptimizer] {progress.Message}")));
                 Dispatcher.Invoke(() =>
                 {
                     BtnNetRevert.IsEnabled = true;
@@ -1729,7 +1817,12 @@ namespace TuneUpUI
 
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("MigrateDirectory", $"{_migSource}|{_migDest}");
+                var resp = SendIpcRequestStreaming("MigrateDirectory", $"{_migSource}|{_migDest}",
+                    progress => Dispatcher.Invoke(() =>
+                    {
+                        ProgMigrate.Value = progress.ProgressPercent;
+                        TxtMigProgress.Text = progress.Message;
+                    }));
                 Dispatcher.Invoke(() =>
                 {
                     BtnMigrate.IsEnabled = true;

@@ -6,8 +6,27 @@ using Microsoft.Win32;
 
 namespace TuneUpEngine
 {
-    public class RegistryIssue
+    public class RegistryIssue : System.ComponentModel.INotifyPropertyChanged
     {
+        // Bound to the "Select" checkbox in the Registry Guard list. Only selected issues are sent
+        // for repair. Unchecked by default, matching the cleaner, so nothing is removed unless the
+        // user opts in.
+        private bool _isSelected = false;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (_isSelected != value)
+                {
+                    _isSelected = value;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsSelected)));
+                }
+            }
+        }
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
         public string Id { get; set; }
         public string Title { get; set; }
         public string KeyPath { get; set; }
@@ -55,7 +74,7 @@ namespace TuneUpEngine
                         if (string.IsNullOrEmpty(val)) continue;
 
                         string exePath = ExtractExecutablePath(val);
-                        if (!string.IsNullOrEmpty(exePath) && !File.Exists(exePath) && !exePath.Contains("System32"))
+                        if (IsMissingTarget(exePath))
                         {
                             issues.Add(new RegistryIssue
                             {
@@ -83,7 +102,7 @@ namespace TuneUpEngine
                         if (string.IsNullOrEmpty(val)) continue;
 
                         string exePath = ExtractExecutablePath(val);
-                        if (!string.IsNullOrEmpty(exePath) && !File.Exists(exePath) && !exePath.Contains("System32"))
+                        if (IsMissingTarget(exePath))
                         {
                             issues.Add(new RegistryIssue
                             {
@@ -117,8 +136,8 @@ namespace TuneUpEngine
                     string path = GetClsidPath(clsid);
                     if (string.IsNullOrEmpty(path)) continue;
 
-                    string expanded = Environment.ExpandEnvironmentVariables(path);
-                    if (!string.IsNullOrEmpty(expanded) && !File.Exists(expanded) && !expanded.Contains("System32"))
+                    string expanded = ExtractServerPath(path, isCommandLine: false);
+                    if (IsMissingTarget(expanded))
                     {
                         issues.Add(new RegistryIssue
                         {
@@ -181,10 +200,9 @@ namespace TuneUpEngine
 
                         if (string.IsNullOrEmpty(serverPath)) continue;
 
-                        string expanded = Environment.ExpandEnvironmentVariables(serverPath);
-                        string exePath = ExtractExecutablePath(expanded);
+                        string exePath = ExtractServerPath(serverPath, isCommandLine: serverKeyName == "LocalServer32");
 
-                        if (!string.IsNullOrEmpty(exePath) && !File.Exists(exePath) && !exePath.Contains("System32"))
+                        if (IsMissingTarget(exePath))
                         {
                             issues.Add(new RegistryIssue
                             {
@@ -257,6 +275,45 @@ namespace TuneUpEngine
             // No ".exe" found — fall back to the first whitespace-delimited token.
             int spaceIdx = expanded.IndexOf(' ');
             return spaceIdx > 0 ? expanded.Substring(0, spaceIdx) : expanded;
+        }
+
+        // COM InprocServer32 / shell-extension values hold a plain (possibly quoted) file path, which
+        // may legitimately contain spaces and has no ".exe" — so it must not go through the
+        // command-line splitter, which would truncate "C:\Program Files\x.dll" to "C:\Program".
+        // LocalServer32 values are command lines and do.
+        internal string ExtractServerPath(string rawValue, bool isCommandLine)
+        {
+            if (string.IsNullOrWhiteSpace(rawValue)) return string.Empty;
+            if (isCommandLine) return ExtractExecutablePath(Environment.ExpandEnvironmentVariables(rawValue));
+
+            string value = rawValue.Trim();
+            if (value.StartsWith("\""))
+            {
+                int endQuote = value.IndexOf('"', 1);
+                value = endQuote > 0 ? value.Substring(1, endQuote - 1) : value.Trim('"');
+            }
+            return Environment.ExpandEnvironmentVariables(value);
+        }
+
+        // Only report a target as missing when we can be certain. Repair deletes what the scan
+        // reports, so a false positive removes a working startup entry or COM registration.
+        //   * Bare names ("rundll32.exe", "mscoree.dll") are resolved by Windows through the search
+        //     path / App Paths — File.Exists on them is meaningless, so they are never flagged.
+        //   * A path without an extension is usually a truncated command line, not a real target.
+        //   * Anything under the Windows directory belongs to the OS and is never ours to remove
+        //     (the old check was a case-sensitive "System32", so "system32" paths slipped through).
+        internal static bool IsMissingTarget(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            if (!Path.IsPathFullyQualified(path)) return false;
+            if (!Path.HasExtension(path)) return false;
+
+            string windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if (!string.IsNullOrEmpty(windowsDir) &&
+                path.StartsWith(Path.TrimEndingDirectorySeparator(windowsDir) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return !File.Exists(path);
         }
 
         public bool Repair(List<RegistryIssue> issues, Action<string, int>? progressCallback = null)

@@ -277,6 +277,25 @@ namespace TuneUpEngine
             }
         }
 
+        // Runs a long operation off the session's read loop. The client blocks until it receives a
+        // final (non-Progress) reply, so an exception inside the job must still produce one —
+        // otherwise the UI would wait on the pipe forever.
+        private void RunInBackground(StreamWriter writer, string operation, Action job)
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    job();
+                }
+                catch (Exception ex)
+                {
+                    LogEvent($"[{operation}] Failed: {ex.Message}");
+                    SendResponse(writer, new IpcResponse { Status = "Error", Message = $"{operation} failed: {ex.Message}" });
+                }
+            });
+        }
+
         private void HandleRequest(IpcRequest request, StreamWriter writer)
         {
             Console.WriteLine($"[Engine IPC] Handling request: {request.Command}");
@@ -361,9 +380,9 @@ namespace TuneUpEngine
 
                 case "UpdateCleanerDefinitions":
                     string winapp2Path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "winapp2.ini");
-                    Task.Run(async () =>
+                    RunInBackground(writer, "Definitions sync", () =>
                     {
-                        bool success = await _downloader.SyncLatestDefinitionsAsync(winapp2Path);
+                        bool success = _downloader.SyncLatestDefinitionsAsync(winapp2Path).GetAwaiter().GetResult();
                         if (success)
                         {
                             _cleaner.LoadExternalWinapp2Ini(winapp2Path);
@@ -585,7 +604,7 @@ namespace TuneUpEngine
                     break;
 
                 case "RemoveAppxPackage":
-                    Task.Run(() =>
+                    RunInBackground(writer, "AppX removal", () =>
                     {
                         string r = DebloatGuard.RemoveAppxPackage(request.Payload,
                             msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }));
@@ -605,7 +624,7 @@ namespace TuneUpEngine
                     break;
 
                 case "ApplyNetworkOptimizations":
-                    Task.Run(() =>
+                    RunInBackground(writer, "Network optimization", () =>
                     {
                         string netResult = NetOptimizer.ApplyOptimizations(
                             msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }));
@@ -615,7 +634,7 @@ namespace TuneUpEngine
                     break;
 
                 case "RevertNetworkOptimizations":
-                    Task.Run(() =>
+                    RunInBackground(writer, "Network revert", () =>
                     {
                         string revertResult = NetOptimizer.RevertToDefaults(
                             msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }));
@@ -639,7 +658,7 @@ namespace TuneUpEngine
                         var migParts = request.Payload?.Split('|');
                         if (migParts?.Length == 2)
                         {
-                            Task.Run(() =>
+                            RunInBackground(writer, "Migration", () =>
                             {
                                 string migResult = StorageMigrator.Migrate(
                                     migParts[0], migParts[1],

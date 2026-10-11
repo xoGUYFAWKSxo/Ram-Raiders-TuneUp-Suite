@@ -46,6 +46,34 @@ namespace TuneUpEngine
         public event Action<string, int, string> OnProcessThrottled; // Name, ID, Reason
         public event Action<string, int> OnProcessRestored; // Name, ID
 
+        // Extra processes that must never be throttled, supplied by the host. Program wires this to
+        // the Game Mode booster so ProBalance can't demote the game Game Mode just elevated (games
+        // routinely saturate a core, which is exactly what ProBalance's spike detector looks for).
+        public Func<int, bool>? IsProcessExempt { get; set; }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        // The process that owns the window the user is interacting with. ProBalance exists to keep
+        // the foreground app responsive, so that process is never the one it throttles.
+        private static int GetForegroundProcessId()
+        {
+            try
+            {
+                IntPtr hWnd = GetForegroundWindow();
+                if (hWnd == IntPtr.Zero) return 0;
+                GetWindowThreadProcessId(hWnd, out uint pid);
+                return (int)pid;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
         public bool IsEnabled
         {
             get => _isEnabled;
@@ -132,16 +160,57 @@ namespace TuneUpEngine
 
         private void StopGovernor()
         {
-            try
+            DisposeWmiWatchers();
+
+            // Turning ProBalance off must hand back everything it took. Previously throttled
+            // processes stayed at Below Normal (and pinned to E-cores) until they exited.
+            lock (_lock)
             {
-                _startWatcher?.Stop();
-                _stopWatcher?.Stop();
+                foreach (var state in _trackedProcesses.Values)
+                {
+                    if (!state.IsThrottled) continue;
+                    try
+                    {
+                        using var proc = Process.GetProcessById(state.Id);
+                        // Guard against PID reuse: only touch the process we actually throttled.
+                        if (proc.ProcessName.Equals(state.Name, StringComparison.OrdinalIgnoreCase))
+                            RestoreProcess(proc, state);
+                    }
+                    catch
+                    {
+                        // Process already exited.
+                    }
+                    state.IsThrottled = false;
+                    state.SpikeSamples = 0;
+                }
             }
-            catch { }
+        }
+
+        private void DisposeWmiWatchers()
+        {
+            try { _startWatcher?.Stop(); } catch { }
+            try { _stopWatcher?.Stop(); } catch { }
+            _startWatcher?.Dispose();
+            _stopWatcher?.Dispose();
+            _startWatcher = null;
+            _stopWatcher = null;
+        }
+
+        private void RestoreProcess(Process proc, ProcessState state)
+        {
+            proc.PriorityClass = state.OriginalPriority;
+            // Restore affinity if we changed it
+            if (state.OriginalAffinity != IntPtr.Zero)
+                proc.ProcessorAffinity = state.OriginalAffinity;
+            state.IsThrottled = false;
+            OnProcessRestored?.Invoke(state.Name, state.Id);
         }
 
         private void InitializeWmiWatchers()
         {
+            // Re-enabling used to create a second pair of watchers without disposing the first.
+            DisposeWmiWatchers();
+
             try
             {
                 _startWatcher = new ManagementEventWatcher(new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace"));
@@ -233,6 +302,8 @@ namespace TuneUpEngine
         {
             var now = DateTime.UtcNow;
             List<int> deadProcesses = new List<int>();
+            int foregroundPid = GetForegroundProcessId();
+            var isExempt = IsProcessExempt;
 
             lock (_lock)
             {
@@ -258,6 +329,26 @@ namespace TuneUpEngine
 
                         if (deltaMs <= 0)
                         {
+                            continue;
+                        }
+
+                        // The foreground app and the Game Mode-boosted game are never throttled. If
+                        // one was throttled before it became exempt (e.g. the user alt-tabbed back to
+                        // it), hand its priority back straight away.
+                        if (pid == foregroundPid || (isExempt != null && isExempt(pid)))
+                        {
+                            state.SpikeSamples = 0;
+                            if (state.IsThrottled)
+                            {
+                                try
+                                {
+                                    RestoreProcess(proc, state);
+                                }
+                                catch (Exception pEx)
+                                {
+                                    Debug.WriteLine($"[ProBalance] Failed to restore exempt process {pName} ({pid}): {pEx.Message}");
+                                }
+                            }
                             continue;
                         }
 
@@ -315,12 +406,7 @@ namespace TuneUpEngine
                                 // Load subsided. Restore priority.
                                 try
                                 {
-                                    proc.PriorityClass = state.OriginalPriority;
-                                    // Restore affinity if we changed it
-                                    if (state.OriginalAffinity != IntPtr.Zero)
-                                        proc.ProcessorAffinity = state.OriginalAffinity;
-                                    state.IsThrottled = false;
-                                    OnProcessRestored?.Invoke(pName, pid);
+                                    RestoreProcess(proc, state);
                                 }
                                 catch (Exception pEx)
                                 {

@@ -508,6 +508,7 @@
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Button x:Name="BtnToggleSelectRegistry" Content="&#xE73A; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Click="BtnToggleSelectRegistry_Click" IsEnabled="False"/>
                                     <Button Content="Scan Registry Integrity" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="180" Click="BtnScanRegistry_Click"/>
                                     <Button x:Name="BtnRepairRegistry" Content="Repair Defective Entries" Style="{StaticResource PremiumButton}" Width="180" IsEnabled="False" Click="BtnRepairRegistry_Click"/>
                                 </StackPanel>
@@ -860,16 +861,16 @@
                                             <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Close unresponsive processes to avoid system crashes" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglCloseUnresponsive" Tag="CloseUnresponsive" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
-                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable security warning for downloaded files" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                        <Grid x:Name="RowDisableSecurityWarning" Visibility="Collapsed" Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable security warning for downloaded files" Foreground="#FF6666" FontWeight="SemiBold" FontSize="14"/><TextBlock Text="Retired: this weakens Windows security and is no longer offered. It is currently ON — switch it off to restore the protection." Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglDisableSecurityWarning" Tag="DisableSecurityWarning" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Add 'Take Ownership' option to File Explorer" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglTakeOwnership" Tag="TakeOwnership" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
-                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable SmartScreen in Windows 11" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                        <Grid x:Name="RowDisableSmartScreen" Visibility="Collapsed" Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable SmartScreen in Windows 11" Foreground="#FF6666" FontWeight="SemiBold" FontSize="14"/><TextBlock Text="Retired: this weakens Windows security and is no longer offered. It is currently ON — switch it off to restore the protection." Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglDisableSmartScreen" Tag="DisableSmartScreen" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -880,8 +881,8 @@
                                             <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Enable access to network drives from elevated apps" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglEnableNetworkDrivesElevated" Tag="EnableNetworkDrivesElevated" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
-                                        <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable User Account Control (UAC) [HIGH RISK]" Foreground="#FF6666" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                        <Grid x:Name="RowDisableUAC" Visibility="Collapsed" Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Disable User Account Control (UAC)" Foreground="#FF6666" FontWeight="SemiBold" FontSize="14"/><TextBlock Text="Retired: this weakens Windows security and is no longer offered. It is currently ON — switch it off to restore the protection." Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglDisableUAC" Tag="DisableUAC" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
