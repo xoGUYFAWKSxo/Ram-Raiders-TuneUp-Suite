@@ -288,7 +288,7 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Winapp2] Failed to parse {filePath}: {ex.Message}");
+                EngineLog.Warn($"[Winapp2] Failed to parse {filePath}: {ex.Message}");
             }
         }
 
@@ -532,7 +532,8 @@ namespace TuneUpEngine
         public List<ScanItem> Scan(Action<string, int>? progressCallback = null) =>
             Scan(ClientContext.ForCurrentProcess(), progressCallback);
 
-        public List<ScanItem> Scan(ClientContext ctx, Action<string, int>? progressCallback = null)
+        // ct: cancels the scan (throws OperationCanceledException between rules).
+        public List<ScanItem> Scan(ClientContext ctx, Action<string, int>? progressCallback = null, CancellationToken ct = default)
         {
             var results = new List<ScanItem>();
             int count = 0;
@@ -550,6 +551,7 @@ namespace TuneUpEngine
 
             foreach (var rule in rules)
             {
+                ct.ThrowIfCancellationRequested();
                 progressCallback?.Invoke(rule.Name, (count * 100) / rules.Count);
                 count++;
 
@@ -715,13 +717,16 @@ namespace TuneUpEngine
         //     a cache folder between scan and clean can't borrow the engine's rights.
         //   * Anything outside the profile (Windows logs, Prefetch, Delivery Optimization) needs
         //     administrator rights and is only cleaned for administrator accounts.
-        public long Clean(List<ScanItem> items, ClientContext ctx, Action<string, int>? progressCallback = null)
+        // ct: stops cleaning between files and returns what was freed so far (nothing is left
+        // half-deleted — each file is either deleted or untouched).
+        public long Clean(List<ScanItem> items, ClientContext ctx, Action<string, int>? progressCallback = null, CancellationToken ct = default)
         {
             long deletedBytes = 0;
             int count = 0;
 
             foreach (var item in items)
             {
+                if (ct.IsCancellationRequested) break;
                 progressCallback?.Invoke($"Cleaning {item.RuleName}", (count * 100) / items.Count);
                 count++;
 
@@ -739,6 +744,7 @@ namespace TuneUpEngine
 
                 foreach (var path in GetDeletionTargets(item))
                 {
+                    if (ct.IsCancellationRequested) break;
                     if (isDuplicateSet && _hasher.GetFullHash(path) != keptHash)
                         continue; // No longer identical to the kept copy — leave it alone.
 

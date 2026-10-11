@@ -172,7 +172,7 @@ namespace TuneUpEngine
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[LatencyAuditor] Sampling error: {ex.Message}");
+                    EngineLog.Warn($"[LatencyAuditor] Sampling error: {ex.Message}");
                 }
 
                 Thread.Sleep(SampleInterval);

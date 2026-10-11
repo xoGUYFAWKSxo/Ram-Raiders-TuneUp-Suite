@@ -173,7 +173,7 @@ namespace TuneUpEngine
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[RegistryTweaker] Failed to read {tweak.Id}: {ex.Message}");
+                    EngineLog.Warn($"[RegistryTweaker] Failed to read {tweak.Id}: {ex.Message}");
                     statuses[tweak.Id] = false;
                 }
             }
@@ -216,7 +216,7 @@ namespace TuneUpEngine
         {
             if (enable && RetiredTweaks.Contains(tweakName))
             {
-                Console.WriteLine($"[RegistryTweaker] Refused to enable retired security-reducing tweak {tweakName}.");
+                EngineLog.Warn($"[RegistryTweaker] Refused to enable retired security-reducing tweak {tweakName}.");
                 return false;
             }
 
@@ -225,7 +225,7 @@ namespace TuneUpEngine
 
             if (RequiresAdministrator(tweak) && !ctx.IsAdministrator)
             {
-                Console.WriteLine($"[RegistryTweaker] Refused {tweakName}: machine-wide tweaks require an administrator account.");
+                EngineLog.Warn($"[RegistryTweaker] Refused {tweakName}: machine-wide tweaks require an administrator account.");
                 return false;
             }
 
@@ -235,7 +235,7 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[RegistryTweaker] Failed to set tweak {tweakName}: {ex.Message}");
+                EngineLog.Warn($"[RegistryTweaker] Failed to set tweak {tweakName}: {ex.Message}");
                 return false;
             }
         }
@@ -251,7 +251,7 @@ namespace TuneUpEngine
             if (!captured)
             {
                 journal.Release(owner);
-                Console.WriteLine($"[RegistryTweaker] Could not record the original state of {tweak.Id}; nothing was changed.");
+                EngineLog.Warn($"[RegistryTweaker] Could not record the original state of {tweak.Id}; nothing was changed.");
                 return false;
             }
 

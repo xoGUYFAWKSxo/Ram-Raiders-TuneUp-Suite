@@ -424,6 +424,7 @@
 
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button x:Name="BtnToggleSelectJunk" Content="&#xE73A; Deselect All" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False"/>
+                                    <Button x:Name="BtnCancelCleaner" Content="Cancel" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Visibility="Collapsed" Click="BtnCancelCleaner_Click"/>
                                     <Button Content="Scan for Junk Files" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="160" Click="BtnScanJunk_Click"/>
                                     <Button x:Name="BtnCleanJunk" Content="Empty Junk Files" Style="{StaticResource PremiumButton}" Width="160" IsEnabled="False" Click="BtnCleanJunk_Click"/>
                                 </StackPanel>
@@ -1164,6 +1165,9 @@
                                                     Padding="14,8" Margin="0,0,10,0" IsEnabled="False" Click="BtnMigAnalyze_Click"/>
                                             <Button x:Name="BtnMigrate" Content="&#xE8DE; Migrate &amp; Symlink" Style="{StaticResource PremiumButton}"
                                                     Padding="14,8" IsEnabled="False" Click="BtnMigrate_Click"/>
+                                            <Button x:Name="BtnCancelMigration" Content="Cancel" Style="{StaticResource OutlineButton}"
+                                                    Padding="14,8" Margin="10,0,0,0" Visibility="Collapsed" Click="BtnCancelMigration_Click"
+                                                    ToolTip="Stops while files are still being copied; the original folder is left untouched"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>

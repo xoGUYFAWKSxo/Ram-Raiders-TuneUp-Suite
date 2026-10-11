@@ -399,7 +399,8 @@ namespace TuneUpEngine
         // Moves a migrated folder back to its original location and removes the link. Same safety
         // rules as migrating: the files are copied back and verified BEFORE the link is replaced,
         // and the moved copy is only deleted once the folder is back in place.
-        public static string UndoMigration(string originalPath, Action<string, double> progressCallback)
+        // ct cancels only while copying back (before anything is replaced).
+        public static string UndoMigration(string originalPath, Action<string, double> progressCallback, CancellationToken ct = default)
         {
             var record = GetHistory().FirstOrDefault(r =>
                 r.OriginalPath.Equals(originalPath, StringComparison.OrdinalIgnoreCase));
@@ -434,7 +435,7 @@ namespace TuneUpEngine
 
                 progressCallback?.Invoke("Copying files back...", 0);
                 long copied = 0;
-                CopyDirectory(record.DestinationPath, restoring, ref copied, size, progressCallback, CancellationToken.None);
+                CopyDirectory(record.DestinationPath, restoring, ref copied, size, progressCallback, ct);
 
                 progressCallback?.Invoke("Verifying the copy...", 90);
                 var (verified, detail) = VerifyCopy(record.DestinationPath, restoring);

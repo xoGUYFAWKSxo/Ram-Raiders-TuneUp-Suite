@@ -15,16 +15,29 @@ namespace TuneUpEngine
             bool isServiceMode = args.Length > 0 && args[0].Equals("--service", StringComparison.OrdinalIgnoreCase);
 
             // The record of every system setting the engine has changed (ProgramData, admin-only).
+            // Created first: it locks the ProgramData folder down before the log folder is made in it.
             var journal = ChangeJournal.CreateDefault();
+
+            // Log to %ProgramData%\RamRaidersTuneUpSuite\logs, and make sure a crash is recorded
+            // there instead of vanishing (a service has no console to show it).
+            EngineLog.Initialize();
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+                EngineLog.Error($"[Engine] Unhandled exception: {e.ExceptionObject}");
+            System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                EngineLog.Error($"[Engine] Unobserved task exception: {e.Exception}");
+                e.SetObserved();
+            };
+            EngineLog.Info($"[Engine] Starting ({(isServiceMode ? "service" : "console")} mode), version {typeof(Program).Assembly.GetName().Version}, as {WindowsIdentity.GetCurrent().Name}.");
 
             // "--revert-all": undo every change this app has ever made, then exit. Used by the
             // uninstaller (stop the engine first).
             if (args.Any(a => a.Equals("--revert-all", StringComparison.OrdinalIgnoreCase)))
             {
                 int failed = journal.ReleaseAll();
-                Console.WriteLine(failed == 0
-                    ? "[Engine] All changes reverted."
-                    : $"[Engine] {failed} change(s) could not be reverted.");
+                EngineLog.Info(failed == 0
+                    ? "[Engine] --revert-all: all changes reverted."
+                    : $"[Engine] --revert-all: {failed} change(s) could not be reverted.");
                 Environment.ExitCode = failed == 0 ? 0 : 1;
                 return;
             }
@@ -110,6 +123,7 @@ namespace TuneUpEngine
                 if (!isAdmin)
                 {
                     Console.ForegroundColor = ConsoleColor.Yellow;
+                    EngineLog.Warn("[Engine] Not running as Administrator — system-level features will fail or be skipped.");
                     Console.WriteLine("[Warning] Engine is not running as Administrator!");
                     Console.WriteLine("          Low-level memory APIs, process priority modifications,");
                     Console.WriteLine("          and system repairs (SFC/DISM) will fail or be skipped.");
@@ -132,8 +146,7 @@ namespace TuneUpEngine
                     // FirstPipeInstance failed: another engine — or some other program — already owns
                     // the pipe name. Never run alongside it.
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("[Engine] The engine pipe is already in use (another TuneUp engine, or another program).");
-                    Console.WriteLine($"         {ex.Message}");
+                    EngineLog.Error($"[Engine] The engine pipe is already in use (another TuneUp engine, or another program): {ex.Message}");
                     Console.ResetColor();
                     Environment.ExitCode = 1;
                     return;
@@ -148,7 +161,7 @@ namespace TuneUpEngine
                 var keepAliveEvent = new ManualResetEvent(false);
                 Console.CancelKeyPress += (sender, e) =>
                 {
-                    Console.WriteLine("[Engine] Terminating engine background service...");
+                    EngineLog.Info("[Engine] Ctrl+C received — shutting down.");
                     // Clean up before exiting rather than letting Ctrl+C kill the process mid-way.
                     e.Cancel = true;
                     ReleaseTemporaryChanges();

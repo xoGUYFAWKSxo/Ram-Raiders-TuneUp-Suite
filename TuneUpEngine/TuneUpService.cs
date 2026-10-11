@@ -39,11 +39,11 @@ namespace TuneUpEngine
                 _ipcServer.Start();
                 _applySavedModuleStates?.Invoke();
 
-                Console.WriteLine("[Service] TuneUp background service successfully started.");
+                EngineLog.Info("[Service] TuneUp background service successfully started.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Service] Failed to start service: {ex.Message}");
+                EngineLog.Warn($"[Service] Failed to start service: {ex.Message}");
                 throw;
             }
         }
@@ -59,11 +59,11 @@ namespace TuneUpEngine
                 _governor.IsEnabled = false;
                 _memoryManager.IsAutoPurging = false;
 
-                Console.WriteLine("[Service] TuneUp background service successfully stopped.");
+                EngineLog.Info("[Service] TuneUp background service successfully stopped.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Service] Error stopping service: {ex.Message}");
+                EngineLog.Warn($"[Service] Error stopping service: {ex.Message}");
             }
         }
 

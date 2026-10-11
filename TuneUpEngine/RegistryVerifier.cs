@@ -407,7 +407,7 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[RegistryVerifier] Could not write backups to {backupDir}: {ex.Message}");
+                EngineLog.Warn($"[RegistryVerifier] Could not write backups to {backupDir}: {ex.Message}");
             }
 
             progressCallback?.Invoke("Repair Complete", 100);

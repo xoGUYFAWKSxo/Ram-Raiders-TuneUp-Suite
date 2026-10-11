@@ -254,7 +254,7 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ProBalance] Failed to initialize WMI Watchers: {ex.Message}");
+                EngineLog.Warn($"[ProBalance] Failed to initialize WMI Watchers: {ex.Message}");
             }
         }
 
@@ -273,7 +273,7 @@ namespace TuneUpEngine
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[ProBalance] Error in monitor loop: {ex.Message}");
+                    EngineLog.Warn($"[ProBalance] Error in monitor loop: {ex.Message}");
                 }
 
                 Thread.Sleep(SampleIntervalMs);
@@ -328,7 +328,7 @@ namespace TuneUpEngine
                                 }
                                 catch (Exception pEx)
                                 {
-                                    Debug.WriteLine($"[ProBalance] Failed to restore exempt process {pName} ({pid}): {pEx.Message}");
+                                    EngineLog.Warn($"[ProBalance] Failed to restore exempt process {pName} ({pid}): {pEx.Message}");
                                 }
                             }
                             continue;
@@ -371,7 +371,7 @@ namespace TuneUpEngine
                                 }
                                 catch (Exception pEx)
                                 {
-                                    Debug.WriteLine($"[ProBalance] Failed to set priority for {pName} ({pid}): {pEx.Message}");
+                                    EngineLog.Warn($"[ProBalance] Failed to set priority for {pName} ({pid}): {pEx.Message}");
                                 }
                             }
                         }
@@ -392,7 +392,7 @@ namespace TuneUpEngine
                                 }
                                 catch (Exception pEx)
                                 {
-                                    Debug.WriteLine($"[ProBalance] Failed to restore priority for {pName} ({pid}): {pEx.Message}");
+                                    EngineLog.Warn($"[ProBalance] Failed to restore priority for {pName} ({pid}): {pEx.Message}");
                                 }
                             }
                         }

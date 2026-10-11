@@ -58,7 +58,7 @@ namespace TuneUpEngine
         public List<ScanItem> ScanEmptyFolders(Action<string> progressCallback) =>
             ScanEmptyFolders(UserFolders.ForCurrentProcess(), progressCallback);
 
-        public List<ScanItem> ScanEmptyFolders(UserFolders folders, Action<string> progressCallback)
+        public List<ScanItem> ScanEmptyFolders(UserFolders folders, Action<string> progressCallback, CancellationToken ct = default)
         {
             var results = new List<ScanItem>();
             var emptyFolders = new List<string>();
@@ -69,7 +69,8 @@ namespace TuneUpEngine
                 if (Directory.Exists(folder))
                 {
                     progressCallback?.Invoke($"Scanning for empty folders in {Path.GetFileName(folder)}...");
-                    FindEmptyFolders(folder, emptyFolders, userFolders);
+                    ct.ThrowIfCancellationRequested();
+                    FindEmptyFolders(folder, emptyFolders, userFolders, ct);
                 }
             }
 
@@ -119,8 +120,10 @@ namespace TuneUpEngine
             }
         }
 
-        private bool FindEmptyFolders(string currentDir, List<string> emptyFolders, string[] userFolders)
+        private bool FindEmptyFolders(string currentDir, List<string> emptyFolders, string[] userFolders, CancellationToken ct)
         {
+            // Checked at every folder (outside the try below, so it isn't swallowed).
+            ct.ThrowIfCancellationRequested();
             try
             {
                 bool isEmpty = true;
@@ -129,7 +132,7 @@ namespace TuneUpEngine
                     // A symlinked/junctioned folder is not "empty" and must not be recursed into.
                     if (IsReparsePoint(dir)) { isEmpty = false; continue; }
 
-                    bool subIsEmpty = FindEmptyFolders(dir, emptyFolders, userFolders);
+                    bool subIsEmpty = FindEmptyFolders(dir, emptyFolders, userFolders, ct);
                     if (!subIsEmpty) isEmpty = false;
                 }
 
@@ -146,7 +149,7 @@ namespace TuneUpEngine
 
                 return isEmpty;
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Access denied, treat as not empty to be safe
                 return false;
@@ -156,7 +159,7 @@ namespace TuneUpEngine
         public List<ScanItem> ScanDuplicateFiles(Action<string> progressCallback) =>
             ScanDuplicateFiles(UserFolders.ForCurrentProcess(), progressCallback);
 
-        public List<ScanItem> ScanDuplicateFiles(UserFolders folders, Action<string> progressCallback)
+        public List<ScanItem> ScanDuplicateFiles(UserFolders folders, Action<string> progressCallback, CancellationToken ct = default)
         {
             var results = new List<ScanItem>();
             var filesBySize = new Dictionary<long, List<string>>();
@@ -173,6 +176,7 @@ namespace TuneUpEngine
                 {
                     foreach (var file in EnumerateFilesSafe(folder))
                     {
+                        ct.ThrowIfCancellationRequested();
                         try
                         {
                             if (!indexedPaths.Add(Path.GetFullPath(file))) continue;
@@ -189,7 +193,8 @@ namespace TuneUpEngine
                         catch { }
                     }
                 }
-                catch { }
+                // Skip unreadable folders, but never swallow a cancellation.
+                catch (Exception ex) when (ex is not OperationCanceledException) { }
             }
 
             // Only process sizes with > 1 file
@@ -205,6 +210,7 @@ namespace TuneUpEngine
             // A pair is only reported when it matches at every stage.
             foreach (var group in potentialDuplicates)
             {
+                ct.ThrowIfCancellationRequested();
                 current++;
                 if (current % 10 == 0)
                     progressCallback?.Invoke($"Hashing potential duplicates... {current}/{potentialDuplicates.Count}");

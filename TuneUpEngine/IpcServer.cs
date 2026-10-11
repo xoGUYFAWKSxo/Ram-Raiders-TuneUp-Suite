@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
@@ -11,20 +12,6 @@ using System.Threading.Tasks;
 
 namespace TuneUpEngine
 {
-    public class IpcRequest
-    {
-        public string Command { get; set; }
-        public string Payload { get; set; }
-    }
-
-    public class IpcResponse
-    {
-        public string Status { get; set; } // "Success", "Error", "Progress"
-        public double ProgressPercent { get; set; }
-        public string Message { get; set; }
-        public string Payload { get; set; }
-    }
-
     public class EngineStatsPayload
     {
         public int CpuCount { get; set; }
@@ -83,11 +70,12 @@ namespace TuneUpEngine
         // everyone; SetRegistryTweak, CleanJunk and RepairRegistry check per item.)
         internal static readonly IReadOnlySet<string> AdministratorCommands = new HashSet<string>(StringComparer.Ordinal)
         {
-            "SetGovernorState", "SetAutoPurgeState", "SetGameModeState", "PurgeStandbyList",
-            "ProvisionMSIInterrupts", "RevertMSIInterrupts", "UpdateCleanerDefinitions",
-            "RunSystemRepair", "SetServiceState", "RemoveAppxPackage",
-            "ApplyNetworkOptimizations", "RevertNetworkOptimizations", "MigrateDirectory", "UndoMigration",
-            "StartLatencyAudit", "StopLatencyAudit", "ShutdownEngine",
+            IpcCommands.SetGovernorState, IpcCommands.SetAutoPurgeState, IpcCommands.SetGameModeState,
+            IpcCommands.PurgeStandbyList, IpcCommands.ProvisionMSIInterrupts, IpcCommands.RevertMSIInterrupts,
+            IpcCommands.UpdateCleanerDefinitions, IpcCommands.RunSystemRepair, IpcCommands.SetServiceState,
+            IpcCommands.RemoveAppxPackage, IpcCommands.ApplyNetworkOptimizations, IpcCommands.RevertNetworkOptimizations,
+            IpcCommands.MigrateDirectory, IpcCommands.UndoMigration, IpcCommands.StartLatencyAudit,
+            IpcCommands.StopLatencyAudit, IpcCommands.ShutdownEngine,
         };
         private readonly IReadOnlyList<string> _trustedClientPaths;
         private NamedPipeServerStream? _firstInstance;
@@ -278,14 +266,14 @@ namespace TuneUpEngine
                     string? clientImage = ClientVerifier.GetClientImagePath(pipeServer);
                     if (!ClientVerifier.IsTrustedClient(clientImage, _trustedClientPaths))
                     {
-                        Console.WriteLine($"[Engine IPC] Rejected connection from untrusted client: {clientImage ?? "(unknown process)"}");
+                        EngineLog.Warn($"[Engine IPC] Rejected connection from untrusted client: {clientImage ?? "(unknown process)"}");
                         LogEvent($"[Security] Rejected a connection from {Path.GetFileName(clientImage ?? "an unknown process")}");
                         try { pipeServer.Disconnect(); } catch { }
                         pipeServer.Dispose();
                         continue;
                     }
 
-                    Console.WriteLine("[Engine IPC] A client has connected.");
+                    EngineLog.Debug("[Engine IPC] A client has connected.");
 
                     // Handle this client session in a separate background thread/Task
                     Task.Run(() => HandleClientSession(pipeServer));
@@ -293,7 +281,7 @@ namespace TuneUpEngine
                 catch (Exception ex)
                 {
                     if (!_isRunning) break;
-                    Console.WriteLine($"[Engine IPC] Server connection error: {ex.Message}");
+                    EngineLog.Warn($"[Engine IPC] Server connection error: {ex.Message}");
                     Thread.Sleep(250);
                 }
             }
@@ -338,12 +326,18 @@ namespace TuneUpEngine
                     // is resolved once the first request line has arrived.
                     ClientContext? ctx = null;
 
+                    // Background jobs started on this connection, by RequestId, so the client can
+                    // cancel them — and so they're cancelled if the client goes away mid-job.
+                    var jobs = new ConcurrentDictionary<string, CancellationTokenSource>();
+
+                    try
+                    {
                     while (_isRunning && pipeServer.IsConnected)
                     {
                         string? requestLine = ReadLineBounded(reader, MaxRequestChars, out bool tooLong);
                         if (tooLong)
                         {
-                            SendResponse(writer, new IpcResponse { Status = "Error", Message = "Request too large." });
+                            SendResponse(writer, new IpcResponse { Status = IpcStatus.Error, Message = "Request too large." });
                             break;
                         }
                         if (string.IsNullOrEmpty(requestLine)) break;
@@ -356,8 +350,8 @@ namespace TuneUpEngine
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"[Engine IPC] Could not identify client: {ex.Message}");
-                                SendResponse(writer, new IpcResponse { Status = "Error", Message = "The engine could not identify your user account. Please update TuneUp." });
+                                EngineLog.Warn($"[Engine IPC] Could not identify client: {ex.Message}");
+                                SendResponse(writer, new IpcResponse { Status = IpcStatus.Error, Message = "The engine could not identify your user account. Please update TuneUp." });
                                 break;
                             }
                         }
@@ -365,23 +359,42 @@ namespace TuneUpEngine
                         try
                         {
                             var request = JsonSerializer.Deserialize<IpcRequest>(requestLine);
-                            if (request?.Command == null)
+                            if (string.IsNullOrEmpty(request?.Command))
                                 throw new JsonException("Missing command.");
-                            HandleRequest(request, writer, ctx);
+
+                            if (request.Command == IpcCommands.CancelRequest)
+                            {
+                                // No reply of its own: the cancelled job sends its final reply.
+                                if (request.Payload != null && jobs.TryGetValue(request.Payload, out var cts))
+                                    cts.Cancel();
+                                continue;
+                            }
+
+                            HandleRequest(request, writer, ctx, jobs);
                         }
                         catch (Exception ex)
                         {
                             SendResponse(writer, new IpcResponse
                             {
-                                Status = "Error",
+                                Status = IpcStatus.Error,
                                 Message = $"Malformed request: {ex.Message}"
                             });
+                        }
+                    }
+                    }
+                    finally
+                    {
+                        // The client disconnected (or the session ended): stop its jobs. Every
+                        // cancellable job stops at a safe point (see each operation).
+                        foreach (var cts in jobs.Values)
+                        {
+                            try { cts.Cancel(); } catch (ObjectDisposedException) { }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Engine IPC] Client session error: {ex.Message}");
+                    EngineLog.Warn($"[Engine IPC] Client session error: {ex.Message}");
                 }
             }
         }
@@ -396,29 +409,46 @@ namespace TuneUpEngine
                 try
                 {
                     string json = JsonSerializer.Serialize(response);
-                    Console.WriteLine($"[Engine IPC] Sending response: {response.Status}");
+                    EngineLog.Debug($"[Engine IPC] Sending response: {response.Status}");
                     writer.WriteLine(json);
                     writer.Flush();
                 }
-                catch (Exception ex) { Console.WriteLine($"[Engine IPC] SendResponse Error: {ex.Message}"); }
+                catch (Exception ex) { EngineLog.Warn($"[Engine IPC] SendResponse Error: {ex.Message}"); }
             }
         }
 
         // Runs a long operation off the session's read loop. The client blocks until it receives a
         // final (non-Progress) reply, so an exception inside the job must still produce one —
         // otherwise the UI would wait on the pipe forever.
-        private void RunInBackground(StreamWriter writer, string operation, Action job)
+        // The job receives a token that fires when the client sends CancelRequest for this
+        // request's ID, or disconnects.
+        private void RunInBackground(IpcRequest request, StreamWriter writer,
+            ConcurrentDictionary<string, CancellationTokenSource> jobs, string operation, Action<CancellationToken> job)
         {
+            var cts = new CancellationTokenSource();
+            string? jobId = request.RequestId;
+            if (!string.IsNullOrEmpty(jobId)) jobs[jobId] = cts;
+
             Task.Run(() =>
             {
                 try
                 {
-                    job();
+                    job(cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    LogEvent($"[{operation}] Cancelled.");
+                    SendResponse(writer, new IpcResponse { Status = IpcStatus.Error, Message = $"{operation} cancelled.", RequestId = jobId });
                 }
                 catch (Exception ex)
                 {
                     LogEvent($"[{operation}] Failed: {ex.Message}");
-                    SendResponse(writer, new IpcResponse { Status = "Error", Message = $"{operation} failed: {ex.Message}" });
+                    SendResponse(writer, new IpcResponse { Status = IpcStatus.Error, Message = $"{operation} failed: {ex.Message}", RequestId = jobId });
+                }
+                finally
+                {
+                    if (!string.IsNullOrEmpty(jobId)) jobs.TryRemove(jobId, out _);
+                    cts.Dispose();
                 }
             });
         }
@@ -437,13 +467,21 @@ namespace TuneUpEngine
             }
         }
 
-        private void HandleRequest(IpcRequest request, StreamWriter writer, ClientContext ctx)
+        private void HandleRequest(IpcRequest request, StreamWriter writer, ClientContext ctx,
+            ConcurrentDictionary<string, CancellationTokenSource> jobs)
         {
-            Console.WriteLine($"[Engine IPC] Handling request: {request.Command}");
+            // Every reply to this request carries its RequestId.
+            void Send(IpcResponse response)
+            {
+                response.RequestId = request.RequestId;
+                SendResponse(writer, response);
+            }
+
+            EngineLog.Debug($"[Engine IPC] Handling request: {request.Command}");
 
             if (AdministratorCommands.Contains(request.Command) && !ctx.IsAdministrator)
             {
-                SendResponse(writer, new IpcResponse { Status = "Error", Message = "This needs an administrator account." });
+                Send(new IpcResponse { Status = IpcStatus.Error, Message = "This needs an administrator account." });
                 return;
             }
 
@@ -452,19 +490,19 @@ namespace TuneUpEngine
                 // ── Foreground reporting (service mode) ──────────────────────────────
                 // A service can't see the user's desktop, so the UI reports which process is in
                 // front. Only processes in the reporting user's own session are accepted.
-                case "ReportForeground":
+                case IpcCommands.ReportForeground:
                     if (int.TryParse(request.Payload, out int fgPid) && IsInSession(fgPid, ctx.SessionId))
                     {
                         ForegroundTracker.Report(fgPid);
-                        SendResponse(writer, new IpcResponse { Status = "Success" });
+                        Send(new IpcResponse { Status = IpcStatus.Success });
                     }
                     else
                     {
-                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid foreground process." });
+                        Send(new IpcResponse { Status = IpcStatus.Error, Message = "Invalid foreground process." });
                     }
                     break;
 
-                case "GetEngineStats":
+                case IpcCommands.GetEngineStats:
                     var mem = _memoryManager.GetMemoryStatus();
                     List<string> logs;
                     lock (_logLock)
@@ -491,77 +529,77 @@ namespace TuneUpEngine
                         stats.ModifiedBytes = lists.ModifiedBytes;
                     }
 
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(stats)
                     });
                     break;
 
-                case "SetGovernorState":
+                case IpcCommands.SetGovernorState:
                     if (!bool.TryParse(request.Payload, out bool govEnabled))
                     {
-                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload for SetGovernorState" });
+                        Send(new IpcResponse { Status = IpcStatus.Error, Message = "Invalid payload for SetGovernorState" });
                         break;
                     }
                     _governor.IsEnabled = govEnabled;
                     _settings.ProBalanceEnabled = govEnabled;
                     _settings.Save();
                     LogEvent($"ProBalance governor state set to: {(govEnabled ? "ENABLED" : "DISABLED")}");
-                    SendResponse(writer, new IpcResponse { Status = "Success" });
+                    Send(new IpcResponse { Status = IpcStatus.Success });
                     break;
 
-                case "SetAutoPurgeState":
+                case IpcCommands.SetAutoPurgeState:
                     if (!bool.TryParse(request.Payload, out bool purgeEnabled))
                     {
-                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload for SetAutoPurgeState" });
+                        Send(new IpcResponse { Status = IpcStatus.Error, Message = "Invalid payload for SetAutoPurgeState" });
                         break;
                     }
                     _memoryManager.IsAutoPurging = purgeEnabled;
                     _settings.AutoPurgeEnabled = purgeEnabled;
                     _settings.Save();
                     LogEvent($"Standby list auto-purging set to: {(purgeEnabled ? "ENABLED" : "DISABLED")}");
-                    SendResponse(writer, new IpcResponse { Status = "Success" });
+                    Send(new IpcResponse { Status = IpcStatus.Success });
                     break;
 
-                case "SetGameModeState":
+                case IpcCommands.SetGameModeState:
                     if (!bool.TryParse(request.Payload, out bool gameEnabled))
                     {
-                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload for SetGameModeState" });
+                        Send(new IpcResponse { Status = IpcStatus.Error, Message = "Invalid payload for SetGameModeState" });
                         break;
                     }
                     _gameMode.IsEnabled = gameEnabled;
                     _settings.GameModeEnabled = gameEnabled;
                     _settings.Save();
                     LogEvent($"Game Mode Booster set to: {(gameEnabled ? "ENABLED" : "DISABLED")}");
-                    SendResponse(writer, new IpcResponse { Status = "Success" });
+                    Send(new IpcResponse { Status = IpcStatus.Success });
                     break;
 
-                case "CheckMsiCompliance":
+                case IpcCommands.CheckMsiCompliance:
                     string complianceResult = HardwareController.CheckMsiCompliance();
-                    SendResponse(writer, new IpcResponse { Status = "Success", Payload = complianceResult });
+                    Send(new IpcResponse { Status = IpcStatus.Success, Payload = complianceResult });
                     break;
 
-                case "ProvisionMSIInterrupts":
+                case IpcCommands.ProvisionMSIInterrupts:
                     string provisionResult = HardwareController.EnableMSI(_journal);
                     LogEvent($"MSI Provisioning Executed: {provisionResult}");
-                    SendResponse(writer, new IpcResponse { Status = "Success", Payload = provisionResult });
+                    Send(new IpcResponse { Status = IpcStatus.Success, Payload = provisionResult });
                     break;
 
-                case "RevertMSIInterrupts":
+                case IpcCommands.RevertMSIInterrupts:
                     string msiRevertResult = HardwareController.RevertMSI(_journal);
                     LogEvent($"MSI Revert Executed: {msiRevertResult}");
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = msiRevertResult.StartsWith("Error") ? "Error" : "Success",
+                        Status = msiRevertResult.StartsWith("Error") ? IpcStatus.Error : IpcStatus.Success,
                         Payload = msiRevertResult,
                         Message = msiRevertResult
                     });
                     break;
 
-                case "UpdateCleanerDefinitions":
+                case IpcCommands.UpdateCleanerDefinitions:
                     string winapp2Path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "winapp2.ini");
-                    RunInBackground(writer, "Definitions sync", () =>
+                    RunInBackground(request, writer, jobs, "Definitions sync", ct =>
                     {
                         bool success = _downloader.SyncLatestDefinitionsAsync(winapp2Path).GetAwaiter().GetResult();
                         if (success)
@@ -569,215 +607,213 @@ namespace TuneUpEngine
                             _cleaner.LoadExternalWinapp2Ini(winapp2Path);
                         }
 
-                        SendResponse(writer, new IpcResponse
+                        Send(new IpcResponse
                         {
-                            Status = success ? "Success" : "Error",
+                            Status = success ? IpcStatus.Success : IpcStatus.Error,
                             Message = success ? "Community definitions successfully synced." : "Online sync failed."
                         });
                     });
                     break;
 
-                case "PurgeStandbyList":
+                case IpcCommands.PurgeStandbyList:
                     var purge = _memoryManager.PurgeStandbyList();
                     if (!purge.Success)
                     {
                         LogEvent($"[Manual Purge] {purge.Error}");
-                        SendResponse(writer, new IpcResponse { Status = "Error", Message = purge.Error });
+                        Send(new IpcResponse { Status = IpcStatus.Error, Message = purge.Error });
                         break;
                     }
                     Interlocked.Add(ref _totalMemoryFreed, purge.FreedBytes);
                     LogEvent($"[Manual Purge] Standby list emptied. Freed {purge.FreedBytes / (1024.0 * 1024.0):F1} MB");
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = purge.FreedBytes.ToString()
                     });
                     break;
 
-                case "ScanJunk":
-                    SendResponse(writer, new IpcResponse { Status = "Progress", ProgressPercent = 5.0, Message = "Scanning file structures..." });
-                    var scanResults = _cleaner.Scan(ctx, (ruleName, percent) =>
+                case IpcCommands.ScanJunk:
+                    RunInBackground(request, writer, jobs, "Junk scan", ct =>
                     {
-                        SendResponse(writer, new IpcResponse
+                        Send(new IpcResponse { Status = IpcStatus.Progress, ProgressPercent = 5.0, Message = "Scanning file structures..." });
+                        var scanResults = _cleaner.Scan(ctx, (ruleName, percent) =>
                         {
-                            Status = "Progress",
-                            ProgressPercent = percent,
-                            Message = $"Scanning {ruleName}..."
-                        });
-                    });
+                            Send(new IpcResponse
+                            {
+                                Status = IpcStatus.Progress,
+                                ProgressPercent = percent,
+                                Message = $"Scanning {ruleName}..."
+                            });
+                        }, ct);
 
-                    _scanResults.Replace("junk", scanResults, ctx.Sid);
-                    SendResponse(writer, new IpcResponse
-                    {
-                        Status = "Success",
-                        Payload = JsonSerializer.Serialize(scanResults)
+                        _scanResults.Replace("junk", scanResults, ctx.Sid);
+                        Send(new IpcResponse
+                        {
+                            Status = IpcStatus.Success,
+                            Payload = JsonSerializer.Serialize(scanResults)
+                        });
                     });
                     break;
 
-                case "CleanJunk":
+                case IpcCommands.CleanJunk:
                     // The payload is a list of result IDs from an earlier scan — never paths. Only
                     // items the engine itself found can be cleaned; unknown IDs match nothing.
                     var cleanItems = _scanResults.Take(JsonSerializer.Deserialize<List<string>>(request.Payload ?? "[]"), ctx.Sid);
                     if (cleanItems.Count == 0)
                     {
-                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Nothing to clean. The results may be out of date — please scan again." });
+                        Send(new IpcResponse { Status = IpcStatus.Error, Message = "Nothing to clean. The results may be out of date — please scan again." });
                         break;
                     }
-                    var cleanBytes = _cleaner.Clean(cleanItems, ctx, (ruleName, percent) =>
+                    RunInBackground(request, writer, jobs, "Clean", ct =>
                     {
-                        SendResponse(writer, new IpcResponse
+                        var cleanBytes = _cleaner.Clean(cleanItems, ctx, (ruleName, percent) =>
                         {
-                            Status = "Progress",
-                            ProgressPercent = percent,
-                            Message = $"Cleaning {ruleName}..."
-                        });
-                    });
+                            Send(new IpcResponse
+                            {
+                                Status = IpcStatus.Progress,
+                                ProgressPercent = percent,
+                                Message = $"Cleaning {ruleName}..."
+                            });
+                        }, ct);
 
-                    SendResponse(writer, new IpcResponse
-                    {
-                        Status = "Success",
-                        Payload = cleanBytes.ToString()
+                        // Cleaning stops between files when cancelled; report what was freed.
+                        Send(ct.IsCancellationRequested
+                            ? new IpcResponse { Status = IpcStatus.Error, Message = $"Clean cancelled after freeing {cleanBytes / (1024.0 * 1024.0):F1} MB.", Payload = cleanBytes.ToString() }
+                            : new IpcResponse { Status = IpcStatus.Success, Payload = cleanBytes.ToString() });
                     });
                     break;
 
-                case "ScanAdvancedEmptyFolders":
-                    var emptyFoldersScanner = new AdvancedScanner();
-                    var emptyFoldersResults = emptyFoldersScanner.ScanEmptyFolders(ctx.Folders, (msg) =>
+                case IpcCommands.ScanAdvancedEmptyFolders:
+                    RunInBackground(request, writer, jobs, "Empty folder scan", ct =>
                     {
-                        SendResponse(writer, new IpcResponse
+                        var emptyFoldersResults = new AdvancedScanner().ScanEmptyFolders(ctx.Folders,
+                            msg => Send(new IpcResponse { Status = IpcStatus.Progress, Message = msg }), ct);
+                        _scanResults.Replace("emptyFolders", emptyFoldersResults, ctx.Sid);
+                        Send(new IpcResponse
                         {
-                            Status = "Progress",
-                            Message = msg
+                            Status = IpcStatus.Success,
+                            Payload = JsonSerializer.Serialize(emptyFoldersResults)
                         });
-                    });
-                    _scanResults.Replace("emptyFolders", emptyFoldersResults, ctx.Sid);
-                    SendResponse(writer, new IpcResponse
-                    {
-                        Status = "Success",
-                        Payload = JsonSerializer.Serialize(emptyFoldersResults)
                     });
                     break;
 
-                case "ScanAdvancedDuplicates":
-                    var dupScanner = new AdvancedScanner();
-                    var dupResults = dupScanner.ScanDuplicateFiles(ctx.Folders, (msg) =>
+                case IpcCommands.ScanAdvancedDuplicates:
+                    RunInBackground(request, writer, jobs, "Duplicate scan", ct =>
                     {
-                        SendResponse(writer, new IpcResponse
+                        var dupResults = new AdvancedScanner().ScanDuplicateFiles(ctx.Folders,
+                            msg => Send(new IpcResponse { Status = IpcStatus.Progress, Message = msg }), ct);
+                        _scanResults.Replace("duplicates", dupResults, ctx.Sid);
+                        Send(new IpcResponse
                         {
-                            Status = "Progress",
-                            Message = msg
+                            Status = IpcStatus.Success,
+                            Payload = JsonSerializer.Serialize(dupResults)
                         });
-                    });
-                    _scanResults.Replace("duplicates", dupResults, ctx.Sid);
-                    SendResponse(writer, new IpcResponse
-                    {
-                        Status = "Success",
-                        Payload = JsonSerializer.Serialize(dupResults)
                     });
                     break;
 
-                case "ScanRegistry":
+                case IpcCommands.ScanRegistry:
                     var regIssues = _registryVerifier.Scan(ctx, (step, percent) =>
                     {
-                        SendResponse(writer, new IpcResponse
+                        Send(new IpcResponse
                         {
-                            Status = "Progress",
+                            Status = IpcStatus.Progress,
                             ProgressPercent = percent,
                             Message = step
                         });
                     });
 
                     _registryResults.Replace("registry", regIssues, ctx.Sid);
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(regIssues)
                     });
                     break;
 
-                case "RepairRegistry":
+                case IpcCommands.RepairRegistry:
                     // As with CleanJunk: IDs from the engine's own scan only, never raw registry paths.
                     var repairIssues = _registryResults.Take(JsonSerializer.Deserialize<List<string>>(request.Payload ?? "[]"), ctx.Sid);
                     if (repairIssues.Count == 0)
                     {
-                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Nothing to repair. The results may be out of date — please scan again." });
+                        Send(new IpcResponse { Status = IpcStatus.Error, Message = "Nothing to repair. The results may be out of date — please scan again." });
                         break;
                     }
                     _registryVerifier.Repair(repairIssues, ctx, (step, percent) =>
                     {
-                        SendResponse(writer, new IpcResponse
+                        Send(new IpcResponse
                         {
-                            Status = "Progress",
+                            Status = IpcStatus.Progress,
                             ProgressPercent = percent,
                             Message = step
                         });
                     });
 
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success"
+                        Status = IpcStatus.Success
                     });
                     break;
 
-                case "GetSystemIntegrityStatus":
+                case IpcCommands.GetSystemIntegrityStatus:
                     var integrityReport = _integrityAgent.ScanIntegrityLogs();
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(integrityReport)
                     });
                     break;
 
-                case "RunSystemRepair":
-                    var repair = _integrityAgent.RunIntegrityRepair((step, percent) =>
+                case IpcCommands.RunSystemRepair:
+                    // Off the read loop (it can take an hour), but deliberately not cancellable:
+                    // stopping DISM part-way through isn't something to offer.
+                    RunInBackground(request, writer, jobs, "System repair", _ =>
                     {
-                        SendResponse(writer, new IpcResponse
+                        var repair = _integrityAgent.RunIntegrityRepair((step, percent) =>
                         {
-                            Status = "Progress",
-                            ProgressPercent = percent,
-                            Message = step
+                            Send(new IpcResponse
+                            {
+                                Status = IpcStatus.Progress,
+                                ProgressPercent = percent,
+                                Message = step
+                            });
+                        });
+
+                        LogEvent($"[Repair] {repair.Message}");
+                        Send(new IpcResponse
+                        {
+                            Status = repair.Success ? IpcStatus.Success : IpcStatus.Error,
+                            Message = repair.Message
                         });
                     });
-
-                    LogEvent($"[Repair] {repair.Message}");
-                    SendResponse(writer, new IpcResponse
-                    {
-                        Status = repair.Success ? "Success" : "Error",
-                        Message = repair.Message
-                    });
                     break;
 
-                case "GetRegistryTweaks":
+                case IpcCommands.GetRegistryTweaks:
                     var tweaks = RegistryTweaker.GetTweakStatuses(ctx);
                     var tweaksJson = JsonSerializer.Serialize(tweaks);
-                    SendResponse(writer, new IpcResponse { Status = "Success", Payload = tweaksJson });
+                    Send(new IpcResponse { Status = IpcStatus.Success, Payload = tweaksJson });
                     break;
 
-                case "SetRegistryTweak":
-                    if (!string.IsNullOrEmpty(request.Payload))
+                case IpcCommands.SetRegistryTweak:
+                    if (IpcPayload.Deserialize<SetTweakRequest>(request.Payload) is { Name: { Length: > 0 } } tweakRequest)
                     {
-                        var parts = request.Payload.Split('|');
-                        if (parts.Length == 2 && bool.TryParse(parts[1], out bool enable))
+                        if (RegistryTweaker.RequiresAdministrator(tweakRequest.Name) && !ctx.IsAdministrator)
                         {
-                            if (RegistryTweaker.RequiresAdministrator(parts[0]) && !ctx.IsAdministrator)
-                            {
-                                SendResponse(writer, new IpcResponse { Status = "Error", Message = "This tweak changes the whole PC and needs an administrator account." });
-                                break;
-                            }
-                            bool ok = RegistryTweaker.SetTweakStatus(parts[0], enable, _journal, ctx);
-                            SendResponse(writer, new IpcResponse { Status = ok ? "Success" : "Error" });
+                            Send(new IpcResponse { Status = IpcStatus.Error, Message = "This tweak changes the whole PC and needs an administrator account." });
                             break;
                         }
+                        bool ok = RegistryTweaker.SetTweakStatus(tweakRequest.Name, tweakRequest.Enable, _journal, ctx);
+                        Send(new IpcResponse { Status = ok ? IpcStatus.Success : IpcStatus.Error });
+                        break;
                     }
-                    SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload for SetRegistryTweak" });
+                    Send(new IpcResponse { Status = IpcStatus.Error, Message = "Invalid payload for SetRegistryTweak" });
                     break;
 
                 // ── CoreDirector ────────────────────────────────────────────────────
-                case "GetCoreTopology":
+                case IpcCommands.GetCoreTopology:
                     var topo = CoreDirector.GetTopology();
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(new
                         {
                             topo.CpuModel,
@@ -791,173 +827,173 @@ namespace TuneUpEngine
                     break;
 
                 // ── DebloatGuard ────────────────────────────────────────────────────
-                case "GetDebloatStatus":
+                case IpcCommands.GetDebloatStatus:
                     var debloat = DebloatGuard.GetStatus(ctx);
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(debloat)
                     });
                     break;
 
-                case "SetServiceState":
+                case IpcCommands.SetServiceState:
                     {
-                        var parts2 = request.Payload?.Split('|');
-                        if (parts2?.Length == 2 && bool.TryParse(parts2[1], out bool disable))
+                        if (IpcPayload.Deserialize<SetServiceRequest>(request.Payload) is { Name: { Length: > 0 } } serviceRequest)
                         {
-                            string result = DebloatGuard.SetServiceState(parts2[0], disable, _journal);
+                            string result = DebloatGuard.SetServiceState(serviceRequest.Name, serviceRequest.Disable, _journal);
                             LogEvent($"[DebloatGuard] {result}");
                             bool changed = !result.StartsWith("Refused") && !result.StartsWith("Failed");
-                            SendResponse(writer, new IpcResponse { Status = changed ? "Success" : "Error", Message = result });
+                            Send(new IpcResponse { Status = changed ? IpcStatus.Success : IpcStatus.Error, Message = result });
                         }
                         else
-                            SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload" });
+                            Send(new IpcResponse { Status = IpcStatus.Error, Message = "Invalid payload" });
                     }
                     break;
 
-                case "RemoveAppxPackage":
-                    RunInBackground(writer, "AppX removal", () =>
+                case IpcCommands.RemoveAppxPackage:
+                    RunInBackground(request, writer, jobs, "AppX removal", ct =>
                     {
                         string r = DebloatGuard.RemoveAppxPackage(request.Payload,
-                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }), ctx);
+                            msg => Send(new IpcResponse { Status = IpcStatus.Progress, Message = msg }), ctx);
                         LogEvent($"[DebloatGuard] {r}");
-                        SendResponse(writer, new IpcResponse { Status = "Success", Message = r });
+                        Send(new IpcResponse { Status = IpcStatus.Success, Message = r });
                     });
                     break;
 
                 // ── NetOptimizer ────────────────────────────────────────────────────
-                case "GetNetworkOptimizationStatus":
+                case IpcCommands.GetNetworkOptimizationStatus:
                     var netSettings = NetOptimizer.GetCurrentSettings();
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(netSettings)
                     });
                     break;
 
-                case "ApplyNetworkOptimizations":
-                    RunInBackground(writer, "Network optimization", () =>
+                case IpcCommands.ApplyNetworkOptimizations:
+                    RunInBackground(request, writer, jobs, "Network optimization", ct =>
                     {
                         string netResult = NetOptimizer.ApplyOptimizations(
-                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }), _journal);
+                            msg => Send(new IpcResponse { Status = IpcStatus.Progress, Message = msg }), _journal);
                         LogEvent($"[NetOptimizer] {netResult}");
-                        SendResponse(writer, new IpcResponse { Status = "Success", Message = netResult });
+                        Send(new IpcResponse { Status = IpcStatus.Success, Message = netResult });
                     });
                     break;
 
-                case "RevertNetworkOptimizations":
-                    RunInBackground(writer, "Network revert", () =>
+                case IpcCommands.RevertNetworkOptimizations:
+                    RunInBackground(request, writer, jobs, "Network revert", ct =>
                     {
                         string revertResult = NetOptimizer.RevertToDefaults(
-                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }), _journal);
+                            msg => Send(new IpcResponse { Status = IpcStatus.Progress, Message = msg }), _journal);
                         LogEvent($"[NetOptimizer] {revertResult}");
-                        SendResponse(writer, new IpcResponse { Status = "Success", Message = revertResult });
+                        Send(new IpcResponse { Status = IpcStatus.Success, Message = revertResult });
                     });
                     break;
 
                 // ── StorageMigrator ─────────────────────────────────────────────────
-                case "AnalyzeMigration":
+                case IpcCommands.AnalyzeMigration:
                     var analysis = StorageMigrator.Analyze(request.Payload);
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(analysis)
                     });
                     break;
 
-                case "MigrateDirectory":
+                case IpcCommands.MigrateDirectory:
                     {
-                        var migParts = request.Payload?.Split('|');
-                        if (migParts?.Length == 2)
+                        if (IpcPayload.Deserialize<MigrateRequest>(request.Payload) is { Source: { Length: > 0 }, Destination: { Length: > 0 } } migration)
                         {
-                            RunInBackground(writer, "Migration", () =>
+                            RunInBackground(request, writer, jobs, "Migration", ct =>
                             {
+                                // Cancellable while copying; once the swap starts it runs to the end.
                                 string migResult = StorageMigrator.Migrate(
-                                    migParts[0], migParts[1],
-                                    (msg, pct) => SendResponse(writer, new IpcResponse
+                                    migration.Source, migration.Destination,
+                                    (msg, pct) => Send(new IpcResponse
                                     {
-                                        Status = "Progress",
+                                        Status = IpcStatus.Progress,
                                         ProgressPercent = pct,
                                         Message = msg
-                                    }));
+                                    }), ct);
                                 LogEvent($"[StorageMigrator] {migResult}");
-                                SendResponse(writer, new IpcResponse
+                                Send(new IpcResponse
                                 {
-                                    Status = migResult.StartsWith("Success") ? "Success" : "Error",
+                                    Status = migResult.StartsWith("Success") ? IpcStatus.Success : IpcStatus.Error,
                                     Message = migResult
                                 });
                             });
                         }
                         else
-                            SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload. Expected 'source|destination'" });
+                            Send(new IpcResponse { Status = IpcStatus.Error, Message = "Invalid payload for MigrateDirectory" });
                     }
                     break;
 
-                case "UndoMigration":
-                    RunInBackground(writer, "Undo migration", () =>
+                case IpcCommands.UndoMigration:
+                    RunInBackground(request, writer, jobs, "Undo migration", ct =>
                     {
                         string undoResult = StorageMigrator.UndoMigration(request.Payload ?? "",
-                            (msg, pct) => SendResponse(writer, new IpcResponse { Status = "Progress", ProgressPercent = pct, Message = msg }));
+                            (msg, pct) => Send(new IpcResponse { Status = IpcStatus.Progress, ProgressPercent = pct, Message = msg }), ct);
                         LogEvent($"[StorageMigrator] {undoResult}");
-                        SendResponse(writer, new IpcResponse
+                        Send(new IpcResponse
                         {
-                            Status = undoResult.StartsWith("Success") ? "Success" : "Error",
+                            Status = undoResult.StartsWith("Success") ? IpcStatus.Success : IpcStatus.Error,
                             Message = undoResult
                         });
                     });
                     break;
 
-                case "GetMigrationHistory":
+                case IpcCommands.GetMigrationHistory:
                     var history = StorageMigrator.GetHistory();
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(history)
                     });
                     break;
 
                 // ── LatencyAuditor ──────────────────────────────────────────────────
-                case "StartLatencyAudit":
+                case IpcCommands.StartLatencyAudit:
                     _latencyAuditor.Start();
-                    SendResponse(writer, new IpcResponse { Status = "Success", Message = "Latency audit started." });
+                    Send(new IpcResponse { Status = IpcStatus.Success, Message = "Latency audit started." });
                     break;
 
-                case "StopLatencyAudit":
+                case IpcCommands.StopLatencyAudit:
                     _latencyAuditor.Stop();
-                    SendResponse(writer, new IpcResponse { Status = "Success", Message = "Latency audit stopped." });
+                    Send(new IpcResponse { Status = IpcStatus.Success, Message = "Latency audit stopped." });
                     break;
 
-                case "GetLatencyReport":
+                case IpcCommands.GetLatencyReport:
                     var latReport = _latencyAuditor.GetReport();
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Success",
+                        Status = IpcStatus.Success,
                         Payload = JsonSerializer.Serialize(latReport)
                     });
                     break;
 
-                case "ShutdownEngine":
+                case IpcCommands.ShutdownEngine:
                     // The service is shared by every user on the PC and keeps working in the
                     // background (ProBalance, Game Mode); closing one user's UI must not stop it.
                     if (_isServiceMode)
                     {
-                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "The engine runs as a Windows service and keeps running in the background." });
+                        Send(new IpcResponse { Status = IpcStatus.Error, Message = "The engine runs as a Windows service and keeps running in the background." });
                         break;
                     }
-                    SendResponse(writer, new IpcResponse { Status = "Success", Message = "Engine shutting down." });
+                    EngineLog.Info("[Engine] Shutdown requested by the UI.");
+                    Send(new IpcResponse { Status = IpcStatus.Success, Message = "Engine shutting down." });
                     Task.Run(() =>
                     {
                         Thread.Sleep(100);
                         try { ShuttingDown?.Invoke(); }
-                        catch (Exception ex) { Console.WriteLine($"[Engine] Shutdown cleanup failed: {ex.Message}"); }
+                        catch (Exception ex) { EngineLog.Warn($"[Engine] Shutdown cleanup failed: {ex.Message}"); }
                         Environment.Exit(0);
                     });
                     break;
 
                 default:
-                    SendResponse(writer, new IpcResponse
+                    Send(new IpcResponse
                     {
-                        Status = "Error",
+                        Status = IpcStatus.Error,
                         Message = $"Unknown command: {request.Command}"
                     });
                     break;

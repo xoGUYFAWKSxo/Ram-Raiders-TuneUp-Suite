@@ -109,7 +109,7 @@ namespace TuneUpEngine
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[NetOptimizer] Per-interface tweak failed for {ifPath}: {ex.Message}");
+                    EngineLog.Warn($"[NetOptimizer] Per-interface tweak failed for {ifPath}: {ex.Message}");
                 }
             }
 
@@ -159,7 +159,7 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[NetOptimizer] Could not enumerate interfaces: {ex.Message}");
+                EngineLog.Warn($"[NetOptimizer] Could not enumerate interfaces: {ex.Message}");
             }
             return paths;
         }
