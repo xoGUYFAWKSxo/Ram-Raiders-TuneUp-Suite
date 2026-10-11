@@ -8,17 +8,20 @@ namespace TuneUpEngine
         private readonly ProBalanceGovernor _governor;
         private readonly StandbyListManager _memoryManager;
         private readonly IpcServer _ipcServer;
+        private readonly Action? _releaseTemporaryChanges;
 
         public TuneUpService(
             ProBalanceGovernor governor, 
             StandbyListManager memoryManager, 
-            IpcServer ipcServer)
+            IpcServer ipcServer,
+            Action? releaseTemporaryChanges = null)
         {
             ServiceName = "TuneUpEngineService";
             
             _governor = governor;
             _memoryManager = memoryManager;
             _ipcServer = ipcServer;
+            _releaseTemporaryChanges = releaseTemporaryChanges;
 
             CanStop = true;
             CanShutdown = true;
@@ -47,6 +50,9 @@ namespace TuneUpEngine
         {
             try
             {
+                // Hand back temporary changes (boosted game, power plan, throttled processes)
+                _releaseTemporaryChanges?.Invoke();
+
                 // Stop modules
                 _governor.IsEnabled = false;
                 _memoryManager.IsAutoPurging = false;

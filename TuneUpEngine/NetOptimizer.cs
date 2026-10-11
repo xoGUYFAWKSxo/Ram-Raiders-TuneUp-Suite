@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
@@ -38,17 +39,13 @@ namespace TuneUpEngine
                 settings.Rss            = ExtractValue(netshOutput, "Receive-Side Scaling State") ?? "Unknown";
             }
 
-            // Read registry tweaks
+            // TcpNoDelay / TcpAckFrequency are per-interface settings: report them as on only when
+            // every connected interface has them.
             try
             {
-                using var key = Registry.LocalMachine.OpenSubKey(TcpParamsKey);
-                if (key != null)
-                {
-                    int noDelay = (int)(key.GetValue("TcpNoDelay") ?? 0);
-                    int ackFreq = (int)(key.GetValue("TcpAckFrequency") ?? 2);
-                    settings.TcpNoDelay = noDelay == 1;
-                    settings.TcpAckFrequencyOne = ackFreq == 1;
-                }
+                var interfaces = ConnectedInterfaceKeys();
+                settings.TcpNoDelay = interfaces.Count > 0 && interfaces.All(k => ReadDword(k, "TcpNoDelay") == 1);
+                settings.TcpAckFrequencyOne = interfaces.Count > 0 && interfaces.All(k => ReadDword(k, "TcpAckFrequency") == 1);
             }
             catch { }
 
@@ -62,101 +59,128 @@ namespace TuneUpEngine
             return settings;
         }
 
-        public static string ApplyOptimizations(Action<string> progress)
+        // All changes are recorded in the change journal first, so "Revert" restores the values the
+        // user actually had — previously it forced ECN and timestamps ON, which isn't necessarily
+        // how the PC was before.
+        private const string JournalOwner = "net";
+
+        private static readonly (string Setting, string Value, string Progress)[] TcpGlobals =
         {
-            var results = new List<string>();
+            ("autotuninglevel", "normal", "Setting TCP auto-tuning level to normal..."),
+            ("ecncapability", "disabled", "Disabling ECN capability..."),
+            ("timestamps", "disabled", "Disabling TCP timestamps..."),
+            ("rss", "enabled", "Enabling Receive Side Scaling (RSS)..."),
+        };
 
-            progress?.Invoke("Setting TCP auto-tuning level to normal...");
-            results.Add(RunNetsh("int tcp set global autotuninglevel=normal"));
-
-            progress?.Invoke("Disabling ECN capability...");
-            results.Add(RunNetsh("int tcp set global ecncapability=disabled"));
-
-            progress?.Invoke("Disabling TCP timestamps...");
-            results.Add(RunNetsh("int tcp set global timestamps=disabled"));
-
-            progress?.Invoke("Enabling Receive Side Scaling (RSS)...");
-            results.Add(RunNetsh("int tcp set global rss=enabled"));
-
-            progress?.Invoke("Setting TcpNoDelay (disable Nagle algorithm)...");
-            ApplyRegistryTweaks();
-
-            progress?.Invoke("Applying per-interface TcpNoDelay...");
-            ApplyPerInterfaceNoDelay();
-
-            return $"Network optimizations applied. ({results.Count} netsh commands executed)";
-        }
-
-        public static string RevertToDefaults(Action<string> progress)
+        public static string ApplyOptimizations(Action<string> progress, ChangeJournal journal)
         {
-            progress?.Invoke("Restoring TCP auto-tuning to normal...");
-            RunNetsh("int tcp set global autotuninglevel=normal");
+            int changed = 0, skipped = 0;
 
-            progress?.Invoke("Re-enabling ECN capability...");
-            RunNetsh("int tcp set global ecncapability=enabled");
-
-            progress?.Invoke("Re-enabling TCP timestamps...");
-            RunNetsh("int tcp set global timestamps=enabled");
-
-            progress?.Invoke("Confirming RSS is enabled...");
-            RunNetsh("int tcp set global rss=enabled");
-
-            progress?.Invoke("Removing registry overrides...");
-            RemoveRegistryTweaks();
-
-            return "Network settings restored to Windows defaults.";
-        }
-
-        private static void ApplyRegistryTweaks()
-        {
-            try
+            foreach (var (setting, value, message) in TcpGlobals)
             {
-                using var key = Registry.LocalMachine.OpenSubKey(TcpParamsKey, writable: true);
-                if (key != null)
+                progress?.Invoke(message);
+                // If the current value can't be read (e.g. non-English Windows, where netsh's
+                // labels are translated) it can't be restored later, so it is left alone.
+                if (journal.CaptureNetshTcpGlobal(JournalOwner, setting) &&
+                    journal.Commands.SetNetshTcpGlobal(setting, value))
+                    changed++;
+                else
+                    skipped++;
+            }
+
+            // Windows only honours TcpNoDelay / TcpAckFrequency per interface; the copies earlier
+            // versions wrote under Tcpip\Parameters had no effect and are no longer written.
+            progress?.Invoke("Applying TcpNoDelay / TcpAckFrequency to connected network interfaces...");
+            int interfaces = 0;
+            foreach (string ifPath in ConnectedInterfacePaths())
+            {
+                bool captured =
+                    journal.CaptureRegistryValue(JournalOwner, RegistryHive.LocalMachine, ifPath, "TcpNoDelay") &&
+                    journal.CaptureRegistryValue(JournalOwner, RegistryHive.LocalMachine, ifPath, "TcpAckFrequency");
+                if (!captured) continue;
+
+                try
                 {
-                    key.SetValue("TcpNoDelay", 1, RegistryValueKind.DWord);
-                    key.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
+                    using var ifKey = Registry.LocalMachine.OpenSubKey(ifPath, writable: true);
+                    if (ifKey == null) continue;
+                    ifKey.SetValue("TcpNoDelay", 1, RegistryValueKind.DWord);
+                    ifKey.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
+                    interfaces++;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[NetOptimizer] Per-interface tweak failed for {ifPath}: {ex.Message}");
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[NetOptimizer] Registry tweak failed: {ex.Message}");
-            }
+
+            string result = $"Network optimizations applied: {changed} TCP setting(s) and {interfaces} interface(s) changed.";
+            if (skipped > 0)
+                result += $" {skipped} TCP setting(s) were left unchanged because their current value couldn't be read.";
+            return result;
         }
 
-        private static void ApplyPerInterfaceNoDelay()
+        public static string RevertToDefaults(Action<string> progress, ChangeJournal journal)
         {
-            // Apply TcpNoDelay and TcpAckFrequency to every network adapter interface
+            if (journal.IsOwned(JournalOwner))
+            {
+                progress?.Invoke("Restoring your previous network settings...");
+                int failed = journal.Release(JournalOwner);
+                return failed == 0
+                    ? "Network settings restored to exactly how they were before optimization."
+                    : $"Network settings restored, except {failed} that will be retried on the next engine start.";
+            }
+
+            // Optimized by a version without the journal: the previous values are unknown, so fall
+            // back to the old behaviour of resetting to Windows defaults.
+            progress?.Invoke("No record of your earlier values — restoring Windows defaults...");
+            RunNetsh("int tcp set global autotuninglevel=normal");
+            RunNetsh("int tcp set global ecncapability=enabled");
+            RunNetsh("int tcp set global timestamps=enabled");
+            RunNetsh("int tcp set global rss=enabled");
+            RemoveLegacyRegistryTweaks();
+            return "Network settings reset to Windows defaults (no record of earlier values was available).";
+        }
+
+        // Interfaces that have an IP address (real, configured adapters).
+        private static List<string> ConnectedInterfacePaths()
+        {
+            var paths = new List<string>();
             try
             {
                 using var interfacesKey = Registry.LocalMachine.OpenSubKey(TcpInterfacesKey);
-                if (interfacesKey == null) return;
+                if (interfacesKey == null) return paths;
 
                 foreach (string subKeyName in interfacesKey.GetSubKeyNames())
                 {
-                    try
-                    {
-                        using var ifKey = Registry.LocalMachine.OpenSubKey(
-                            $@"{TcpInterfacesKey}\{subKeyName}", writable: true);
-                        // Only touch interfaces that have an IP address (real adapters)
-                        var dhcp = ifKey?.GetValue("DhcpIPAddress");
-                        var ip   = ifKey?.GetValue("IPAddress");
-                        if (dhcp != null || ip != null)
-                        {
-                            ifKey.SetValue("TcpNoDelay", 1, RegistryValueKind.DWord);
-                            ifKey.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
-                        }
-                    }
-                    catch { }
+                    using var ifKey = interfacesKey.OpenSubKey(subKeyName);
+                    if (ifKey?.GetValue("DhcpIPAddress") != null || ifKey?.GetValue("IPAddress") != null)
+                        paths.Add($@"{TcpInterfacesKey}\{subKeyName}");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[NetOptimizer] Per-interface tweak failed: {ex.Message}");
+                Debug.WriteLine($"[NetOptimizer] Could not enumerate interfaces: {ex.Message}");
+            }
+            return paths;
+        }
+
+        private static List<RegistryKey> ConnectedInterfaceKeys() =>
+            ConnectedInterfacePaths()
+                .Select(p => Registry.LocalMachine.OpenSubKey(p))
+                .Where(k => k != null)
+                .Cast<RegistryKey>()
+                .ToList();
+
+        private static int? ReadDword(RegistryKey key, string name)
+        {
+            using (key)
+            {
+                return key.GetValue(name) as int?;
             }
         }
 
-        private static void RemoveRegistryTweaks()
+        // Only for state left by versions without the change journal.
+        private static void RemoveLegacyRegistryTweaks()
         {
             try
             {
@@ -166,23 +190,16 @@ namespace TuneUpEngine
             }
             catch { }
 
-            try
+            foreach (string ifPath in ConnectedInterfacePaths())
             {
-                using var interfacesKey = Registry.LocalMachine.OpenSubKey(TcpInterfacesKey);
-                if (interfacesKey == null) return;
-                foreach (string subKeyName in interfacesKey.GetSubKeyNames())
+                try
                 {
-                    try
-                    {
-                        using var ifKey = Registry.LocalMachine.OpenSubKey(
-                            $@"{TcpInterfacesKey}\{subKeyName}", writable: true);
-                        ifKey?.DeleteValue("TcpNoDelay", throwOnMissingValue: false);
-                        ifKey?.DeleteValue("TcpAckFrequency", throwOnMissingValue: false);
-                    }
-                    catch { }
+                    using var ifKey = Registry.LocalMachine.OpenSubKey(ifPath, writable: true);
+                    ifKey?.DeleteValue("TcpNoDelay", throwOnMissingValue: false);
+                    ifKey?.DeleteValue("TcpAckFrequency", throwOnMissingValue: false);
                 }
+                catch { }
             }
-            catch { }
         }
 
         private static string RunNetsh(string arguments)

@@ -5,142 +5,125 @@ using Microsoft.Win32;
 
 namespace TuneUpEngine
 {
+    // A registry value a tweak sets. LegacyOff is only used to switch off a tweak that was applied
+    // before the change journal existed (so its true original is unknown): null deletes the value,
+    // which is the correct "off" for every Policies value — writing a "default" there would create
+    // a policy that never existed.
+    internal record TweakValue(RegistryHive Hive, string Path, string Name, RegistryValueKind Kind, object On, object? LegacyOff);
+
+    // A key a tweak creates (context-menu entries and the like). The tweak is only "on" while the
+    // key exists. Switching off restores it via the journal — deleting it if this app created it.
+    internal record TweakKey(RegistryHive Hive, string Path);
+
+    internal record TweakDefinition(string Id, TweakKey[] Keys, TweakValue[] Values);
+
     public class RegistryTweaker
     {
-        // Helper methods to keep code clean
-        private static bool CheckDword(RegistryKey root, string keyPath, string valueName, int expectedValue)
+        private const RegistryHive HKLM = RegistryHive.LocalMachine;
+        private const RegistryHive HKCU = RegistryHive.CurrentUser;
+        private const RegistryValueKind DWord = RegistryValueKind.DWord;
+        private const RegistryValueKind Str = RegistryValueKind.String;
+
+        private const string MmcssProfile = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
+        private const string Desktop = @"Control Panel\Desktop";
+        private const string ExplorerAdvanced = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+        private const string PoliciesSystem = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
+        private const string ContentDelivery = @"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
+        // HKCR is a merged view; new machine-wide shell verbs are written to HKLM\SOFTWARE\Classes
+        // explicitly so the journal knows exactly where they live.
+        private const string Classes = @"SOFTWARE\Classes";
+        private const string TakeOwnFileCmd = "cmd.exe /c takeown /f \"%1\" && icacls \"%1\" /grant administrators:F";
+        private const string TakeOwnDirCmd = "cmd.exe /c takeown /f \"%1\" /r /d y && icacls \"%1\" /grant administrators:F /t";
+        private const string Win10MenuClsid = @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+
+        private static TweakDefinition Tweak(string id, params TweakValue[] values) => new(id, Array.Empty<TweakKey>(), values);
+        private static TweakDefinition Tweak(string id, TweakKey[] keys, params TweakValue[] values) => new(id, keys, values);
+        private static TweakValue V(RegistryHive hive, string path, string name, RegistryValueKind kind, object on, object? legacyOff) =>
+            new(hive, path, name, kind, on, legacyOff);
+
+        // Every tweak, defined once. Reading the status, applying, journaling and switching off all
+        // come from this table, so they can't drift apart (they previously did: several tweaks
+        // checked a different value from the one they wrote).
+        internal static readonly TweakDefinition[] Definitions =
         {
-            using (var key = root.OpenSubKey(keyPath))
-            {
-                if (key != null && key.GetValue(valueName) is int val)
-                {
-                    return val == expectedValue;
-                }
-                return false;
-            }
-        }
+            // Gaming
+            Tweak("NetworkThrottling", V(HKLM, MmcssProfile, "NetworkThrottlingIndex", DWord, unchecked((int)0xFFFFFFFF), 10)),
+            Tweak("SystemResponsiveness", V(HKLM, MmcssProfile, "SystemResponsiveness", DWord, 0, 20)),
+            Tweak("GameDVR",
+                V(HKCU, @"System\GameConfigStore", "GameDVR_Enabled", DWord, 0, 1),
+                V(HKCU, @"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", DWord, 0, 1)),
+            Tweak("PowerThrottling", V(HKLM, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", DWord, 1, null)),
 
-        private static bool CheckString(RegistryKey root, string keyPath, string valueName, string expectedValue)
-        {
-            using (var key = root.OpenSubKey(keyPath))
-            {
-                if (key != null && key.GetValue(valueName) is string val)
-                {
-                    return val == expectedValue;
-                }
-                return false;
-            }
-        }
+            // System
+            Tweak("DisableDriverUpdates", V(HKLM, @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "ExcludeWUDriversInQualityUpdate", DWord, 1, null)),
+            Tweak("DisableStoreUpdates", V(HKLM, @"SOFTWARE\Policies\Microsoft\WindowsStore", "AutoDownload", DWord, 2, null)),
+            Tweak("DisableTelemetry", V(HKLM, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", DWord, 0, null)),
+            Tweak("ClearPageFile", V(HKLM, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "ClearPageFileAtShutdown", DWord, 1, 0)),
 
-        private static void SetDword(RegistryKey root, string keyPath, string valueName, int value, bool enable, int? defaultValue = null)
-        {
-            using (var key = root.CreateSubKey(keyPath))
-            {
-                if (enable)
-                {
-                    key.SetValue(valueName, value, RegistryValueKind.DWord);
-                }
-                else
-                {
-                    if (defaultValue.HasValue) key.SetValue(valueName, defaultValue.Value, RegistryValueKind.DWord);
-                    else key.DeleteValue(valueName, false);
-                }
-            }
-        }
+            // Windows usage
+            // Explorer reads "link" as a 4-byte REG_BINARY.
+            Tweak("DisableShortcutSuffix", V(HKCU, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "link", RegistryValueKind.Binary, new byte[4], null)),
+            Tweak("DisablePreventShutdown", V(HKCU, Desktop, "AutoEndTasks", Str, "1", "0")),
 
-        private static void SetString(RegistryKey root, string keyPath, string valueName, string value, bool enable, string defaultValue = null)
-        {
-            using (var key = root.CreateSubKey(keyPath))
-            {
-                if (enable)
-                {
-                    key.SetValue(valueName, value, RegistryValueKind.String);
-                }
-                else
-                {
-                    if (defaultValue != null) key.SetValue(valueName, defaultValue, RegistryValueKind.String);
-                    else key.DeleteValue(valueName, false);
-                }
-            }
-        }
+            // Security & stability
+            Tweak("CloseUnresponsive",
+                V(HKCU, Desktop, "WaitToKillAppTimeout", Str, "2000", "20000"),
+                V(HKCU, Desktop, "HungAppTimeout", Str, "2000", "5000")),
+            Tweak("DisableSecurityWarning", V(HKCU, @"Software\Microsoft\Windows\CurrentVersion\Policies\Attachments", "SaveZoneInformation", DWord, 1, null)),
+            Tweak("TakeOwnership",
+                new[] { new TweakKey(HKLM, $@"{Classes}\*\shell\TakeOwnership"), new TweakKey(HKLM, $@"{Classes}\Directory\shell\TakeOwnership") },
+                V(HKLM, $@"{Classes}\*\shell\TakeOwnership", "", Str, "Take Ownership", null),
+                V(HKLM, $@"{Classes}\*\shell\TakeOwnership", "HasLUAShield", Str, "", null),
+                V(HKLM, $@"{Classes}\*\shell\TakeOwnership", "NoWorkingDirectory", Str, "", null),
+                V(HKLM, $@"{Classes}\*\shell\TakeOwnership\command", "", Str, TakeOwnFileCmd, null),
+                V(HKLM, $@"{Classes}\*\shell\TakeOwnership\command", "IsolatedCommand", Str, TakeOwnFileCmd, null),
+                V(HKLM, $@"{Classes}\Directory\shell\TakeOwnership", "", Str, "Take Ownership", null),
+                V(HKLM, $@"{Classes}\Directory\shell\TakeOwnership", "HasLUAShield", Str, "", null),
+                V(HKLM, $@"{Classes}\Directory\shell\TakeOwnership", "NoWorkingDirectory", Str, "", null),
+                V(HKLM, $@"{Classes}\Directory\shell\TakeOwnership\command", "", Str, TakeOwnDirCmd, null),
+                V(HKLM, $@"{Classes}\Directory\shell\TakeOwnership\command", "IsolatedCommand", Str, TakeOwnDirCmd, null)),
+            Tweak("DisableSmartScreen", V(HKLM, @"SOFTWARE\Policies\Microsoft\Windows\System", "EnableSmartScreen", DWord, 0, null)),
+            Tweak("ShowBSODDetails", V(HKLM, @"SYSTEM\CurrentControlSet\Control\CrashControl", "DisplayParameters", DWord, 1, 0)),
+            Tweak("EnableNetworkDrivesElevated", V(HKLM, PoliciesSystem, "EnableLinkedConnections", DWord, 1, null)),
+            // EnableLUA must be put back to 1, never deleted.
+            Tweak("DisableUAC", V(HKLM, PoliciesSystem, "EnableLUA", DWord, 0, 1)),
+            Tweak("EnableAntiAdware", V(HKLM, @"SOFTWARE\Policies\Microsoft\Windows Defender\MpEngine", "MpEnablePus", DWord, 1, null)),
+            Tweak("ForceCrashDump", new[] { new TweakKey(HKLM, @"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps") }),
 
-        public static Dictionary<string, bool> GetTweakStatuses()
-        {
-            var statuses = new Dictionary<string, bool>();
+            // Desktop
+            Tweak("SpeedUpMouseHover", V(HKCU, @"Control Panel\Mouse", "MouseHoverTime", Str, "10", "400")),
+            Tweak("SpeedUpDesktopLoading", V(HKLM, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "Max Cached Icons", Str, "4096", null)),
+            Tweak("DisableBingSearch", V(HKCU, @"SOFTWARE\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", DWord, 1, null)),
+            Tweak("TaskbarEndTask", V(HKCU, $@"{ExplorerAdvanced}\TaskbarDeveloperSettings", "TaskbarEndTask", DWord, 1, 0)),
+            Tweak("TaskbarSeconds", V(HKCU, ExplorerAdvanced, "ShowSecondsInSystemClock", DWord, 1, 0)),
 
-            try
-            {
-                // Original Tweaks
-                statuses["NetworkThrottling"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex", unchecked((int)0xFFFFFFFF));
-                statuses["SystemResponsiveness"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness", 0);
-                
-                using (var key1 = Registry.CurrentUser.OpenSubKey(@"System\GameConfigStore"))
-                using (var key2 = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR"))
-                {
-                    bool dvrEnabled = (key1 != null && key1.GetValue("GameDVR_Enabled") is int dvr && dvr == 0);
-                    bool appCapture = (key2 != null && key2.GetValue("AppCaptureEnabled") is int app && app == 0);
-                    statuses["GameDVR"] = (dvrEnabled && appCapture);
-                }
+            // File Explorer
+            Tweak("DisableNewAppPrompt", V(HKLM, @"SOFTWARE\Policies\Microsoft\Windows\Explorer", "NoNewAppAlert", DWord, 1, null)),
+            Tweak("CmdAdminContextMenu",
+                new[] { new TweakKey(HKLM, $@"{Classes}\Directory\shell\runas") },
+                V(HKLM, $@"{Classes}\Directory\shell\runas", "", Str, "Open Command Window Here as Administrator", null),
+                V(HKLM, $@"{Classes}\Directory\shell\runas", "HasLUAShield", Str, "", null),
+                V(HKLM, $@"{Classes}\Directory\shell\runas\command", "", Str, "cmd.exe /s /k pushd \"%V\"", null)),
+            Tweak("ExplorerAutoComplete",
+                V(HKCU, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\AutoComplete", "AutoSuggest", Str, "yes", "no"),
+                V(HKCU, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\AutoComplete", "AppendCompletion", Str, "yes", "no")),
+            Tweak("ShowDriveLettersFirst", V(HKLM, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowDriveLettersFirst", DWord, 4, 0)),
 
-                statuses["PowerThrottling"] = CheckDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", 1);
-
-                // System Tweaks
-                statuses["DisableDriverUpdates"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "ExcludeWUDriversInQualityUpdate", 1);
-                statuses["DisableStoreUpdates"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\WindowsStore", "AutoDownload", 2);
-                statuses["DisableTelemetry"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0);
-                statuses["ClearPageFile"] = CheckDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "ClearPageFileAtShutdown", 1);
-
-                // Windows Usage Tweaks
-                // SetTweakStatus writes "link" as a 4-byte REG_BINARY (that is what Explorer reads), so
-                // a DWORD check never matched and the toggle always showed as off.
-                using (var explorerKey = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer"))
-                {
-                    statuses["DisableShortcutSuffix"] = explorerKey?.GetValue("link") is byte[] link &&
-                                                        link.Length >= 4 && link.All(b => b == 0);
-                }
-                statuses["DisablePreventShutdown"] = CheckString(Registry.CurrentUser, @"Control Panel\Desktop", "AutoEndTasks", "1");
-
-                // Security & Stability
-                statuses["CloseUnresponsive"] = CheckString(Registry.CurrentUser, @"Control Panel\Desktop", "WaitToKillAppTimeout", "2000");
-                statuses["DisableSecurityWarning"] = CheckDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Policies\Attachments", "SaveZoneInformation", 1);
-                statuses["TakeOwnership"] = Registry.ClassesRoot.OpenSubKey(@"*\shell\TakeOwnership") != null;
-                statuses["DisableSmartScreen"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "EnableSmartScreen", 0);
-                statuses["ShowBSODDetails"] = CheckDword(Registry.LocalMachine, @"System\CurrentControlSet\Control\CrashControl", "DisplayParameters", 1);
-                statuses["EnableNetworkDrivesElevated"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLinkedConnections", 1);
-                statuses["DisableUAC"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLUA", 0);
-                statuses["EnableAntiAdware"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows Defender\MpEngine", "MpEnablePus", 1);
-                statuses["ForceCrashDump"] = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps") != null;
-
-                // Desktop Tweaks
-                statuses["SpeedUpMouseHover"] = CheckString(Registry.CurrentUser, @"Control Panel\Mouse", "MouseHoverTime", "10");
-                statuses["SpeedUpDesktopLoading"] = CheckString(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "Max Cached Icons", "4096");
-                statuses["DisableBingSearch"] = CheckDword(Registry.CurrentUser, @"SOFTWARE\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", 1);
-                statuses["TaskbarEndTask"] = CheckDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings", "TaskbarEndTask", 1);
-                statuses["TaskbarSeconds"] = CheckDword(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "ShowSecondsInSystemClock", 1);
-
-                // File Explorer Tweaks
-                statuses["DisableNewAppPrompt"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\Explorer", "NoNewAppAlert", 1);
-                statuses["CmdAdminContextMenu"] = Registry.ClassesRoot.OpenSubKey(@"Directory\shell\runas") != null;
-                statuses["ExplorerAutoComplete"] = CheckString(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\AutoComplete", "AutoSuggest", "yes");
-                statuses["ShowDriveLettersFirst"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowDriveLettersFirst", 4);
-
-                // Windows Appearance Tweaks
-                statuses["SpeedUpAeroSnap"] = CheckString(Registry.CurrentUser, @"Control Panel\Desktop", "WindowArrangementActive", "1");
-                statuses["SpeedUpWindowsPeek"] = CheckDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "DesktopLivePreviewHoverTime", 100);
-                statuses["SpeedUpMenus"] = CheckString(Registry.CurrentUser, @"Control Panel\Desktop", "MenuShowDelay", "10");
-                statuses["Win10ContextMenu"] = Registry.CurrentUser.OpenSubKey(@"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32") != null;
-                statuses["DisableWin11Ads"] = CheckDword(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SubscribedContent-338389Enabled", 0);
-                statuses["DisableSigninBlur"] = CheckDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "DisableAcrylicBackgroundOnLogon", 1);
-                statuses["EnableBatteryEstimatedTime"] = CheckDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power", "EnergyEstimationEnabled", 1);
-                statuses["RemoveShortcutArrow"] = CheckString(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons", "29", @"%windir%\System32\shell32.dll,-50");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[RegistryTweaker] Failed to read statuses: {ex.Message}");
-            }
-
-            return statuses;
-        }
+            // Appearance
+            Tweak("SpeedUpAeroSnap", V(HKCU, Desktop, "WindowArrangementActive", Str, "1", "0")),
+            Tweak("SpeedUpWindowsPeek", V(HKCU, ExplorerAdvanced, "DesktopLivePreviewHoverTime", DWord, 100, 1000)),
+            Tweak("SpeedUpMenus", V(HKCU, Desktop, "MenuShowDelay", Str, "10", "400")),
+            Tweak("Win10ContextMenu",
+                new[] { new TweakKey(HKCU, Win10MenuClsid) },
+                V(HKCU, $@"{Win10MenuClsid}\InprocServer32", "", Str, "", null)),
+            Tweak("DisableWin11Ads",
+                V(HKCU, ContentDelivery, "SubscribedContent-338389Enabled", DWord, 0, 1),
+                V(HKCU, ContentDelivery, "SystemPaneSuggestionsEnabled", DWord, 0, 1),
+                V(HKCU, ContentDelivery, "SoftLandingEnabled", DWord, 0, 1)),
+            Tweak("DisableSigninBlur", V(HKLM, @"SOFTWARE\Policies\Microsoft\Windows\System", "DisableAcrylicBackgroundOnLogon", DWord, 1, null)),
+            Tweak("EnableBatteryEstimatedTime", V(HKLM, @"SYSTEM\CurrentControlSet\Control\Power", "EnergyEstimationEnabled", DWord, 1, 0)),
+            Tweak("RemoveShortcutArrow", V(HKLM, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons", "29", Str, @"%windir%\System32\shell32.dll,-50", null)),
+        };
 
         // Tweaks that weaken Windows security and are no longer offered. They can still be switched
         // OFF (so anyone who applied them can restore the protection), but never switched on:
@@ -152,7 +135,56 @@ namespace TuneUpEngine
             "DisableUAC", "DisableSmartScreen", "DisableSecurityWarning"
         };
 
-        public static bool SetTweakStatus(string tweakName, bool enable)
+        internal static string OwnerOf(string tweakId) => $"tweak:{tweakId}";
+
+        private static RegistryKey Root(RegistryHive hive) =>
+            hive == RegistryHive.LocalMachine ? Registry.LocalMachine : Registry.CurrentUser;
+
+        public static Dictionary<string, bool> GetTweakStatuses()
+        {
+            var statuses = new Dictionary<string, bool>();
+            foreach (var tweak in Definitions)
+            {
+                try
+                {
+                    statuses[tweak.Id] = IsApplied(tweak);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[RegistryTweaker] Failed to read {tweak.Id}: {ex.Message}");
+                    statuses[tweak.Id] = false;
+                }
+            }
+            return statuses;
+        }
+
+        internal static bool IsApplied(TweakDefinition tweak)
+        {
+            foreach (var key in tweak.Keys)
+            {
+                using var k = Root(key.Hive).OpenSubKey(key.Path);
+                if (k == null) return false;
+            }
+
+            foreach (var value in tweak.Values)
+            {
+                using var k = Root(value.Hive).OpenSubKey(value.Path);
+                if (!ValueMatches(k?.GetValue(value.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames), value.On))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool ValueMatches(object? actual, object expected) => (actual, expected) switch
+        {
+            (int a, int e) => a == e,
+            (string a, string e) => a == e,
+            (byte[] a, byte[] e) => a.SequenceEqual(e),
+            _ => false
+        };
+
+        public static bool SetTweakStatus(string tweakName, bool enable, ChangeJournal journal)
         {
             if (enable && RetiredTweaks.Contains(tweakName))
             {
@@ -160,197 +192,71 @@ namespace TuneUpEngine
                 return false;
             }
 
+            var tweak = Definitions.FirstOrDefault(t => t.Id == tweakName);
+            if (tweak == null) return false;
+
             try
             {
-                switch (tweakName)
-                {
-                    case "NetworkThrottling":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex", unchecked((int)0xFFFFFFFF), enable, 10);
-                        break;
-                    case "SystemResponsiveness":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness", 0, enable, 20);
-                        break;
-                    case "GameDVR":
-                        using (var key1 = Registry.CurrentUser.CreateSubKey(@"System\GameConfigStore"))
-                            key1.SetValue("GameDVR_Enabled", enable ? 0 : 1, RegistryValueKind.DWord);
-                        using (var key2 = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR"))
-                            key2.SetValue("AppCaptureEnabled", enable ? 0 : 1, RegistryValueKind.DWord);
-                        break;
-                    case "PowerThrottling":
-                        SetDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", 1, enable);
-                        break;
-
-                    // System Tweaks
-                    case "DisableDriverUpdates":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "ExcludeWUDriversInQualityUpdate", 1, enable, 0);
-                        break;
-                    case "DisableStoreUpdates":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\WindowsStore", "AutoDownload", 2, enable, 4);
-                        break;
-                    case "DisableTelemetry":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", 0, enable, 3);
-                        break;
-                    case "ClearPageFile":
-                        SetDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "ClearPageFileAtShutdown", 1, enable, 0);
-                        break;
-
-                    // Windows Usage Tweaks
-                    case "DisableShortcutSuffix":
-                        using (var key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer"))
-                        {
-                            if (enable) key.SetValue("link", new byte[] { 0, 0, 0, 0 }, RegistryValueKind.Binary);
-                            else key.DeleteValue("link", false);
-                        }
-                        break;
-                    case "DisablePreventShutdown":
-                        SetString(Registry.CurrentUser, @"Control Panel\Desktop", "AutoEndTasks", "1", enable, "0");
-                        break;
-
-                    // Security & Stability
-                    case "CloseUnresponsive":
-                        SetString(Registry.CurrentUser, @"Control Panel\Desktop", "WaitToKillAppTimeout", "2000", enable, "20000");
-                        SetString(Registry.CurrentUser, @"Control Panel\Desktop", "HungAppTimeout", "2000", enable, "5000");
-                        break;
-                    case "DisableSecurityWarning":
-                        SetDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Policies\Attachments", "SaveZoneInformation", 1, enable, 2);
-                        break;
-                    case "TakeOwnership":
-                        if (enable)
-                        {
-                            using (var key = Registry.ClassesRoot.CreateSubKey(@"*\shell\TakeOwnership"))
-                            {
-                                key.SetValue("", "Take Ownership");
-                                key.SetValue("HasLUAShield", "");
-                                key.SetValue("NoWorkingDirectory", "");
-                                using (var cmd = key.CreateSubKey("command"))
-                                {
-                                    cmd.SetValue("", "cmd.exe /c takeown /f \"%1\" && icacls \"%1\" /grant administrators:F");
-                                    cmd.SetValue("IsolatedCommand", "cmd.exe /c takeown /f \"%1\" && icacls \"%1\" /grant administrators:F");
-                                }
-                            }
-                            using (var key = Registry.ClassesRoot.CreateSubKey(@"Directory\shell\TakeOwnership"))
-                            {
-                                key.SetValue("", "Take Ownership");
-                                key.SetValue("HasLUAShield", "");
-                                key.SetValue("NoWorkingDirectory", "");
-                                using (var cmd = key.CreateSubKey("command"))
-                                {
-                                    cmd.SetValue("", "cmd.exe /c takeown /f \"%1\" /r /d y && icacls \"%1\" /grant administrators:F /t");
-                                    cmd.SetValue("IsolatedCommand", "cmd.exe /c takeown /f \"%1\" /r /d y && icacls \"%1\" /grant administrators:F /t");
-                                }
-                            }
-                        }
-                        else
-                        {
-                            Registry.ClassesRoot.DeleteSubKeyTree(@"*\shell\TakeOwnership", false);
-                            Registry.ClassesRoot.DeleteSubKeyTree(@"Directory\shell\TakeOwnership", false);
-                        }
-                        break;
-                    case "DisableSmartScreen":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "EnableSmartScreen", 0, enable, 1);
-                        break;
-                    case "ShowBSODDetails":
-                        SetDword(Registry.LocalMachine, @"System\CurrentControlSet\Control\CrashControl", "DisplayParameters", 1, enable, 0);
-                        break;
-                    case "EnableNetworkDrivesElevated":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLinkedConnections", 1, enable, 0);
-                        break;
-                    case "DisableUAC":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLUA", 0, enable, 1);
-                        break;
-                    case "EnableAntiAdware":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows Defender\MpEngine", "MpEnablePus", 1, enable, 0);
-                        break;
-                    case "ForceCrashDump":
-                        if (enable) Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps");
-                        else Registry.LocalMachine.DeleteSubKeyTree(@"SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps", false);
-                        break;
-
-                    // Desktop Tweaks
-                    case "SpeedUpMouseHover":
-                        SetString(Registry.CurrentUser, @"Control Panel\Mouse", "MouseHoverTime", "10", enable, "400");
-                        break;
-                    case "SpeedUpDesktopLoading":
-                        SetString(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "Max Cached Icons", "4096", enable);
-                        break;
-                    case "DisableBingSearch":
-                        SetDword(Registry.CurrentUser, @"SOFTWARE\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", 1, enable, 0);
-                        break;
-                    case "TaskbarEndTask":
-                        SetDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings", "TaskbarEndTask", 1, enable, 0);
-                        break;
-                    case "TaskbarSeconds":
-                        SetDword(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "ShowSecondsInSystemClock", 1, enable, 0);
-                        break;
-
-                    // File Explorer Tweaks
-                    case "DisableNewAppPrompt":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\Explorer", "NoNewAppAlert", 1, enable, 0);
-                        break;
-                    case "CmdAdminContextMenu":
-                        if (enable)
-                        {
-                            using (var key = Registry.ClassesRoot.CreateSubKey(@"Directory\shell\runas"))
-                            {
-                                key.SetValue("", "Open Command Window Here as Administrator");
-                                key.SetValue("HasLUAShield", "");
-                                using (var cmd = key.CreateSubKey("command"))
-                                    cmd.SetValue("", "cmd.exe /s /k pushd \"%V\"");
-                            }
-                        }
-                        else Registry.ClassesRoot.DeleteSubKeyTree(@"Directory\shell\runas", false);
-                        break;
-                    case "ExplorerAutoComplete":
-                        SetString(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\AutoComplete", "AutoSuggest", "yes", enable, "no");
-                        SetString(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\AutoComplete", "AppendCompletion", "yes", enable, "no");
-                        break;
-                    case "ShowDriveLettersFirst":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "ShowDriveLettersFirst", 4, enable, 0);
-                        break;
-
-                    // Windows Appearance Tweaks
-                    case "SpeedUpAeroSnap":
-                        SetString(Registry.CurrentUser, @"Control Panel\Desktop", "WindowArrangementActive", "1", enable, "0");
-                        break;
-                    case "SpeedUpWindowsPeek":
-                        SetDword(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "DesktopLivePreviewHoverTime", 100, enable, 1000);
-                        break;
-                    case "SpeedUpMenus":
-                        SetString(Registry.CurrentUser, @"Control Panel\Desktop", "MenuShowDelay", "10", enable, "400");
-                        break;
-                    case "Win10ContextMenu":
-                        if (enable)
-                        {
-                            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"))
-                                key.SetValue("", "");
-                        }
-                        else Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}", false);
-                        break;
-                    case "DisableWin11Ads":
-                        SetDword(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SubscribedContent-338389Enabled", 0, enable, 1);
-                        SetDword(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SystemPaneSuggestionsEnabled", 0, enable, 1);
-                        SetDword(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SoftLandingEnabled", 0, enable, 1);
-                        break;
-                    case "DisableSigninBlur":
-                        SetDword(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "DisableAcrylicBackgroundOnLogon", 1, enable, 0);
-                        break;
-                    case "EnableBatteryEstimatedTime":
-                        SetDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power", "EnergyEstimationEnabled", 1, enable, 0);
-                        break;
-                    case "RemoveShortcutArrow":
-                        SetString(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons", "29", @"%windir%\System32\shell32.dll,-50", enable);
-                        break;
-
-                    default:
-                        return false;
-                }
-                return true;
+                return enable ? Apply(tweak, journal) : Remove(tweak, journal);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[RegistryTweaker] Failed to set tweak {tweakName}: {ex.Message}");
                 return false;
             }
+        }
+
+        internal static bool Apply(TweakDefinition tweak, ChangeJournal journal)
+        {
+            string owner = OwnerOf(tweak.Id);
+
+            // Record every original first. If any can't be recorded, change nothing.
+            bool captured =
+                tweak.Keys.All(k => journal.CaptureRegistryKey(owner, k.Hive, k.Path)) &&
+                tweak.Values.All(v => journal.CaptureRegistryValue(owner, v.Hive, v.Path, v.Name));
+            if (!captured)
+            {
+                journal.Release(owner);
+                Console.WriteLine($"[RegistryTweaker] Could not record the original state of {tweak.Id}; nothing was changed.");
+                return false;
+            }
+
+            foreach (var key in tweak.Keys)
+            {
+                using var _ = Root(key.Hive).CreateSubKey(key.Path);
+            }
+
+            foreach (var value in tweak.Values)
+            {
+                using var k = Root(value.Hive).CreateSubKey(value.Path);
+                k.SetValue(value.Name, value.On, value.Kind);
+            }
+
+            return true;
+        }
+
+        internal static bool Remove(TweakDefinition tweak, ChangeJournal journal)
+        {
+            string owner = OwnerOf(tweak.Id);
+
+            // Normal case: put back exactly what was there before this app changed it.
+            if (journal.IsOwned(owner))
+                return journal.Release(owner) == 0;
+
+            // Applied before the journal existed (or by something else): the original is unknown,
+            // so fall back to each value's documented "off" state.
+            foreach (var value in tweak.Values)
+            {
+                using var k = Root(value.Hive).OpenSubKey(value.Path, writable: true);
+                if (k == null) continue;
+                if (value.LegacyOff == null) k.DeleteValue(value.Name, throwOnMissingValue: false);
+                else k.SetValue(value.Name, value.LegacyOff, value.Kind);
+            }
+
+            foreach (var key in tweak.Keys)
+                Root(key.Hive).DeleteSubKeyTree(key.Path, throwOnMissingSubKey: false);
+
+            return true;
         }
     }
 }
