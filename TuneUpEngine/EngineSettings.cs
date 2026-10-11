@@ -14,7 +14,14 @@ namespace TuneUpEngine
         public bool AutoPurgeEnabled { get; set; } = false;
         public bool GameModeEnabled { get; set; } = true;
 
+        // Engine (machine-wide) settings live in ProgramData next to the change journal. Older
+        // versions kept them in the engine account's LocalAppData — SYSTEM's profile once the
+        // engine runs as a service — so that file is read once as a fallback.
         private static string SettingsPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "RamRaidersTuneUpSuite", "engine_settings.json");
+
+        private static string LegacySettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "RamRaidersTuneUpSuite", "engine_settings.json");
 
@@ -22,9 +29,10 @@ namespace TuneUpEngine
         {
             try
             {
-                if (File.Exists(SettingsPath))
+                string path = File.Exists(SettingsPath) ? SettingsPath : LegacySettingsPath;
+                if (File.Exists(path))
                 {
-                    string json = File.ReadAllText(SettingsPath);
+                    string json = File.ReadAllText(path);
                     var loaded = JsonSerializer.Deserialize<EngineSettings>(json);
                     if (loaded != null) return loaded;
                 }

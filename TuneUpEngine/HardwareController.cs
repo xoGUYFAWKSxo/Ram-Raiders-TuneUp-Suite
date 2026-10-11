@@ -23,7 +23,13 @@ namespace TuneUpEngine
 
         // Timestamped MSI backups live alongside the Registry Guard backups, so every reversible
         // change this suite makes ends up in one predictable place.
+        // Machine-wide settings, so machine-wide backups (ProgramData). Older versions wrote them to
+        // the engine account's AppData, which is still checked when reverting.
         private static string BackupDir => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "RamRaidersTuneUpSuite", "RegistryBackups");
+
+        private static string LegacyBackupDir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RamRaidersTuneUpSuite", "RegistryBackups");
 
@@ -188,11 +194,9 @@ namespace TuneUpEngine
                 }
 
                 // Enabled by a version without the change journal: fall back to the backup files.
-                if (!Directory.Exists(BackupDir))
-                    return "No MSI backup found to revert.";
-
-                var latest = new DirectoryInfo(BackupDir)
-                    .GetFiles("MSI_Backup_*.json")
+                var latest = new[] { BackupDir, LegacyBackupDir }
+                    .Where(Directory.Exists)
+                    .SelectMany(d => new DirectoryInfo(d).GetFiles("MSI_Backup_*.json"))
                     .OrderByDescending(f => f.LastWriteTimeUtc)
                     .FirstOrDefault();
 

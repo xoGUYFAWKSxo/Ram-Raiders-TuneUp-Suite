@@ -10,26 +10,22 @@ namespace TuneUpEngine
     {
         public const string DuplicateFilesCategory = "Duplicate Files";
 
-        private static string[] GetUserFolders()
+        // The requesting user's personal folders - resolved from THEIR profile (see UserFolders), so a
+        // service running as SYSTEM scans the right person's files. The profile root itself is
+        // deliberately NOT a scan root: it contains every folder below (so each file was once
+        // indexed twice and reported as a "duplicate" of itself) and it also contains AppData,
+        // where empty folders and identical files belong to installed applications.
+        private static string[] GetUserFolders(UserFolders folders)
         {
-            // Use USERPROFILE env var so we always resolve to the real logged-in user's
-            // home directory, not the SYSTEM account's profile when running elevated.
-            string userProfile = Environment.GetEnvironmentVariable("USERPROFILE")
-                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-            // The profile root itself is deliberately NOT a scan root. It contains every folder below
-            // (so each file was previously indexed twice and reported as a "duplicate" of itself) and
-            // it also contains AppData, where empty folders and identical files belong to installed
-            // applications and are not the user's to clean up.
             return new[]
             {
-                Path.Combine(userProfile, "Documents"),
-                Path.Combine(userProfile, "Pictures"),
-                Path.Combine(userProfile, "Videos"),
-                Path.Combine(userProfile, "Music"),
-                Path.Combine(userProfile, "Desktop"),
-                Path.Combine(userProfile, "Downloads"),
-                Path.Combine(userProfile, "OneDrive") // Common on modern Windows
+                folders.Documents,
+                folders.Pictures,
+                folders.Videos,
+                folders.Music,
+                folders.Desktop,
+                folders.Downloads,
+                folders.OneDrive
             }.Where(p => !string.IsNullOrEmpty(p))
              .Distinct(StringComparer.OrdinalIgnoreCase)
              .ToArray();
@@ -59,11 +55,14 @@ namespace TuneUpEngine
         internal static bool IsCloudPlaceholder(FileAttributes attributes) =>
             (attributes & (FileAttributes.Offline | RecallOnOpen | RecallOnDataAccess)) != 0;
 
-        public List<ScanItem> ScanEmptyFolders(Action<string> progressCallback)
+        public List<ScanItem> ScanEmptyFolders(Action<string> progressCallback) =>
+            ScanEmptyFolders(UserFolders.ForCurrentProcess(), progressCallback);
+
+        public List<ScanItem> ScanEmptyFolders(UserFolders folders, Action<string> progressCallback)
         {
             var results = new List<ScanItem>();
             var emptyFolders = new List<string>();
-            var userFolders = GetUserFolders();
+            var userFolders = GetUserFolders(folders);
 
             foreach (var folder in RemoveNestedRoots(userFolders))
             {
@@ -154,7 +153,10 @@ namespace TuneUpEngine
             }
         }
 
-        public List<ScanItem> ScanDuplicateFiles(Action<string> progressCallback)
+        public List<ScanItem> ScanDuplicateFiles(Action<string> progressCallback) =>
+            ScanDuplicateFiles(UserFolders.ForCurrentProcess(), progressCallback);
+
+        public List<ScanItem> ScanDuplicateFiles(UserFolders folders, Action<string> progressCallback)
         {
             var results = new List<ScanItem>();
             var filesBySize = new Dictionary<long, List<string>>();
@@ -162,7 +164,7 @@ namespace TuneUpEngine
             // would be reported as a duplicate of itself and cleaning it would delete the only copy.
             var indexedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var folder in RemoveNestedRoots(GetUserFolders()))
+            foreach (var folder in RemoveNestedRoots(GetUserFolders(folders)))
             {
                 if (!Directory.Exists(folder)) continue;
                 progressCallback?.Invoke($"Indexing files in {Path.GetFileName(folder)}...");

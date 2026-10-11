@@ -253,7 +253,9 @@ namespace TuneUpEngine.Tests
 
         private static IpcResponse? Send(string pipeName, string command, string payload)
         {
-            using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
+            // Like the UI: allow the engine to act as this user, which it needs for per-user work.
+            using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut,
+                PipeOptions.None, System.Security.Principal.TokenImpersonationLevel.Impersonation);
             client.Connect(5000);
             var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true };
             var reader = new StreamReader(client, Encoding.UTF8);

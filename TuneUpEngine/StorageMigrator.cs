@@ -43,8 +43,10 @@ namespace TuneUpEngine
         private const uint INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF;
         private const uint FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
 
+        // Machine-wide (migrations move machine folders such as game installs), next to the change
+        // journal. The engine's own AppData would be SYSTEM's profile when running as a service.
         private static readonly string HistoryFile = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "RamRaidersTuneUpSuite", "migration_history.json");
 
         // ── Path safety ─────────────────────────────────────────────────────────
@@ -74,6 +76,12 @@ namespace TuneUpEngine
                 if (IsSameOrInside(protectedDir, source))
                     return $"'{source}' is or contains a protected system folder and cannot be migrated.";
             }
+
+            // Every user's profile root and AppData folders — not just the engine's own (which is
+            // SYSTEM's when running as a service). Their subfolders, e.g. a game folder in
+            // Documents, are fine.
+            string? profileError = CheckProfileFolders(source);
+            if (profileError != null) return profileError;
 
             foreach (var systemTree in SystemTrees())
             {
@@ -115,6 +123,21 @@ namespace TuneUpEngine
         // .NET accepts characters Windows forbids in file names (e.g. '|', '?', '*'), so reject them
         // explicitly — wildcards in particular must never reach a recursive delete.
         private static readonly char[] ForbiddenPathChars = { '<', '>', '"', '|', '?', '*' };
+
+        internal static string? CheckProfileFolders(string source)
+        {
+            string? usersDir = Path.GetDirectoryName(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+            if (string.IsNullOrEmpty(usersDir) || !IsSameOrInside(source, usersDir)) return null;
+
+            string[] parts = Path.GetRelativePath(Normalize(usersDir), source)
+                .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length == 1)
+                return $"'{source}' is a user profile folder and cannot be migrated.";
+            if (parts.Length <= 3 && parts[1].Equals("AppData", StringComparison.OrdinalIgnoreCase))
+                return $"'{source}' is an AppData folder and cannot be migrated.";
+            return null;
+        }
 
         private static string Normalize(string path)
         {

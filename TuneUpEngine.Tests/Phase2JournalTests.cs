@@ -254,6 +254,7 @@ namespace TuneUpEngine.Tests
     public class RegistryTweakerTableTests : IDisposable
     {
         private readonly string _root = @"Software\RRTU_Test_" + Guid.NewGuid().ToString("N");
+        private static readonly ClientContext Me = ClientContext.ForCurrentProcess();
 
         public void Dispose() => Registry.CurrentUser.DeleteSubKeyTree(_root, throwOnMissingSubKey: false);
 
@@ -312,11 +313,11 @@ namespace TuneUpEngine.Tests
             var j = new ChangeJournal(null, new FakeSystemCommands());
             var tweak = TestTweak();
 
-            Assert.True(RegistryTweaker.Apply(tweak, j));
-            Assert.True(RegistryTweaker.IsApplied(tweak));
+            Assert.True(RegistryTweaker.Apply(tweak, j, Me));
+            Assert.True(RegistryTweaker.IsApplied(tweak, Me));
 
-            Assert.True(RegistryTweaker.Remove(tweak, j));
-            Assert.False(RegistryTweaker.IsApplied(tweak));
+            Assert.True(RegistryTweaker.Remove(tweak, j, Me));
+            Assert.False(RegistryTweaker.IsApplied(tweak, Me));
             using (var desk = Registry.CurrentUser.OpenSubKey($@"{_root}\desk"))
                 Assert.Equal("250", desk!.GetValue("Delay")); // the user's own value, not the "400" default
             using (var menu = Registry.CurrentUser.OpenSubKey($@"{_root}\menu"))
@@ -328,10 +329,10 @@ namespace TuneUpEngine.Tests
         {
             var tweak = TestTweak();
             var applyJournal = new ChangeJournal(null, new FakeSystemCommands());
-            RegistryTweaker.Apply(tweak, applyJournal);
+            RegistryTweaker.Apply(tweak, applyJournal, Me);
 
             // A fresh journal has no record (applied by an older version).
-            Assert.True(RegistryTweaker.Remove(tweak, new ChangeJournal(null, new FakeSystemCommands())));
+            Assert.True(RegistryTweaker.Remove(tweak, new ChangeJournal(null, new FakeSystemCommands()), Me));
 
             using (var desk = Registry.CurrentUser.OpenSubKey($@"{_root}\desk"))
                 Assert.Equal("400", desk!.GetValue("Delay"));

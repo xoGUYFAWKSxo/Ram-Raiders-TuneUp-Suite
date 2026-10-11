@@ -114,17 +114,20 @@ namespace TuneUpEngine
 
         // ── Capture ─────────────────────────────────────────────────────────────
 
-        public bool CaptureRegistryValue(string owner, RegistryHive hive, string keyPath, string valueName, bool transient = false)
+        // userSid: for HKCU, whose hive this is (defaults to the engine's own user). Requests from
+        // the UI pass the connected user's SID, so their settings land in — and are later restored
+        // to — their own hive even when the engine runs as a service.
+        public bool CaptureRegistryValue(string owner, RegistryHive hive, string keyPath, string valueName, bool transient = false, string? userSid = null)
         {
-            var target = NewRegistryTarget("RegValue", hive, keyPath, valueName, transient);
+            var target = NewRegistryTarget("RegValue", hive, keyPath, valueName, transient, userSid);
             return Capture(owner, target, t => ReadRegistryValue(hive, t));
         }
 
         // Records whether a key existed, so a key this app created (e.g. a context-menu entry) can
         // be deleted again on restore. Capture the key BEFORE the values written inside it.
-        public bool CaptureRegistryKey(string owner, RegistryHive hive, string keyPath, bool transient = false)
+        public bool CaptureRegistryKey(string owner, RegistryHive hive, string keyPath, bool transient = false, string? userSid = null)
         {
-            var target = NewRegistryTarget("RegKey", hive, keyPath, null, transient);
+            var target = NewRegistryTarget("RegKey", hive, keyPath, null, transient, userSid);
             return Capture(owner, target, t =>
             {
                 using var key = BaseKey(hive, t.UserSid, writable: false)?.OpenSubKey(keyPath);
@@ -283,7 +286,7 @@ namespace TuneUpEngine
 
         // ── Registry helpers ────────────────────────────────────────────────────
 
-        private static JournalTarget NewRegistryTarget(string type, RegistryHive hive, string keyPath, string? valueName, bool transient)
+        private static JournalTarget NewRegistryTarget(string type, RegistryHive hive, string keyPath, string? valueName, bool transient, string? userSid)
         {
             if (hive != RegistryHive.LocalMachine && hive != RegistryHive.CurrentUser)
                 throw new ArgumentException("Only HKLM and HKCU are supported.", nameof(hive));
@@ -292,7 +295,7 @@ namespace TuneUpEngine
             {
                 Type = type,
                 Hive = hive == RegistryHive.LocalMachine ? "HKLM" : "HKCU",
-                UserSid = hive == RegistryHive.CurrentUser ? WindowsIdentity.GetCurrent().User?.Value : null,
+                UserSid = hive == RegistryHive.CurrentUser ? (userSid ?? WindowsIdentity.GetCurrent().User?.Value) : null,
                 Path = keyPath.Trim('\\'),
                 Name = valueName,
                 Transient = transient

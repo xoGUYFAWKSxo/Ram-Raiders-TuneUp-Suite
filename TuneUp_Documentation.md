@@ -44,12 +44,21 @@
 
 ## How to Launch
 
-Run **`Start-TuneUp.bat`** from the project root. This script:
+**Installed copy:** the installer registers the engine as an automatically starting Windows service (**TuneUp Engine**, `TuneUpEngineService`). Just open **Ram Raiders TuneUp Suite** — there is no UAC prompt, and the engine keeps working in the background after you close the window.
 
-1. Starts `TuneUpUI.exe` as the current user.
-2. The UI automatically checks if the background engine is running by checking the pipe. If offline, it triggers `Process.Start` with the `runas` verb, prompting for Windows UAC (User Account Control) Administrator elevation.
-3. The engine starts completely silently in the background (`ProcessWindowStyle.Hidden` and `CreateNoWindow`).
-4. The UI polls the named pipe every 500ms for up to 15 seconds until the engine is ready, then immediately populates the dashboard.
+1. `TuneUpUI.exe` starts as you (never elevated).
+2. It connects to the engine's pipe, first checking that the pipe belongs to the genuine `TuneUpEngine.exe` installed next to it.
+3. If the service is stopped, the UI starts it (signed-in users are allowed to start it; stopping or changing it needs an administrator).
+4. While open (including minimised to the tray), the UI tells the engine which program is in the foreground each second — a service can't see your desktop, and Game Mode / ProBalance need to know.
+
+**Development build:** run `TuneUpUI.exe` from its build folder (or `Start-TuneUp.bat`). With no service installed, the UI falls back to launching the engine itself with a UAC prompt, and stops it again when the UI exits.
+
+### Per-user work and administrator rights
+
+The engine is shared by everyone signed in to the PC, so each request is handled for the user who made it:
+
+- **Your settings and files:** per-user tweaks go to *your* registry hive, scans use *your* folders, and files inside your profile are deleted **as you** — Windows itself guarantees nothing is removed that you couldn't remove yourself.
+- **Machine-wide changes** (system tweaks, services, MSI, network, Game Mode/ProBalance switches, SFC/DISM, migration, cleaning Windows logs) require an **administrator account**. A standard user can still scan, clean their own files and change their own per-user tweaks.
 
 ---
 

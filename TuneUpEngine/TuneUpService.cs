@@ -9,12 +9,14 @@ namespace TuneUpEngine
         private readonly StandbyListManager _memoryManager;
         private readonly IpcServer _ipcServer;
         private readonly Action? _releaseTemporaryChanges;
+        private readonly Action? _applySavedModuleStates;
 
         public TuneUpService(
             ProBalanceGovernor governor, 
             StandbyListManager memoryManager, 
             IpcServer ipcServer,
-            Action? releaseTemporaryChanges = null)
+            Action? releaseTemporaryChanges = null,
+            Action? applySavedModuleStates = null)
         {
             ServiceName = "TuneUpEngineService";
             
@@ -22,6 +24,7 @@ namespace TuneUpEngine
             _memoryManager = memoryManager;
             _ipcServer = ipcServer;
             _releaseTemporaryChanges = releaseTemporaryChanges;
+            _applySavedModuleStates = applySavedModuleStates;
 
             CanStop = true;
             CanShutdown = true;
@@ -31,11 +34,10 @@ namespace TuneUpEngine
         {
             try
             {
-                // Module enable/disable state was already applied from persisted EngineSettings in
-                // Program.Main before the service was constructed, so we must NOT re-force it here
-                // (doing so would clobber the user's saved choices). We only need to bring the IPC
-                // pipe online.
+                // Claim the pipe first (fails if another engine is already running), then restore
+                // the saved module states — never the other way round.
                 _ipcServer.Start();
+                _applySavedModuleStates?.Invoke();
 
                 Console.WriteLine("[Service] TuneUp background service successfully started.");
             }

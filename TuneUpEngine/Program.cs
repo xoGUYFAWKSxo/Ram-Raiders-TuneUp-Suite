@@ -71,6 +71,7 @@ namespace TuneUpEngine
             var ipcServer = new IpcServer(governor, memoryManager, cleaner, integrityAgent, registryVerifier, gameMode, downloader, latencyAuditor, engineSettings,
                 allowedClientSids: ParseAllowedSids(args),
                 allowInteractiveUsers: isServiceMode,
+                isServiceMode: isServiceMode,
                 journal: journal);
 
             // On any orderly exit, hand back everything temporary: the boosted game's priority and
@@ -88,9 +89,10 @@ namespace TuneUpEngine
 
             if (isServiceMode)
             {
-                // Headless Windows Service Mode (the Service Control Manager guarantees one instance)
-                ApplySavedModuleStates();
-                using (var service = new TuneUpService(governor, memoryManager, ipcServer, ReleaseTemporaryChanges))
+                // Headless Windows Service Mode. Modules are enabled in OnStart, only after the pipe
+                // has been claimed — a console engine left running would otherwise share the
+                // machine with a second set of active modules.
+                using (var service = new TuneUpService(governor, memoryManager, ipcServer, ReleaseTemporaryChanges, ApplySavedModuleStates))
                 {
                     ServiceBase.Run(service);
                 }

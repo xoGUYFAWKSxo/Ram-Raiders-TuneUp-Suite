@@ -135,19 +135,41 @@ namespace TuneUpEngine
             "DisableUAC", "DisableSmartScreen", "DisableSecurityWarning"
         };
 
-        internal static string OwnerOf(string tweakId) => $"tweak:{tweakId}";
+        // Tweaks that touch HKCU belong to one user, so their journal owner includes that user's
+        // SID — otherwise one user switching a tweak off would also undo it for everyone else.
+        internal static string OwnerOf(TweakDefinition tweak, ClientContext ctx) =>
+            TouchesUserHive(tweak) ? $"tweak:{tweak.Id}@{ctx.Sid}" : $"tweak:{tweak.Id}";
 
-        private static RegistryKey Root(RegistryHive hive) =>
-            hive == RegistryHive.LocalMachine ? Registry.LocalMachine : Registry.CurrentUser;
+        private static bool TouchesUserHive(TweakDefinition tweak) =>
+            tweak.Keys.Any(k => k.Hive == RegistryHive.CurrentUser) ||
+            tweak.Values.Any(v => v.Hive == RegistryHive.CurrentUser);
 
-        public static Dictionary<string, bool> GetTweakStatuses()
+        // Machine-wide tweaks (anything under HKLM) need an administrator account. Per-user tweaks
+        // only change the requesting user's own settings, so any user may apply them.
+        internal static bool RequiresAdministrator(TweakDefinition tweak) =>
+            tweak.Keys.Any(k => k.Hive == RegistryHive.LocalMachine) ||
+            tweak.Values.Any(v => v.Hive == RegistryHive.LocalMachine);
+
+        public static bool RequiresAdministrator(string tweakName) =>
+            Definitions.FirstOrDefault(t => t.Id == tweakName) is { } t && RequiresAdministrator(t);
+
+        // HKCU always means the requesting user's own hive — not the engine's (which is SYSTEM's
+        // when running as a service, or another admin's after over-the-shoulder UAC).
+        private static RegistryKey Root(RegistryHive hive, UserHiveHandle userHive)
+        {
+            if (hive == RegistryHive.LocalMachine) return Registry.LocalMachine;
+            return userHive.Key ?? throw new InvalidOperationException("The user's registry hive is not loaded.");
+        }
+
+        public static Dictionary<string, bool> GetTweakStatuses(ClientContext ctx)
         {
             var statuses = new Dictionary<string, bool>();
+            using var userHive = ctx.OpenUserHive();
             foreach (var tweak in Definitions)
             {
                 try
                 {
-                    statuses[tweak.Id] = IsApplied(tweak);
+                    statuses[tweak.Id] = IsApplied(tweak, userHive);
                 }
                 catch (Exception ex)
                 {
@@ -158,17 +180,23 @@ namespace TuneUpEngine
             return statuses;
         }
 
-        internal static bool IsApplied(TweakDefinition tweak)
+        internal static bool IsApplied(TweakDefinition tweak, ClientContext ctx)
+        {
+            using var userHive = ctx.OpenUserHive();
+            return IsApplied(tweak, userHive);
+        }
+
+        private static bool IsApplied(TweakDefinition tweak, UserHiveHandle userHive)
         {
             foreach (var key in tweak.Keys)
             {
-                using var k = Root(key.Hive).OpenSubKey(key.Path);
+                using var k = Root(key.Hive, userHive).OpenSubKey(key.Path);
                 if (k == null) return false;
             }
 
             foreach (var value in tweak.Values)
             {
-                using var k = Root(value.Hive).OpenSubKey(value.Path);
+                using var k = Root(value.Hive, userHive).OpenSubKey(value.Path);
                 if (!ValueMatches(k?.GetValue(value.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames), value.On))
                     return false;
             }
@@ -184,7 +212,7 @@ namespace TuneUpEngine
             _ => false
         };
 
-        public static bool SetTweakStatus(string tweakName, bool enable, ChangeJournal journal)
+        public static bool SetTweakStatus(string tweakName, bool enable, ChangeJournal journal, ClientContext ctx)
         {
             if (enable && RetiredTweaks.Contains(tweakName))
             {
@@ -195,9 +223,15 @@ namespace TuneUpEngine
             var tweak = Definitions.FirstOrDefault(t => t.Id == tweakName);
             if (tweak == null) return false;
 
+            if (RequiresAdministrator(tweak) && !ctx.IsAdministrator)
+            {
+                Console.WriteLine($"[RegistryTweaker] Refused {tweakName}: machine-wide tweaks require an administrator account.");
+                return false;
+            }
+
             try
             {
-                return enable ? Apply(tweak, journal) : Remove(tweak, journal);
+                return enable ? Apply(tweak, journal, ctx) : Remove(tweak, journal, ctx);
             }
             catch (Exception ex)
             {
@@ -206,14 +240,14 @@ namespace TuneUpEngine
             }
         }
 
-        internal static bool Apply(TweakDefinition tweak, ChangeJournal journal)
+        internal static bool Apply(TweakDefinition tweak, ChangeJournal journal, ClientContext ctx)
         {
-            string owner = OwnerOf(tweak.Id);
+            string owner = OwnerOf(tweak, ctx);
 
             // Record every original first. If any can't be recorded, change nothing.
             bool captured =
-                tweak.Keys.All(k => journal.CaptureRegistryKey(owner, k.Hive, k.Path)) &&
-                tweak.Values.All(v => journal.CaptureRegistryValue(owner, v.Hive, v.Path, v.Name));
+                tweak.Keys.All(k => journal.CaptureRegistryKey(owner, k.Hive, k.Path, userSid: ctx.Sid)) &&
+                tweak.Values.All(v => journal.CaptureRegistryValue(owner, v.Hive, v.Path, v.Name, userSid: ctx.Sid));
             if (!captured)
             {
                 journal.Release(owner);
@@ -221,23 +255,25 @@ namespace TuneUpEngine
                 return false;
             }
 
+            using var userHive = ctx.OpenUserHive(writable: true);
+
             foreach (var key in tweak.Keys)
             {
-                using var _ = Root(key.Hive).CreateSubKey(key.Path);
+                using var _ = Root(key.Hive, userHive).CreateSubKey(key.Path);
             }
 
             foreach (var value in tweak.Values)
             {
-                using var k = Root(value.Hive).CreateSubKey(value.Path);
+                using var k = Root(value.Hive, userHive).CreateSubKey(value.Path);
                 k.SetValue(value.Name, value.On, value.Kind);
             }
 
             return true;
         }
 
-        internal static bool Remove(TweakDefinition tweak, ChangeJournal journal)
+        internal static bool Remove(TweakDefinition tweak, ChangeJournal journal, ClientContext ctx)
         {
-            string owner = OwnerOf(tweak.Id);
+            string owner = OwnerOf(tweak, ctx);
 
             // Normal case: put back exactly what was there before this app changed it.
             if (journal.IsOwned(owner))
@@ -245,16 +281,18 @@ namespace TuneUpEngine
 
             // Applied before the journal existed (or by something else): the original is unknown,
             // so fall back to each value's documented "off" state.
+            using var userHive = ctx.OpenUserHive(writable: true);
+
             foreach (var value in tweak.Values)
             {
-                using var k = Root(value.Hive).OpenSubKey(value.Path, writable: true);
+                using var k = Root(value.Hive, userHive).OpenSubKey(value.Path, writable: true);
                 if (k == null) continue;
                 if (value.LegacyOff == null) k.DeleteValue(value.Name, throwOnMissingValue: false);
                 else k.SetValue(value.Name, value.LegacyOff, value.Kind);
             }
 
             foreach (var key in tweak.Keys)
-                Root(key.Hive).DeleteSubKeyTree(key.Path, throwOnMissingSubKey: false);
+                Root(key.Hive, userHive).DeleteSubKeyTree(key.Path, throwOnMissingSubKey: false);
 
             return true;
         }

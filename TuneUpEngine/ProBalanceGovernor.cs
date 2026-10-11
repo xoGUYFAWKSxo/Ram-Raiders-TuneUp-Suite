@@ -51,28 +51,10 @@ namespace TuneUpEngine
         // routinely saturate a core, which is exactly what ProBalance's spike detector looks for).
         public Func<int, bool>? IsProcessExempt { get; set; }
 
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
         // The process that owns the window the user is interacting with. ProBalance exists to keep
-        // the foreground app responsive, so that process is never the one it throttles.
-        private static int GetForegroundProcessId()
-        {
-            try
-            {
-                IntPtr hWnd = GetForegroundWindow();
-                if (hWnd == IntPtr.Zero) return 0;
-                GetWindowThreadProcessId(hWnd, out uint pid);
-                return (int)pid;
-            }
-            catch
-            {
-                return 0;
-            }
-        }
+        // the foreground app responsive, so that process is never the one it throttles. (Works in
+        // service mode too: the UI reports it — see ForegroundTracker.)
+        private static int GetForegroundProcessId() => ForegroundTracker.GetForegroundProcessId();
 
         public bool IsEnabled
         {
