@@ -8,6 +8,8 @@ namespace TuneUpEngine
 {
     public class AdvancedScanner
     {
+        public const string DuplicateFilesCategory = "Duplicate Files";
+
         private static string[] GetUserFolders()
         {
             // Use USERPROFILE env var so we always resolve to the real logged-in user's
@@ -15,9 +17,12 @@ namespace TuneUpEngine
             string userProfile = Environment.GetEnvironmentVariable("USERPROFILE")
                 ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
+            // The profile root itself is deliberately NOT a scan root. It contains every folder below
+            // (so each file was previously indexed twice and reported as a "duplicate" of itself) and
+            // it also contains AppData, where empty folders and identical files belong to installed
+            // applications and are not the user's to clean up.
             return new[]
             {
-                userProfile,
                 Path.Combine(userProfile, "Documents"),
                 Path.Combine(userProfile, "Pictures"),
                 Path.Combine(userProfile, "Videos"),
@@ -30,13 +35,37 @@ namespace TuneUpEngine
              .ToArray();
         }
 
+        // Drops any root that lives inside another root, so no directory tree is walked twice.
+        internal static string[] RemoveNestedRoots(IEnumerable<string> roots)
+        {
+            var normalized = roots
+                .Select(r => Path.TrimEndingDirectorySeparator(Path.GetFullPath(r)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return normalized
+                .Where(r => !normalized.Any(other =>
+                    !other.Equals(r, StringComparison.OrdinalIgnoreCase) &&
+                    r.StartsWith(other + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+        }
+
+        // Cloud placeholders (OneDrive Files On-Demand and similar) report their full size but their
+        // content lives online. Reading them to hash would silently download the user's whole cloud
+        // drive, so they are excluded from duplicate detection.
+        private const FileAttributes RecallOnOpen = (FileAttributes)0x00040000;
+        private const FileAttributes RecallOnDataAccess = (FileAttributes)0x00400000;
+
+        internal static bool IsCloudPlaceholder(FileAttributes attributes) =>
+            (attributes & (FileAttributes.Offline | RecallOnOpen | RecallOnDataAccess)) != 0;
+
         public List<ScanItem> ScanEmptyFolders(Action<string> progressCallback)
         {
             var results = new List<ScanItem>();
             var emptyFolders = new List<string>();
             var userFolders = GetUserFolders();
 
-            foreach (var folder in userFolders)
+            foreach (var folder in RemoveNestedRoots(userFolders))
             {
                 if (Directory.Exists(folder))
                 {
@@ -129,21 +158,26 @@ namespace TuneUpEngine
         {
             var results = new List<ScanItem>();
             var filesBySize = new Dictionary<long, List<string>>();
-            var userFolders = GetUserFolders();
+            // Belt and braces alongside RemoveNestedRoots: a path must never be indexed twice, or it
+            // would be reported as a duplicate of itself and cleaning it would delete the only copy.
+            var indexedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var folder in userFolders)
+            foreach (var folder in RemoveNestedRoots(GetUserFolders()))
             {
                 if (!Directory.Exists(folder)) continue;
                 progressCallback?.Invoke($"Indexing files in {Path.GetFileName(folder)}...");
-                
+
                 try
                 {
                     foreach (var file in EnumerateFilesSafe(folder))
                     {
                         try
                         {
+                            if (!indexedPaths.Add(Path.GetFullPath(file))) continue;
+
                             var fi = new FileInfo(file);
                             if (fi.Length == 0) continue; // Ignore 0 byte files
+                            if (IsCloudPlaceholder(fi.Attributes)) continue;
 
                             if (!filesBySize.ContainsKey(fi.Length))
                                 filesBySize[fi.Length] = new List<string>();
@@ -178,7 +212,7 @@ namespace TuneUpEngine
                 {
                     results.Add(new ScanItem
                     {
-                        Category = "Duplicate Files",
+                        Category = DuplicateFilesCategory,
                         RuleName = $"Duplicate Set {current}-{dupSetIndex} ({FormatSize(group.Key)})",
                         FilePaths = files,
                         TotalSizeBytes = group.Key * (files.Count - 1) // Size that can be freed

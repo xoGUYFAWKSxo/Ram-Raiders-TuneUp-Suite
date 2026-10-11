@@ -13,8 +13,14 @@ namespace TuneUpEngine
         public string Category { get; set; }
         public List<string> DetectPaths { get; set; } = new List<string>();
         public List<string> FileKeys { get; set; } = new List<string>(); // "Path|Pattern|Flags"
+        public List<string> ExcludeKeys { get; set; } = new List<string>(); // "FILE|Path|Pattern" or "PATH|Path|Pattern"
         public bool IsDefault { get; set; }
+        public bool IsExternal { get; set; } // Loaded from winapp2.ini (replaced wholesale on reload)
     }
+
+    // A parsed winapp2 ExcludeKey. Files matching one of a rule's exclusions are never scanned or
+    // cleaned — the rule author uses these to protect settings/state that lives next to the cache.
+    public record ExcludeRule(bool IsPathRule, string Directory, string? Pattern);
 
     public class ScanItem : System.ComponentModel.INotifyPropertyChanged
     {
@@ -64,6 +70,7 @@ namespace TuneUpEngine
         private const uint SHERB_NOSOUND = 0x00000004;
 
         private readonly List<CleanRule> _rules = new List<CleanRule>();
+        private readonly object _rulesLock = new object();
 
         public Winapp2Parser()
         {
@@ -180,6 +187,7 @@ namespace TuneUpEngine
             try
             {
                 string[] lines = File.ReadAllLines(filePath);
+                var loadedRules = new List<CleanRule>();
                 CleanRule currentRule = null;
 
                 foreach (var line in lines)
@@ -192,7 +200,7 @@ namespace TuneUpEngine
                     {
                         if (currentRule != null && currentRule.FileKeys.Count > 0)
                         {
-                            _rules.Add(currentRule);
+                            loadedRules.Add(currentRule);
                         }
 
                         string name = trimmed.Substring(1, trimmed.Length - 2);
@@ -200,18 +208,19 @@ namespace TuneUpEngine
                         {
                             Name = name,
                             Category = "Third-Party Apps",
-                            IsDefault = true
+                            IsDefault = true,
+                            IsExternal = true
                         };
                     }
                     else if (currentRule != null)
                     {
-                        var match = Regex.Match(trimmed, @"^(Detect|DetectFile|FileKey\d+)=(.*)$", RegexOptions.IgnoreCase);
+                        var match = Regex.Match(trimmed, @"^(Detect|DetectFile|FileKey\d+|ExcludeKey\d+)=(.*)$", RegexOptions.IgnoreCase);
                         if (match.Success)
                         {
                             string key = match.Groups[1].Value;
                             string val = match.Groups[2].Value;
 
-                            if (key.Equals("Detect", StringComparison.OrdinalIgnoreCase) || 
+                            if (key.Equals("Detect", StringComparison.OrdinalIgnoreCase) ||
                                 key.Equals("DetectFile", StringComparison.OrdinalIgnoreCase))
                             {
                                 currentRule.DetectPaths.Add(val);
@@ -220,13 +229,25 @@ namespace TuneUpEngine
                             {
                                 currentRule.FileKeys.Add(val);
                             }
+                            else if (key.StartsWith("ExcludeKey", StringComparison.OrdinalIgnoreCase))
+                            {
+                                currentRule.ExcludeKeys.Add(val);
+                            }
                         }
                     }
                 }
 
                 if (currentRule != null && currentRule.FileKeys.Count > 0)
                 {
-                    _rules.Add(currentRule);
+                    loadedRules.Add(currentRule);
+                }
+
+                // Replace (not append to) the previous external set, so re-syncing definitions does
+                // not stack a second copy of every rule on top of the first.
+                lock (_rulesLock)
+                {
+                    _rules.RemoveAll(r => r.IsExternal);
+                    _rules.AddRange(loadedRules);
                 }
             }
             catch (Exception ex)
@@ -273,9 +294,16 @@ namespace TuneUpEngine
             var results = new List<ScanItem>();
             int count = 0;
 
-            foreach (var rule in _rules)
+            // Snapshot so a definitions sync running concurrently can't modify the list mid-scan.
+            List<CleanRule> rules;
+            lock (_rulesLock)
             {
-                progressCallback?.Invoke(rule.Name, (count * 100) / _rules.Count);
+                rules = new List<CleanRule>(_rules);
+            }
+
+            foreach (var rule in rules)
+            {
+                progressCallback?.Invoke(rule.Name, (count * 100) / rules.Count);
                 count++;
 
                 if (!IsRuleDetected(rule)) continue;
@@ -285,6 +313,12 @@ namespace TuneUpEngine
                     RuleName = rule.Name,
                     Category = rule.Category
                 };
+
+                var excludes = rule.ExcludeKeys
+                    .Select(ParseExcludeKey)
+                    .OfType<ExcludeRule>()
+                    .ToList();
+                var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var fileKey in rule.FileKeys)
                 {
@@ -305,22 +339,36 @@ namespace TuneUpEngine
 
                     if (!Directory.Exists(expandedPath)) continue;
 
-                    try
+                    // Never follow junctions/symlinks: the engine is elevated, and a link planted in a
+                    // user-writable cache or temp folder could otherwise redirect deletion anywhere.
+                    // Inaccessible subfolders are skipped instead of aborting the whole key.
+                    var options = new EnumerationOptions
                     {
-                        var searchOption = recurse ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-                        var files = Directory.GetFiles(expandedPath, pattern, searchOption);
-                        foreach (var file in files)
+                        RecurseSubdirectories = recurse,
+                        IgnoreInaccessible = true,
+                        AttributesToSkip = FileAttributes.ReparsePoint,
+                        MatchType = MatchType.Win32
+                    };
+
+                    // winapp2 allows several patterns in one key, separated by ';' (e.g. "*.log;*.tmp").
+                    foreach (var singlePattern in pattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    {
+                        try
                         {
-                            try
+                            foreach (var file in Directory.EnumerateFiles(expandedPath, singlePattern, options))
                             {
-                                var fi = new FileInfo(file);
-                                item.FilePaths.Add(file);
-                                item.TotalSizeBytes += fi.Length;
+                                if (!seenFiles.Add(file) || IsExcluded(file, excludes)) continue;
+                                try
+                                {
+                                    var fi = new FileInfo(file);
+                                    item.FilePaths.Add(file);
+                                    item.TotalSizeBytes += fi.Length;
+                                }
+                                catch { }
                             }
-                            catch { }
                         }
+                        catch { }
                     }
-                    catch { }
                 }
 
                 if (item.FilePaths.Count > 0)
@@ -343,7 +391,7 @@ namespace TuneUpEngine
                 progressCallback?.Invoke($"Cleaning {item.RuleName}", (count * 100) / items.Count);
                 count++;
 
-                foreach (var path in item.FilePaths)
+                foreach (var path in GetDeletionTargets(item))
                 {
                     if (path == "RECYCLE_BIN")
                     {
@@ -387,6 +435,94 @@ namespace TuneUpEngine
 
             progressCallback?.Invoke("Clean Complete", 100);
             return deletedBytes;
+        }
+
+        // The paths that cleaning an item is allowed to delete. A duplicate set lists every copy of
+        // the same content, so the first listed copy is always kept — deleting every path would
+        // destroy the data rather than de-duplicate it. A "set" that collapses to a single distinct
+        // path (the same file listed twice) has nothing redundant and is skipped entirely.
+        internal static IEnumerable<string> GetDeletionTargets(ScanItem item)
+        {
+            if (item?.FilePaths == null) return Enumerable.Empty<string>();
+
+            if (item.Category != AdvancedScanner.DuplicateFilesCategory)
+                return item.FilePaths;
+
+            var distinct = item.FilePaths
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => { try { return Path.GetFullPath(p); } catch { return p; } })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return distinct.Count < 2 ? Enumerable.Empty<string>() : distinct.Skip(1);
+        }
+
+        // Parses "FILE|<dir>|<pattern>", "FILE|<full path>" or "PATH|<dir>[|<pattern>]".
+        // REG exclusions (and anything unrecognised) return null: this cleaner never touches the registry.
+        internal ExcludeRule? ParseExcludeKey(string excludeKey)
+        {
+            if (string.IsNullOrWhiteSpace(excludeKey)) return null;
+
+            var parts = excludeKey.Split('|');
+            if (parts.Length < 2) return null;
+
+            string kind = parts[0].Trim();
+            bool isPath = kind.Equals("PATH", StringComparison.OrdinalIgnoreCase);
+            bool isFile = kind.Equals("FILE", StringComparison.OrdinalIgnoreCase);
+            if (!isPath && !isFile) return null;
+
+            string? location = ExpandSpecialFolder(parts[1].Trim());
+            string? pattern = parts.Length > 2 ? parts[2].Trim() : null;
+
+            if (isFile && string.IsNullOrEmpty(pattern))
+            {
+                // A bare file path: split it into its directory and exact file name.
+                pattern = Path.GetFileName(location);
+                location = Path.GetDirectoryName(location);
+            }
+
+            if (string.IsNullOrEmpty(location)) return null;
+
+            try
+            {
+                location = Path.TrimEndingDirectorySeparator(Path.GetFullPath(location));
+            }
+            catch
+            {
+                return null;
+            }
+
+            return new ExcludeRule(isPath, location, string.IsNullOrEmpty(pattern) ? null : pattern);
+        }
+
+        internal static bool IsExcluded(string filePath, IReadOnlyList<ExcludeRule>? excludes)
+        {
+            if (excludes == null || excludes.Count == 0) return false;
+
+            string fileDir = Path.GetDirectoryName(filePath) ?? string.Empty;
+            string fileName = Path.GetFileName(filePath);
+
+            foreach (var rule in excludes)
+            {
+                bool directoryMatches = rule.IsPathRule
+                    // PATH covers the directory and everything beneath it.
+                    ? fileDir.Equals(rule.Directory, StringComparison.OrdinalIgnoreCase) ||
+                      fileDir.StartsWith(rule.Directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    // FILE only covers files sitting directly in that directory.
+                    : fileDir.Equals(rule.Directory, StringComparison.OrdinalIgnoreCase);
+
+                if (!directoryMatches) continue;
+
+                if (rule.Pattern == null) return true;
+
+                foreach (var pattern in rule.Pattern.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (System.IO.Enumeration.FileSystemName.MatchesWin32Expression(pattern, fileName, ignoreCase: true))
+                        return true;
+                }
+            }
+
+            return false;
         }
     }
 }

@@ -99,7 +99,7 @@ A two-tier junk file scanner and cleaner. The primary scanner is powered by a bu
 | Toggle | Effect |
 |---|---|
 | **Scan Empty User Folders** | After the main scan, recursively walks your user folders (Documents, Downloads, Desktop, Pictures, Videos, Music, OneDrive) and identifies every subdirectory that contains no files or non-empty subdirectories. The root folders themselves are never flagged — only their children. |
-| **Scan Duplicate User Files** | After the main scan, indexes all files in your user folders by file size, then uses MD5 hashing of the first 1 MB of each candidate to identify true byte-for-byte duplicates. Reports each duplicate group with the amount of space that *could* be recovered by keeping only one copy. |
+| **Scan Duplicate User Files** | After the main scan, indexes the files in your Documents, Pictures, Videos, Music, Desktop, Downloads and OneDrive folders by file size, pre-filters candidates on a SHA-256 of the first 1 MB, then confirms true byte-for-byte duplicates with a full-file SHA-256. Cloud-only (online) files are skipped so they are never downloaded. Reports each duplicate group with the space recovered by keeping only one copy — cleaning a set always keeps the first copy listed. |
 
 ### Select All / Deselect All
 
@@ -287,7 +287,7 @@ Allows users to analyze their directories and migrate large folders (such as gam
 | **Process isolation** | The UI runs at user privileges; only the engine runs elevated. This means a bug in the UI cannot directly manipulate the system. |
 | **No auto-deletion** | The System Cleaner and Advanced Scanner never delete anything automatically. Items must be explicitly selected and confirmed. |
 | **Registry backups** | All Registry Guard repairs create timestamped backups in `%APPDATA%\RamRaidersTuneUpSuite\RegistryBackups\` before deletion. |
-| **User-folder scoping** | The Advanced Scanner (duplicates, empty folders) is strictly scoped to `%USERPROFILE%` subdirectories — it will never touch `System32`, `Program Files`, or other system directories. |
+| **User-folder scoping** | The Advanced Scanner (duplicates, empty folders) is strictly scoped to your personal folders under `%USERPROFILE%` (Documents, Pictures, Videos, Music, Desktop, Downloads, OneDrive — not AppData) — it will never touch `System32`, `Program Files`, or other system directories. |
 | **MSI warning gate** | The MSI Force button requires explicit confirmation after a compliance scan and displays a warning dialog about BSOD risk before proceeding. |
 
 ---

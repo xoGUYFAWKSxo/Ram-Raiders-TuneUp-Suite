@@ -7,7 +7,8 @@ namespace TuneUpEngine
 {
     public class Winapp2Downloader
     {
-        private const string Winapp2Url = "https://raw.githubusercontent.com/BleachBit/winapp2.ini/master/winapp2.ini";
+        // The canonical community winapp2.ini (the previous BleachBit URL returns 404).
+        private const string Winapp2Url = "https://raw.githubusercontent.com/MoscaDotTo/Winapp2/master/Winapp2.ini";
         private readonly HttpClient _httpClient;
 
         public event Action<string> OnDownloadLog;

@@ -42,7 +42,7 @@ A professional-grade, high-performance Windows system optimization and maintenan
 
 ### 🧼 4. Rule-Based System Cleaner & Advanced Hasher
 * **Winapp2.ini Scanner**: Parses standard and community-sourced Winapp2 cleaner rule files to wipe cache, log, and temp paths for hundreds of third-party applications.
-* **Advanced Duplicate Hasher**: Scans user-profile folders, indexes candidates by file size, and generates MD5 hashes of the first 1 MB to identify byte-for-byte duplicate files safely.
+* **Advanced Duplicate Hasher**: Scans your Documents, Pictures, Videos, Music, Desktop, Downloads and OneDrive folders, groups candidates by file size, pre-filters on a SHA-256 of the first 1 MB, then confirms true byte-for-byte duplicates with a full-file SHA-256. Cloud-only (online) files are skipped, and cleaning a duplicate set always keeps the first copy.
 * **Empty Folder Finder**: Recursively scans and cleans empty subdirectories within user folders without touching root structures.
 
 ### 🛠️ 5. Component Repair & Log Analyzer

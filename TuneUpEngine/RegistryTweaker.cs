@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Win32;
 
 namespace TuneUpEngine
@@ -90,7 +91,13 @@ namespace TuneUpEngine
                 statuses["ClearPageFile"] = CheckDword(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "ClearPageFileAtShutdown", 1);
 
                 // Windows Usage Tweaks
-                statuses["DisableShortcutSuffix"] = CheckDword(Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "link", 0);
+                // SetTweakStatus writes "link" as a 4-byte REG_BINARY (that is what Explorer reads), so
+                // a DWORD check never matched and the toggle always showed as off.
+                using (var explorerKey = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer"))
+                {
+                    statuses["DisableShortcutSuffix"] = explorerKey?.GetValue("link") is byte[] link &&
+                                                        link.Length >= 4 && link.All(b => b == 0);
+                }
                 statuses["DisablePreventShutdown"] = CheckString(Registry.CurrentUser, @"Control Panel\Desktop", "AutoEndTasks", "1");
 
                 // Security & Stability
@@ -135,8 +142,24 @@ namespace TuneUpEngine
             return statuses;
         }
 
+        // Tweaks that weaken Windows security and are no longer offered. They can still be switched
+        // OFF (so anyone who applied them can restore the protection), but never switched on:
+        //   DisableUAC             — EnableLUA=0 turns off UAC entirely and breaks Store/UWP apps.
+        //   DisableSmartScreen     — removes reputation checks on downloaded executables.
+        //   DisableSecurityWarning — strips Mark-of-the-Web, so downloads lose their security zone.
+        public static readonly IReadOnlySet<string> RetiredTweaks = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "DisableUAC", "DisableSmartScreen", "DisableSecurityWarning"
+        };
+
         public static bool SetTweakStatus(string tweakName, bool enable)
         {
+            if (enable && RetiredTweaks.Contains(tweakName))
+            {
+                Console.WriteLine($"[RegistryTweaker] Refused to enable retired security-reducing tweak {tweakName}.");
+                return false;
+            }
+
             try
             {
                 switch (tweakName)
