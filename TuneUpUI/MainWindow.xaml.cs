@@ -373,14 +373,28 @@ namespace TuneUpUI
             });
         }
 
+        private bool _shownOtherCopyWarning;
+
         private void UpdateStatsUI(IpcResponse resp)
         {
             if (resp == null || resp.Status != IpcStatus.Success)
             {
                 StatusDot.Fill = System.Windows.Media.Brushes.Red;
-                TxtStatus.Text = "Engine Offline";
+                string? problem = _engine.LastConnectionProblem;
+                bool otherCopy = problem != null && problem.StartsWith("A different copy", StringComparison.Ordinal);
+                TxtStatus.Text = otherCopy ? "Another copy is running" : "Engine Offline";
+                TxtStatus.ToolTip = problem;
+
+                // Say it once, plainly, rather than leaving a silent "offline".
+                if (otherCopy && !_shownOtherCopyWarning)
+                {
+                    _shownOtherCopyWarning = true;
+                    UiLog.Warn($"[UI] {problem}");
+                    MessageBox.Show(problem, "Ram Raiders TuneUp Suite", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
                 return;
             }
+            TxtStatus.ToolTip = null;
 
             StatusDot.Fill = System.Windows.Media.Brushes.Green;
             TxtStatus.Text = "Engine Online";
@@ -1380,7 +1394,7 @@ namespace TuneUpUI
                 bool enable = chk.IsChecked ?? false;
                 Task.Run(() =>
                 {
-                    var resp = _engine.Send(IpcCommands.SetRegistryTweak, new SetTweakRequest(tweakName, enable));
+                    var resp = _engine.SendJson(IpcCommands.SetRegistryTweak, new SetTweakRequest(tweakName, enable));
                     if (resp?.Status != IpcStatus.Success)
                     {
                         // The toggle flipped optimistically; re-read the real state so it doesn't
@@ -1573,7 +1587,7 @@ namespace TuneUpUI
                 bool disable = !(chk.IsChecked ?? false);
                 Task.Run(() =>
                 {
-                    var resp = _engine.Send(IpcCommands.SetServiceState, new SetServiceRequest(svcName, disable));
+                    var resp = _engine.SendJson(IpcCommands.SetServiceState, new SetServiceRequest(svcName, disable));
                     Dispatcher.Invoke(() =>
                     {
                         if (resp?.Message != null)

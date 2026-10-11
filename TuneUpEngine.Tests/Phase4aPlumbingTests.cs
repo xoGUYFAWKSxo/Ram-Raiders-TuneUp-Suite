@@ -66,18 +66,43 @@ namespace TuneUpEngine.Tests
         }
 
         [Fact]
-        public void Client_RefusesAnEngineThatIsNotGenuine()
+        public void Client_RefusesAnEngineThatIsNotGenuine_AndSaysWhy()
         {
-            // Same server, but the client only trusts an engine at a different path.
+            // Same server, but the client only trusts an engine at a different path — exactly what
+            // happens when an older test copy of the app is still running.
             var client = new EngineClient(new[] { @"C:\Program Files\Ram Raiders TuneUp Suite\TuneUpEngine.exe" }, StartServer());
             Assert.Null(client.Send(IpcCommands.GetEngineStats));
             Assert.Equal(IpcStatus.Error, client.SendStreaming(IpcCommands.ScanJunk, null, null).Status);
+            Assert.StartsWith("A different copy of the TuneUp engine is running", client.LastConnectionProblem);
+        }
+
+        // Regression: the window passes payloads as plain strings (often ""). A generic
+        // Send<T>/SendStreaming<T> overload used to win overload resolution for those, re-encode
+        // the string on every call to itself and fail at 268 MB — so no scan ever ran.
+        [Fact]
+        public void StringPayloads_AreSentAsIs()
+        {
+            string pipe = StartServer();
+            string emptyPayload = "";
+            var streamed = ClientFor(pipe).SendStreaming(IpcCommands.ScanAdvancedEmptyFolders, emptyPayload, null, CancellationToken.None); // exactly how the window calls it
+            Assert.Equal(IpcStatus.Success, streamed.Status);
+
+            string pid = Environment.ProcessId.ToString();
+            Assert.Equal(IpcStatus.Success, ClientFor(pipe).Send(IpcCommands.ReportForeground, pid)?.Status);
+        }
+
+        [Fact]
+        public void LastConnectionProblem_ClearsOnSuccess()
+        {
+            var client = ClientFor(StartServer());
+            Assert.NotNull(client.Send(IpcCommands.GetEngineStats));
+            Assert.Null(client.LastConnectionProblem);
         }
 
         [Fact]
         public void TypedPayloads_AreUnderstoodByTheEngine()
         {
-            var reply = ClientFor(StartServer()).Send(IpcCommands.SetServiceState, new SetServiceRequest("WinDefend", true));
+            var reply = ClientFor(StartServer()).SendJson(IpcCommands.SetServiceState, new SetServiceRequest("WinDefend", true));
             Assert.Equal(IpcStatus.Error, reply?.Status);
             Assert.StartsWith("Refused", reply?.Message); // parsed, and refused by the allowlist
         }

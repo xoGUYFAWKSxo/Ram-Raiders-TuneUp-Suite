@@ -16,6 +16,11 @@ namespace TuneUpEngine
         private readonly string _pipeName;
         private readonly IReadOnlyList<string> _trustedEnginePaths;
 
+        // Why the last request couldn't reach the engine, in plain words (null after a success).
+        // Lets the UI say more than "Engine Offline" — e.g. that a different copy of the engine is
+        // running and must be closed first.
+        public string? LastConnectionProblem { get; private set; }
+
         public EngineClient(IReadOnlyList<string> trustedEnginePaths, string pipeName = IpcServer.DefaultPipeName)
         {
             _trustedEnginePaths = trustedEnginePaths;
@@ -40,8 +45,20 @@ namespace TuneUpEngine
                 client.Connect(timeoutMs);
                 string? server = ClientVerifier.GetServerImagePath(client);
                 if (!ClientVerifier.IsTrustedClient(server, _trustedEnginePaths))
-                    throw new UnauthorizedAccessException($"Refusing to talk to an unexpected engine process: {server ?? "unknown"}");
+                {
+                    LastConnectionProblem = server != null
+                        ? $"A different copy of the TuneUp engine is running ({server}). Close that copy of TuneUp (right-click its tray icon → Exit) and open this one again."
+                        : "Another program is using the TuneUp engine's connection, so this copy can't start its engine.";
+                    throw new UnauthorizedAccessException(LastConnectionProblem);
+                }
+                LastConnectionProblem = null;
                 return client;
+            }
+            catch (TimeoutException)
+            {
+                LastConnectionProblem = "The TuneUp engine isn't running.";
+                client.Dispose();
+                throw;
             }
             catch
             {
@@ -72,7 +89,10 @@ namespace TuneUpEngine
             }
         }
 
-        public IpcResponse? Send<T>(string command, T payload, int timeoutMs = 3000) =>
+        // Typed payload (serialized to JSON). Deliberately NOT an overload of Send: a generic
+        // Send<T>(string, T) also matched Send(command, "some string"), and C# picked it — the
+        // string was then JSON-encoded again on every call to itself until it hit the 268 MB limit.
+        public IpcResponse? SendJson<T>(string command, T payload, int timeoutMs = 3000) where T : class =>
             Send(command, IpcPayload.Serialize(payload), timeoutMs);
 
         // Sends a command that may stream Progress replies, and blocks until its final reply.
@@ -134,7 +154,7 @@ namespace TuneUpEngine
             }
         }
 
-        public IpcResponse SendStreaming<T>(string command, T payload, Action<IpcResponse>? onProgress, CancellationToken ct = default) =>
+        public IpcResponse SendStreamingJson<T>(string command, T payload, Action<IpcResponse>? onProgress, CancellationToken ct = default) where T : class =>
             SendStreaming(command, IpcPayload.Serialize(payload), onProgress, ct);
     }
 }
