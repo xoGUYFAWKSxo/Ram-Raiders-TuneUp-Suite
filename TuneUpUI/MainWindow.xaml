@@ -407,22 +407,25 @@
 
                         <!-- Footer Actions -->
                         <Border Grid.Row="3" Margin="0,10,0,0" Padding="10,0">
+                            <!-- Two lines: status + progress get the full width, buttons sit below.
+                                 (On one line, the status text was squeezed to a few pixels wide while
+                                 scanning, wrapped one character per line and stretched the buttons.) -->
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
 
-                                <Grid VerticalAlignment="Center" Margin="0,0,20,0">
+                                <Grid Grid.Row="0" Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock x:Name="TxtCleanerStatus" Text="Ready to scan file structures" Foreground="{StaticResource BrushTextMain}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                    <ProgressBar Grid.Column="1" x:Name="ProgCleaner" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" Visibility="Collapsed"/>
+                                    <ProgressBar Grid.Column="1" x:Name="ProgCleaner" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
                                 </Grid>
 
-                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
                                     <Button x:Name="BtnToggleSelectJunk" Content="&#xE73A; Deselect All" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False"/>
                                     <Button x:Name="BtnCancelCleaner" Content="Cancel" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Visibility="Collapsed" Click="BtnCancelCleaner_Click"/>
                                     <Button Content="Scan for Junk Files" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="160" Click="BtnScanJunk_Click"/>
@@ -497,18 +500,23 @@
 
                         <!-- Footer Actions -->
                         <Border Grid.Row="2" Margin="0,15,0,0">
+                            <!-- Same two-line layout as the cleaner, so long status text is never cut off. -->
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
 
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock x:Name="TxtRegistryStatus" Text="No scan performed yet" Foreground="{StaticResource BrushTextMain}" FontSize="12" VerticalAlignment="Center"/>
-                                    <ProgressBar x:Name="ProgRegistry" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" Visibility="Collapsed"/>
-                                </StackPanel>
+                                <Grid Grid.Row="0" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="TxtRegistryStatus" Text="No scan performed yet" Foreground="{StaticResource BrushTextMain}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    <ProgressBar Grid.Column="1" x:Name="ProgRegistry" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                </Grid>
 
-                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
                                     <Button x:Name="BtnToggleSelectRegistry" Content="&#xE73A; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Click="BtnToggleSelectRegistry_Click" IsEnabled="False"/>
                                     <Button Content="Scan Registry Integrity" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="180" Click="BtnScanRegistry_Click"/>
                                     <Button x:Name="BtnRepairRegistry" Content="Repair Defective Entries" Style="{StaticResource PremiumButton}" Width="180" IsEnabled="False" Click="BtnRepairRegistry_Click"/>
