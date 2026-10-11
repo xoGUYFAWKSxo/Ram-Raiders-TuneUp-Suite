@@ -497,15 +497,13 @@ namespace TuneUpUI
                 double totalGb = totalMemoryBytes / (1024.0 * 1024.0 * 1024.0);
                 double availGb = availMemoryBytes / (1024.0 * 1024.0 * 1024.0);
                 
-                // Standby List size calculation: cache bytes = total - free - active
-                // For direct accuracy, we display standby list as 30% of total memory if not purged, or exact values.
-                // In our manager, we can retrieve approximate standby size.
-                double standbyMb = (totalMemoryBytes - availMemoryBytes) * 0.25 / (1024.0 * 1024.0); // Estimate standby as 25% of used memory
-                if (standbyMb < 0) standbyMb = 0;
+                // The engine reads the real standby list size from Windows (it used to be shown as a
+                // made-up 25% of used memory). -1 means it couldn't be read — show that honestly.
+                long standbyBytes = stats.TryGetValue("StandbyBytes", out var sb) ? sb.GetInt64() : -1;
 
                 TxtFreeRamPercent.Text = $"{freePercent:F0} %";
                 TxtFreeRamBytes.Text = $"{availGb:F1} GB / {totalGb:F1} GB";
-                TxtStandbyListSize.Text = $"{standbyMb:F0} MB";
+                TxtStandbyListSize.Text = standbyBytes >= 0 ? $"{standbyBytes / (1024.0 * 1024.0):F0} MB" : "n/a";
                 TxtTotalSaved.Text = $"{totalSavedBytes / (1024.0 * 1024.0):F0} MB";
 
                 // 2. Toggle Sync (Without triggering events recursively)
@@ -601,12 +599,12 @@ namespace TuneUpUI
                     if (resp != null && resp.Status == "Success")
                     {
                         long freedBytes = long.Parse(resp.Payload);
-                        MessageBox.Show($"Standby List Purge Complete!\nFreed {freedBytes / (1024.0 * 1024.0):F1} MB of inactive cache memory.", "Optimization Reclaimed", MessageBoxButton.OK, MessageBoxImage.Information);
+                        MessageBox.Show($"Standby list emptied.\nThe standby cache shrank by {freedBytes / (1024.0 * 1024.0):F1} MB, which is now free memory. Windows refills this cache over time as files are used.", "Standby Purge", MessageBoxButton.OK, MessageBoxImage.Information);
                         StatsTimer_Tick(null, null); // Refresh
                     }
                     else
                     {
-                        MessageBox.Show("Failed to purge standby memory. Make sure the background engine is running as Administrator.", "Optimization Failure", MessageBoxButton.OK, MessageBoxImage.Error);
+                        MessageBox.Show(resp?.Message ?? "Couldn't reach the engine to purge standby memory.", "Standby Purge Failed", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 });
             });
@@ -1535,10 +1533,10 @@ namespace TuneUpUI
                 {
                     try
                     {
-                        var report = JsonSerializer.Deserialize<LatencyReportDto>(resp.Payload);
+                        var report = JsonSerializer.Deserialize<LatencyReport>(resp.Payload);
                         Dispatcher.Invoke(() =>
                         {
-                            IcLatencyDrivers.ItemsSource = report?.Drivers;
+                            IcLatencyDrivers.ItemsSource = report?.Cores;
                             if (report?.Summary != null)
                                 TxtLatencyStatus.Text = report.Summary;
                         });
@@ -1546,26 +1544,6 @@ namespace TuneUpUI
                     catch { }
                 }
             });
-        }
-
-        // DTO matching LatencyReport from engine
-        private class LatencyReportDto
-        {
-            public bool IsRunning { get; set; }
-            public double TotalInterruptPercent { get; set; }
-            public double DpcsQueuedPerSec { get; set; }
-            public System.Collections.Generic.List<DriverLatencyRecordDto> Drivers { get; set; }
-            public string Summary { get; set; }
-        }
-        private class DriverLatencyRecordDto
-        {
-            public string DriverName { get; set; }
-            public string FriendlyName { get; set; }
-            public double MaxDpcMicroseconds { get; set; }
-            public double AvgDpcMicroseconds { get; set; }
-            public int SpikeCount { get; set; }
-            public bool IsSpike { get; set; }
-            public string Status { get; set; }
         }
 
         // ── DebloatGuard Handlers ───────────────────────────────────────────────────

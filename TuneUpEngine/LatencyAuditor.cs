@@ -1,305 +1,329 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
-using Microsoft.Win32;
 
 namespace TuneUpEngine
 {
-    public class DriverLatencyRecord
+    // One CPU core's measured driver load: the share of its time spent running DPCs (deferred
+    // procedure calls) and interrupt service routines — the work drivers do at elevated priority,
+    // during which nothing else (games, audio) can run on that core.
+    public class CoreLatencyRecord
     {
-        public string DriverName { get; set; }
-        public string FriendlyName { get; set; }
-        public double MaxDpcMicroseconds { get; set; }
-        public double AvgDpcMicroseconds { get; set; }
-        public int SpikeCount { get; set; }
-        public bool IsSpike => MaxDpcMicroseconds >= 1000;
-        public string Status => IsSpike ? "SPIKE" : "OK";
+        public string Name { get; set; } = "";
+        public double CurrentDpcPercent { get; set; }
+        public double CurrentInterruptPercent { get; set; }
+        public double PeakDpcPercent { get; set; }
+        public double PeakInterruptPercent { get; set; }
+        public double AvgDpcPercent { get; set; }
+        public double AvgInterruptPercent { get; set; }
+        public int HighSamples { get; set; }
+        public string Status { get; set; } = "OK";   // OK | ELEVATED | HIGH
+        public bool IsSpike { get; set; }
+
+        internal double DpcSum;
+        internal double InterruptSum;
+        internal int SampleCount;
     }
 
     public class LatencyReport
     {
         public bool IsRunning { get; set; }
+        public bool CountersAvailable { get; set; }
+        public int SampleCount { get; set; }
+        public double TotalDpcPercent { get; set; }
         public double TotalInterruptPercent { get; set; }
         public double DpcsQueuedPerSec { get; set; }
-        public List<DriverLatencyRecord> Drivers { get; set; } = new();
-        public string Summary { get; set; }
+        public double InterruptsPerSec { get; set; }
+        public List<CoreLatencyRecord> Cores { get; set; } = new();
+        public string Summary { get; set; } = "";
     }
 
+    // One reading of the counters: per-core DPC / interrupt time (percent of that core's time)
+    // and machine-wide totals.
+    public record LatencySample(
+        double[] DpcPercent,
+        double[] InterruptPercent,
+        double TotalDpcPercent,
+        double TotalInterruptPercent,
+        double DpcsQueuedPerSec,
+        double InterruptsPerSec);
+
+    public interface ILatencyCounterSource : IDisposable
+    {
+        bool TryInitialize(out string? error);
+        LatencySample Sample();
+    }
+
+    // Measures driver DPC / interrupt load from Windows performance counters.
+    //
+    // What this replaced: per-driver "DPC microseconds" that were never measured — total interrupt
+    // time multiplied by a fixed share per driver name (GPU 35%, network 20%, ...), so every driver
+    // on the list "spiked" together. Windows performance counters can't attribute DPC time to a
+    // particular driver (that needs a kernel trace, as LatencyMon or Windows Performance Analyzer
+    // do), so this reports what they really measure: each core's share of time spent servicing
+    // drivers, with real peaks and averages.
     public class LatencyAuditor
     {
-        // Known high-impact kernel drivers mapped to friendly names
-        private static readonly Dictionary<string, string> _knownDrivers =
-            new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "nvlddmkm.sys",  "NVIDIA Display Driver" },
-            { "nvkflt.sys",    "NVIDIA Filter Driver" },
-            { "amdkmdag.sys",  "AMD Display Driver" },
-            { "atikmdag.sys",  "AMD/ATI Display Driver" },
-            { "ndis.sys",      "Windows Network Stack (NDIS)" },
-            { "tcpip.sys",     "TCP/IP Stack" },
-            { "storport.sys",  "Storage Port Driver" },
-            { "ntfs.sys",      "NTFS File System Driver" },
-            { "HDAudBus.sys",  "HD Audio Bus Driver" },
-            { "USBPORT.sys",   "USB Port Driver" },
-            { "wdf01000.sys",  "Windows Driver Framework" },
-            { "hal.dll",       "Hardware Abstraction Layer" },
-            { "dxgkrnl.sys",   "DirectX Graphics Kernel" },
-            { "intelppm.sys",  "Intel Processor Power Mgmt" },
-            { "amdppm.sys",    "AMD Processor Power Mgmt" },
-            { "acpi.sys",      "ACPI Driver" },
-            { "pci.sys",       "PCI Bus Driver" },
-            { "netio.sys",     "Network I/O Subsystem" },
-            { "ksthunk.sys",   "Kernel Streaming Thunk" },
-            { "portcls.sys",   "Port Class Audio Driver" },
-        };
+        // Share of one core's time spent in DPC + interrupt work.
+        internal const double ElevatedPercent = 3.0;
+        internal const double HighPercent = 10.0;
+        private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(1);
 
-        private bool _isRunning;
-        private Thread _auditThread;
+        private readonly Func<ILatencyCounterSource> _sourceFactory;
+        private ILatencyCounterSource? _source;
+        private Thread? _auditThread;
+        private volatile bool _isRunning;
         private readonly object _lock = new();
-        private readonly Dictionary<string, DriverLatencyRecord> _records = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<CoreLatencyRecord> _cores = new();
+        private LatencySample? _lastSample;
+        private int _sampleCount;
+        private bool _countersAvailable;
 
-        private PerformanceCounter _interruptCounter;
-        private PerformanceCounter _dpcCounter;
-
-        public event Action<DriverLatencyRecord> OnSpikeDetected;
-        public event Action<string> OnLogMessage;
+        public event Action<CoreLatencyRecord>? OnSpikeDetected;
+        public event Action<string>? OnLogMessage;
 
         public bool IsRunning => _isRunning;
+
+        public LatencyAuditor(Func<ILatencyCounterSource>? sourceFactory = null)
+        {
+            _sourceFactory = sourceFactory ?? (() => new PerformanceCounterLatencySource());
+        }
 
         public void Start()
         {
             lock (_lock)
             {
                 if (_isRunning) return;
+
+                _source = _sourceFactory();
+                if (!_source.TryInitialize(out string? error))
+                {
+                    _source.Dispose();
+                    _source = null;
+                    _countersAvailable = false;
+                    OnLogMessage?.Invoke($"[LatencyAuditor] Performance counters unavailable: {error}");
+                    return;
+                }
+
+                _countersAvailable = true;
+                _cores.Clear();
+                _lastSample = null;
+                _sampleCount = 0;
                 _isRunning = true;
             }
 
-            InitializeCounters();
-            SeedKnownDriversFromRegistry();
-
-            _auditThread = new Thread(AuditLoop)
-            {
-                IsBackground = true,
-                Name = "LatencyAuditor"
-            };
+            _auditThread = new Thread(AuditLoop) { IsBackground = true, Name = "LatencyAuditor" };
             _auditThread.Start();
-            OnLogMessage?.Invoke("[LatencyAuditor] DPC latency monitoring started.");
+            OnLogMessage?.Invoke("[LatencyAuditor] Driver DPC / interrupt monitoring started.");
         }
 
         public void Stop()
         {
-            lock (_lock) { _isRunning = false; }
-            _interruptCounter?.Dispose();
-            _dpcCounter?.Dispose();
-            OnLogMessage?.Invoke("[LatencyAuditor] DPC latency monitoring stopped.");
+            lock (_lock)
+            {
+                if (!_isRunning) return;
+                _isRunning = false;
+                // Disposed under the lock, so the sampling thread can't be mid-read.
+                _source?.Dispose();
+                _source = null;
+            }
+            OnLogMessage?.Invoke("[LatencyAuditor] Driver DPC / interrupt monitoring stopped.");
         }
 
         public LatencyReport GetReport()
         {
-            var report = new LatencyReport { IsRunning = _isRunning };
-
-            try
-            {
-                report.TotalInterruptPercent = _interruptCounter?.NextValue() ?? 0;
-                report.DpcsQueuedPerSec = _dpcCounter?.NextValue() ?? 0;
-            }
-            catch { }
-
             lock (_lock)
             {
-                report.Drivers = _records.Values
-                    .OrderByDescending(d => d.MaxDpcMicroseconds)
-                    .Take(15)
-                    .ToList();
-            }
-
-            var spikes = report.Drivers.Where(d => d.IsSpike).ToList();
-            report.Summary = spikes.Count == 0
-                ? "No DPC latency spikes detected — system interrupt handling is healthy."
-                : $"{spikes.Count} driver(s) with latency spikes: {string.Join(", ", spikes.Select(d => d.FriendlyName))}";
-
-            return report;
-        }
-
-        private void InitializeCounters()
-        {
-            try
-            {
-                // Interrupt time across all processors
-                _interruptCounter = new PerformanceCounter(
-                    "Processor", "% Interrupt Time", "_Total", readOnly: true);
-
-                // DPC queue rate — high values indicate driver DPC storms
-                _dpcCounter = new PerformanceCounter(
-                    "Processor", "DPCs Queued/sec", "_Total", readOnly: true);
-
-                // Warm up
-                _interruptCounter.NextValue();
-                _dpcCounter.NextValue();
-            }
-            catch (Exception ex)
-            {
-                OnLogMessage?.Invoke($"[LatencyAuditor] Performance counter init failed: {ex.Message}");
+                var report = new LatencyReport
+                {
+                    IsRunning = _isRunning,
+                    CountersAvailable = _countersAvailable,
+                    SampleCount = _sampleCount,
+                    TotalDpcPercent = _lastSample?.TotalDpcPercent ?? 0,
+                    TotalInterruptPercent = _lastSample?.TotalInterruptPercent ?? 0,
+                    DpcsQueuedPerSec = _lastSample?.DpcsQueuedPerSec ?? 0,
+                    InterruptsPerSec = _lastSample?.InterruptsPerSec ?? 0,
+                    Cores = _cores
+                        .OrderByDescending(c => c.PeakDpcPercent + c.PeakInterruptPercent)
+                        .Take(16)
+                        .Select(Copy)
+                        .ToList(),
+                };
+                report.Summary = BuildSummary(report, _cores);
+                return report;
             }
         }
 
         private void AuditLoop()
         {
-            while (true)
+            while (_isRunning)
             {
-                lock (_lock) { if (!_isRunning) break; }
-
                 try
                 {
-                    SampleCurrentLoad();
+                    LatencySample? sample = null;
+                    lock (_lock)
+                    {
+                        if (_source != null) sample = _source.Sample();
+                    }
+                    if (sample != null) ApplySample(sample);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[LatencyAuditor] Audit loop error: {ex.Message}");
+                    Debug.WriteLine($"[LatencyAuditor] Sampling error: {ex.Message}");
                 }
 
-                Thread.Sleep(2000); // Sample every 2 seconds
+                Thread.Sleep(SampleInterval);
             }
         }
 
-        private void SampleCurrentLoad()
+        // Folds one reading into the per-core statistics. Internal so tests can feed known numbers.
+        internal void ApplySample(LatencySample sample)
         {
-            double interruptPct, dpcRate;
-            try
-            {
-                interruptPct = _interruptCounter?.NextValue() ?? 0;
-                dpcRate      = _dpcCounter?.NextValue() ?? 0;
-            }
-            catch { return; }
-
-            if (interruptPct < 1.0 && dpcRate < 500) return; // Nothing notable
-
-            // Estimate per-driver DPC time by correlating interrupt load with loaded drivers
-            // On a spike, flag all high-DPC candidate drivers based on interrupt context
-            double estimatedTotalDpcUs = interruptPct * 10_000; // rough: 1% ≈ 100µs avg
+            var spikes = new List<CoreLatencyRecord>();
 
             lock (_lock)
             {
-                foreach (var kvp in _records)
+                _lastSample = sample;
+                _sampleCount++;
+
+                int cores = Math.Min(sample.DpcPercent.Length, sample.InterruptPercent.Length);
+                while (_cores.Count < cores)
+                    _cores.Add(new CoreLatencyRecord { Name = $"CPU {_cores.Count}" });
+
+                for (int i = 0; i < cores; i++)
                 {
-                    var record = kvp.Value;
+                    var core = _cores[i];
+                    double dpc = Math.Max(0, sample.DpcPercent[i]);
+                    double isr = Math.Max(0, sample.InterruptPercent[i]);
 
-                    // Distribute load proportionally (drivers with known high-latency patterns get higher share)
-                    double share = GetDriverLoadShare(record.DriverName);
-                    double estimatedDpcUs = estimatedTotalDpcUs * share;
+                    core.CurrentDpcPercent = dpc;
+                    core.CurrentInterruptPercent = isr;
+                    core.PeakDpcPercent = Math.Max(core.PeakDpcPercent, dpc);
+                    core.PeakInterruptPercent = Math.Max(core.PeakInterruptPercent, isr);
+                    core.DpcSum += dpc;
+                    core.InterruptSum += isr;
+                    core.SampleCount++;
+                    core.AvgDpcPercent = core.DpcSum / core.SampleCount;
+                    core.AvgInterruptPercent = core.InterruptSum / core.SampleCount;
 
-                    if (estimatedDpcUs > record.MaxDpcMicroseconds)
+                    double peak = core.PeakDpcPercent + core.PeakInterruptPercent;
+                    core.Status = peak >= HighPercent ? "HIGH" : peak >= ElevatedPercent ? "ELEVATED" : "OK";
+                    core.IsSpike = peak >= HighPercent;
+
+                    if (dpc + isr >= HighPercent)
                     {
-                        record.MaxDpcMicroseconds = estimatedDpcUs;
-                    }
-
-                    // Rolling average
-                    record.AvgDpcMicroseconds = (record.AvgDpcMicroseconds + estimatedDpcUs) / 2.0;
-
-                    if (estimatedDpcUs >= 1000 && interruptPct > 5.0)
-                    {
-                        record.SpikeCount++;
-                        if (record.SpikeCount == 1 || record.SpikeCount % 10 == 0)
-                        {
-                            OnSpikeDetected?.Invoke(record);
-                            OnLogMessage?.Invoke(
-                                $"[LatencyAuditor] ⚠️ DPC spike: {record.FriendlyName} ~{estimatedDpcUs:F0}µs " +
-                                $"(Interrupt load: {interruptPct:F1}%, DPC rate: {dpcRate:F0}/s)");
-                        }
+                        core.HighSamples++;
+                        // First occurrence, then every 30 high readings, so the log isn't flooded.
+                        if (core.HighSamples == 1 || core.HighSamples % 30 == 0)
+                            spikes.Add(Copy(core));
                     }
                 }
             }
+
+            foreach (var spike in spikes)
+            {
+                OnSpikeDetected?.Invoke(spike);
+            }
         }
 
-        private void SeedKnownDriversFromRegistry()
+        internal static string BuildSummary(LatencyReport report, IReadOnlyList<CoreLatencyRecord> allCores)
         {
-            // Check which known drivers are actually loaded on this system
+            if (!report.CountersAvailable)
+                return "Windows performance counters are unavailable on this PC, so driver load can't be measured.";
+            if (report.SampleCount == 0)
+                return "Measuring… results appear after the first second.";
+
+            var high = allCores.Where(c => c.Status == "HIGH").Select(c => c.Name).ToList();
+            var elevated = allCores.Where(c => c.Status == "ELEVATED").Select(c => c.Name).ToList();
+            const string attribution = " Performance counters can't name the driver — use LatencyMon or Windows Performance Analyzer to find which one.";
+
+            if (high.Count > 0)
+                return $"{string.Join(", ", high)} spent {HighPercent:F0}% or more of their time servicing driver DPCs/interrupts at peak — enough to cause stutter or audio dropouts.{attribution}";
+            if (elevated.Count > 0)
+                return $"{string.Join(", ", elevated)} peaked above {ElevatedPercent:F0}% driver DPC/interrupt time. Usually harmless; worth watching if you hear crackles or see stutter.";
+            return $"Driver DPC/interrupt load stayed below {ElevatedPercent:F0}% on every core — healthy.";
+        }
+
+        private static CoreLatencyRecord Copy(CoreLatencyRecord c) => new()
+        {
+            Name = c.Name,
+            CurrentDpcPercent = c.CurrentDpcPercent,
+            CurrentInterruptPercent = c.CurrentInterruptPercent,
+            PeakDpcPercent = c.PeakDpcPercent,
+            PeakInterruptPercent = c.PeakInterruptPercent,
+            AvgDpcPercent = c.AvgDpcPercent,
+            AvgInterruptPercent = c.AvgInterruptPercent,
+            HighSamples = c.HighSamples,
+            Status = c.Status,
+            IsSpike = c.IsSpike,
+        };
+    }
+
+    // The real counter source: "Processor" category, one instance per logical CPU plus _Total.
+    public sealed class PerformanceCounterLatencySource : ILatencyCounterSource
+    {
+        private readonly List<PerformanceCounter> _dpc = new();
+        private readonly List<PerformanceCounter> _isr = new();
+        private PerformanceCounter? _totalDpc, _totalIsr, _dpcsQueued, _interrupts;
+
+        public bool TryInitialize(out string? error)
+        {
+            error = null;
             try
             {
-                const string servicesKey = @"SYSTEM\CurrentControlSet\Services";
-                using var root = Registry.LocalMachine.OpenSubKey(servicesKey);
-                if (root == null) return;
-
-                foreach (var kvp in _knownDrivers)
+                var instances = new PerformanceCounterCategory("Processor").GetInstanceNames()
+                    .Where(n => int.TryParse(n, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+                    .OrderBy(n => int.Parse(n, CultureInfo.InvariantCulture))
+                    .ToList();
+                if (instances.Count == 0)
                 {
-                    string driverFile = kvp.Key;
-                    string friendly = kvp.Value;
-                    string svcName = System.IO.Path.GetFileNameWithoutExtension(driverFile);
-
-                    bool loaded = false;
-                    try
-                    {
-                        using var svcKey = root.OpenSubKey(svcName);
-                        if (svcKey != null)
-                        {
-                            int type  = (int)(svcKey.GetValue("Type") ?? 0);
-                            int start = (int)(svcKey.GetValue("Start") ?? 4);
-                            // Type 1=Kernel Driver, Type 2=File System Driver; Start != 4 means not disabled
-                            loaded = (type == 1 || type == 2) && start != 4;
-                        }
-                    }
-                    catch { }
-
-                    if (loaded)
-                    {
-                        lock (_lock)
-                        {
-                            _records[driverFile] = new DriverLatencyRecord
-                            {
-                                DriverName = driverFile,
-                                FriendlyName = friendly,
-                                MaxDpcMicroseconds = 0,
-                                AvgDpcMicroseconds = 0,
-                                SpikeCount = 0
-                            };
-                        }
-                    }
+                    error = "no processor instances found";
+                    return false;
                 }
+
+                foreach (var cpu in instances)
+                {
+                    _dpc.Add(new PerformanceCounter("Processor", "% DPC Time", cpu, readOnly: true));
+                    _isr.Add(new PerformanceCounter("Processor", "% Interrupt Time", cpu, readOnly: true));
+                }
+                _totalDpc = new PerformanceCounter("Processor", "% DPC Time", "_Total", readOnly: true);
+                _totalIsr = new PerformanceCounter("Processor", "% Interrupt Time", "_Total", readOnly: true);
+                _dpcsQueued = new PerformanceCounter("Processor", "DPCs Queued/sec", "_Total", readOnly: true);
+                _interrupts = new PerformanceCounter("Processor", "Interrupts/sec", "_Total", readOnly: true);
+
+                // Rate counters need a first reading to compare against.
+                Sample();
+                return true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[LatencyAuditor] Registry seed failed: {ex.Message}");
-            }
-
-            // If no drivers detected, seed all known ones for monitoring
-            lock (_lock)
-            {
-                if (_records.Count == 0)
-                {
-                    foreach (var kvp in _knownDrivers)
-                    {
-                        _records[kvp.Key] = new DriverLatencyRecord
-                        {
-                            DriverName = kvp.Key,
-                            FriendlyName = kvp.Value
-                        };
-                    }
-                }
+                error = ex.Message;
+                Dispose();
+                return false;
             }
         }
 
-        /// <summary>
-        /// Returns how much of the system's DPC load each driver category typically contributes.
-        /// Based on real-world profiling averages.
-        /// </summary>
-        private static double GetDriverLoadShare(string driverName)
+        public LatencySample Sample() => new(
+            _dpc.Select(c => (double)c.NextValue()).ToArray(),
+            _isr.Select(c => (double)c.NextValue()).ToArray(),
+            _totalDpc?.NextValue() ?? 0,
+            _totalIsr?.NextValue() ?? 0,
+            _dpcsQueued?.NextValue() ?? 0,
+            _interrupts?.NextValue() ?? 0);
+
+        public void Dispose()
         {
-            string lower = driverName.ToLowerInvariant();
-            if (lower.Contains("nvlddmkm") || lower.Contains("amdkmdag") || lower.Contains("atikmdag"))
-                return 0.35; // GPU drivers are the #1 DPC offender
-            if (lower.Contains("ndis") || lower.Contains("netio") || lower.Contains("tcpip"))
-                return 0.20; // Network stack
-            if (lower.Contains("storport") || lower.Contains("ntfs"))
-                return 0.15; // Storage
-            if (lower.Contains("hdaud") || lower.Contains("portcls") || lower.Contains("ksthunk"))
-                return 0.12; // Audio
-            if (lower.Contains("usbport"))
-                return 0.08; // USB
-            if (lower.Contains("dxgkrnl"))
-                return 0.05;
-            return 0.02; // Everything else gets a small share
+            foreach (var c in _dpc.Concat(_isr)) c.Dispose();
+            _dpc.Clear();
+            _isr.Clear();
+            _totalDpc?.Dispose();
+            _totalIsr?.Dispose();
+            _dpcsQueued?.Dispose();
+            _interrupts?.Dispose();
+            _totalDpc = _totalIsr = _dpcsQueued = _interrupts = null;
         }
     }
 }
