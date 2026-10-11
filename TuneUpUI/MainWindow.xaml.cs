@@ -334,9 +334,14 @@ namespace TuneUpUI
                 {
                     try
                     {
+                        // Tell the engine which account may connect to it: ours. If UAC elevation
+                        // uses a different administrator account, the engine would otherwise only
+                        // accept that account and this UI could not connect.
+                        string? ourSid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value;
                         Process.Start(new ProcessStartInfo
                         {
                             FileName = foundPath,
+                            Arguments = ourSid != null ? $"--allow-sid {ourSid}" : "",
                             CreateNoWindow = true,
                             WindowStyle = ProcessWindowStyle.Hidden,
                             UseShellExecute = true, // Open elevated if requested
@@ -784,7 +789,8 @@ namespace TuneUpUI
             ProgCleaner.Value = 0;
             BtnCleanJunk.IsEnabled = false;
 
-            string payload = JsonSerializer.Serialize(selectedItems);
+            // Only result IDs go to the engine — it cleans what its own scan found, never paths we send.
+            string payload = JsonSerializer.Serialize(selectedItems.Select(i => i.Id));
 
             SendAsyncIpcRequest("CleanJunk", payload,
                 (progress) =>
@@ -887,7 +893,8 @@ namespace TuneUpUI
             BtnRepairRegistry.IsEnabled = false;
             BtnToggleSelectRegistry.IsEnabled = false;
 
-            string payload = JsonSerializer.Serialize(selectedIssues);
+            // Only result IDs go to the engine — it repairs what its own scan found, never keys we send.
+            string payload = JsonSerializer.Serialize(selectedIssues.Select(i => i.Id));
 
             SendAsyncIpcRequest("RepairRegistry", payload,
                 (progress) =>

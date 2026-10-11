@@ -289,6 +289,10 @@ Allows users to analyze their directories and migrate large folders (such as gam
 | **Registry backups** | All Registry Guard repairs create timestamped backups in `%APPDATA%\RamRaidersTuneUpSuite\RegistryBackups\` before deletion. |
 | **User-folder scoping** | The Advanced Scanner (duplicates, empty folders) is strictly scoped to your personal folders under `%USERPROFILE%` (Documents, Pictures, Videos, Music, Desktop, Downloads, OneDrive — not AppData) — it will never touch `System32`, `Program Files`, or other system directories. |
 | **MSI warning gate** | The MSI Force button requires explicit confirmation after a compliance scan and displays a warning dialog about BSOD risk before proceeding. |
+| **Engine pipe access** | Only the account that launched the engine (plus the account the UI vouches for with `--allow-sid`, for over-the-shoulder UAC) can open `TuneUpEnginePipe`. The engine refuses to start if another process already owns the pipe name, and it only answers a `TuneUpUI.exe` located next to the engine (or, for development builds, the UI built from the same solution). |
+| **Act on scan results only** | Cleaning and registry repair send back only the IDs of items the engine's own scan found — never file paths or registry keys — so the engine cannot be asked to delete arbitrary data. Each ID can be used once. |
+| **Duplicate re-verification** | Before deleting an extra copy of a duplicate, the engine re-hashes it and the kept copy; if the kept copy is missing or the files no longer match, nothing in that set is deleted. |
+| **Allowlists** | Service changes are limited to the services listed in OS Tweaks, AppX removal to the curated/OEM package list, and Storage Migrator refuses drive roots, Windows, `Program Files`/`ProgramData`/`Users` themselves, your profile root, and destinations inside the source. |
 
 ---
 
