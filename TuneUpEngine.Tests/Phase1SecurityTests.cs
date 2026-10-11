@@ -303,7 +303,7 @@ namespace TuneUpEngine.Tests
         [Fact]
         public void SetServiceState_ForUnlistedService_IsRefused()
         {
-            var reply = Send(StartTrustingThisProcess(), "SetServiceState", "WinDefend|true");
+            var reply = Send(StartTrustingThisProcess(), "SetServiceState", IpcPayload.Serialize(new SetServiceRequest("WinDefend", true)));
             Assert.Equal("Error", reply?.Status);
             Assert.StartsWith("Refused", reply?.Message);
         }

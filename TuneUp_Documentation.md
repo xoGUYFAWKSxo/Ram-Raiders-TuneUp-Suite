@@ -349,3 +349,6 @@ Ram Raiders TuneUp Suite/
 | User settings | `%LOCALAPPDATA%\RamRaidersTuneUpSuite\settings.json` |
 | Registry backups | `%APPDATA%\RamRaidersTuneUpSuite\RegistryBackups\` |
 | Winapp2 definitions | Same directory as `TuneUpEngine.exe` (`winapp2.ini`) |
+| Engine log | `%PROGRAMDATA%\RamRaidersTuneUpSuite\logs\engine-YYYYMMDD.log` (7 days kept, 10 MB/day cap; set `TUNEUP_DEBUG_LOG=1` to also record every request) |
+| UI log | `%LOCALAPPDATA%\RamRaidersTuneUpSuite\logs\ui-YYYYMMDD.log` |
+| Change journal, engine settings, MSI backups, migration history | `%PROGRAMDATA%\RamRaidersTuneUpSuite\` (administrators only) |

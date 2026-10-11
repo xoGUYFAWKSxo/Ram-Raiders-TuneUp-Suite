@@ -84,7 +84,7 @@ namespace TuneUpEngine
                     {
                         // Pre-load core topology so affinity decisions are instant
                         var topology = CoreDirector.GetTopology();
-                        Console.WriteLine($"[GameMode] Core topology: {topology.DetectionMethod} | Hybrid: {topology.HasHybridCores}");
+                        EngineLog.Info($"[GameMode] Core topology: {topology.DetectionMethod} | Hybrid: {topology.HasHybridCores}");
                         ApplyGlobalTweaks();
                         StartBooster();
                     }
@@ -125,7 +125,7 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[GameMode] Failed to apply global tweaks: {ex.Message}");
+                EngineLog.Warn($"[GameMode] Failed to apply global tweaks: {ex.Message}");
             }
         }
 
@@ -160,7 +160,7 @@ namespace TuneUpEngine
                 games.GetValue("Priority") is int prio && prio == 6;
             if (!looksLegacyApplied) return;
 
-            Console.WriteLine("[GameMode] Found settings left by an older version; restoring Windows defaults before recording originals.");
+            EngineLog.Info("[GameMode] Found settings left by an older version; restoring Windows defaults before recording originals.");
             profile.SetValue("SystemResponsiveness", 20, RegistryValueKind.DWord);
             games.SetValue("Priority", 2, RegistryValueKind.DWord);
             using (var kernel = Registry.LocalMachine.OpenSubKey(KernelKey, writable: true))
@@ -172,7 +172,7 @@ namespace TuneUpEngine
         {
             int failed = _journal.Release(JournalOwner);
             if (failed > 0)
-                Console.WriteLine($"[GameMode] {failed} setting(s) could not be restored yet; they will be retried on the next engine start.");
+                EngineLog.Warn($"[GameMode] {failed} setting(s) could not be restored yet; they will be retried on the next engine start.");
         }
 
         // Called when the engine shuts down: hand the boosted game and the power plan back. Game
@@ -213,7 +213,7 @@ namespace TuneUpEngine
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[GameMode] Error in check loop: {ex.Message}");
+                    EngineLog.Warn($"[GameMode] Error in check loop: {ex.Message}");
                 }
 
                 Thread.Sleep(1000); // Check active window every 1 second
@@ -274,7 +274,7 @@ namespace TuneUpEngine
                             if (topology.HasHybridCores && topology.PCoreCount >= 3 && topology.PCoresMask != IntPtr.Zero)
                             {
                                 proc.ProcessorAffinity = topology.PCoresMask;
-                                Console.WriteLine($"[GameMode] Keeping {procName} on {topology.PCoreCount} P-cores (mask: 0x{topology.PCoresMask.ToInt64():X})");
+                                EngineLog.Info($"[GameMode] Keeping {procName} on {topology.PCoreCount} P-cores (mask: 0x{topology.PCoresMask.ToInt64():X})");
                             }
 
                             _lastBoostedPid = proc.Id;
@@ -292,7 +292,7 @@ namespace TuneUpEngine
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[GameMode] Failed to boost {procName}: {ex.Message}");
+                            EngineLog.Warn($"[GameMode] Failed to boost {procName}: {ex.Message}");
                         }
                     }
                     else

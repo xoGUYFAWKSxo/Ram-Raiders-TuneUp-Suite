@@ -94,6 +94,23 @@ namespace TuneUpEngine
             _path = path;
             _hardenAcl = hardenAcl;
             _commands = commands ?? new WindowsSystemCommands();
+
+            // Lock the folder down straight away (not only on the first save), so nothing else —
+            // e.g. the log folder created inside it — can ever exist there with ProgramData's
+            // default "users may write" permissions.
+            if (_hardenAcl && _path != null)
+            {
+                try
+                {
+                    EnsureProtectedDirectory(System.IO.Path.GetDirectoryName(_path)!);
+                    _directorySecured = true;
+                }
+                catch
+                {
+                    // Not elevated (e.g. a dev run) — Save() will try again.
+                }
+            }
+
             Load();
         }
 
@@ -500,7 +517,7 @@ namespace TuneUpEngine
 
         private void Log(string message)
         {
-            Console.WriteLine(message);
+            EngineLog.Info(message);
             OnLog?.Invoke(message);
         }
     }

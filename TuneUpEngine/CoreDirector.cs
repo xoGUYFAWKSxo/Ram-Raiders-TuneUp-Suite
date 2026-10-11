@@ -135,10 +135,10 @@ namespace TuneUpEngine
                 topology.Architecture = CpuArchitecture.IntelHybrid;
             }
 
-            Console.WriteLine($"[CoreDirector] CPU: {topology.CpuModel}");
-            Console.WriteLine($"[CoreDirector] Architecture: {topology.Architecture} | Hybrid: {topology.HasHybridCores}");
+            EngineLog.Info($"[CoreDirector] CPU: {topology.CpuModel}");
+            EngineLog.Info($"[CoreDirector] Architecture: {topology.Architecture} | Hybrid: {topology.HasHybridCores}");
             if (topology.HasHybridCores)
-                Console.WriteLine($"[CoreDirector] P-cores: {topology.PCoreCount} (mask: 0x{topology.PCoresMask.ToInt64():X}) | E-cores: {topology.ECoreCount} (mask: 0x{topology.ECoresMask.ToInt64():X})");
+                EngineLog.Info($"[CoreDirector] P-cores: {topology.PCoreCount} (mask: 0x{topology.PCoresMask.ToInt64():X}) | E-cores: {topology.ECoreCount} (mask: 0x{topology.ECoresMask.ToInt64():X})");
 
             return topology;
         }
@@ -195,7 +195,7 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CoreDirector] Failed to read core topology: {ex.Message}");
+                EngineLog.Warn($"[CoreDirector] Failed to read core topology: {ex.Message}");
                 return false;
             }
         }

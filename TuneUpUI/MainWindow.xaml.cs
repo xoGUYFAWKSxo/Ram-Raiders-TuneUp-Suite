@@ -62,21 +62,6 @@ namespace TuneUpUI
         private ApplicationSettings _settings = new ApplicationSettings();
         private bool _isLoadingSettings = false;
 
-        // IPC Structures matching Engine
-        public class IpcRequest
-        {
-            public string Command { get; set; }
-            public string Payload { get; set; }
-        }
-
-        public class IpcResponse
-        {
-            public string Status { get; set; }
-            public double ProgressPercent { get; set; }
-            public string Message { get; set; }
-            public string Payload { get; set; }
-        }
-
         public MainWindow()
         {
             InitializeComponent();
@@ -124,8 +109,8 @@ namespace TuneUpUI
                 bool connected = false;
                 for (int i = 0; i < 30; i++) // Try for up to 15 seconds
                 {
-                    var resp = SendIpcRequest("GetEngineStats");
-                    if (resp != null && resp.Status == "Success")
+                    var resp = SendIpcRequest(IpcCommands.GetEngineStats);
+                    if (resp != null && resp.Status == IpcStatus.Success)
                     {
                         Dispatcher.Invoke(() =>
                         {
@@ -176,7 +161,7 @@ namespace TuneUpUI
                 _reportingForeground = true;
                 Task.Run(() =>
                 {
-                    try { SendIpcRequest("ReportForeground", pid.ToString()); }
+                    try { SendIpcRequest(IpcCommands.ReportForeground, pid.ToString()); }
                     finally { _reportingForeground = false; }
                 });
             };
@@ -227,114 +212,31 @@ namespace TuneUpUI
         // NAMED PIPE IPC CLIENT CODE
         // ==========================================
 
-        private static readonly IReadOnlyList<string> TrustedEnginePaths =
-            ClientVerifier.TrustedEnginePaths(AppContext.BaseDirectory);
+        // All engine communication goes through EngineClient (TuneUpEngine assembly): it checks
+        // the engine is genuine, sends typed requests, streams progress and supports cancelling.
+        private readonly EngineClient _engine = EngineClient.ForThisApplication();
 
-        // Opens the engine's pipe. The connection lets the engine act as this user (impersonation)
-        // so your settings and files are changed as you, not as SYSTEM. That's a real permission,
-        // so before sending anything the UI checks the pipe belongs to the genuine engine — Windows
-        // only lets the server act as us after it has read from the pipe, so a fake engine that
-        // grabbed the name never gets the chance.
-        private static NamedPipeClientStream ConnectToEngine(int timeoutMs)
-        {
-            var client = new NamedPipeClientStream(".", "TuneUpEnginePipe", PipeDirection.InOut,
-                PipeOptions.None, System.Security.Principal.TokenImpersonationLevel.Impersonation);
-            try
-            {
-                client.Connect(timeoutMs);
-                string? server = ClientVerifier.GetServerImagePath(client);
-                if (!ClientVerifier.IsTrustedClient(server, TrustedEnginePaths))
-                    throw new UnauthorizedAccessException($"Refusing to talk to an unexpected engine process: {server ?? "unknown"}");
-                return client;
-            }
-            catch
-            {
-                client.Dispose();
-                throw;
-            }
-        }
+        // One request, one reply; null if the engine can't be reached. Not for commands that report
+        // progress — those use SendIpcRequestStreaming.
+        private IpcResponse? SendIpcRequest(string command, string? payload = "") => _engine.Send(command, payload);
 
-        private IpcResponse SendIpcRequest(string command, string payload = "")
-        {
-            try
-            {
-                using (var client = ConnectToEngine(3000))
-                {
-                    var writer = new StreamWriter(client, Encoding.UTF8);
-                    var reader = new StreamReader(client, Encoding.UTF8);
-
-                    var req = new IpcRequest { Command = command, Payload = payload };
-                    string json = JsonSerializer.Serialize(req);
-                    writer.WriteLine(json);
-                    writer.Flush();
-
-                    string respJson = reader.ReadLine();
-                    if (!string.IsNullOrEmpty(respJson))
-                    {
-                        return JsonSerializer.Deserialize<IpcResponse>(respJson);
-                    }
-                }
-            }
-            catch
-            {
-                // Engine is offline or pipe closed
-            }
-            return null;
-        }
-
-        // Sends a command whose handler may stream "Progress" lines before its final reply, and blocks
-        // until that final (non-Progress) reply arrives. Any command that reports progress MUST use
-        // this rather than SendIpcRequest, which reads exactly one line — for these commands that
-        // line is the first progress update, so the caller would treat "Copying files..." as the
-        // result and close the pipe while the operation was still running.
-        // onProgress is invoked on the calling (background) thread.
-        private IpcResponse SendIpcRequestStreaming(string command, string payload, Action<IpcResponse> onProgress)
-        {
-            try
-            {
-                using (var client = ConnectToEngine(5000)) // 5-second timeout for heavy active tasks
-                {
-
-                    var writer = new StreamWriter(client, Encoding.UTF8);
-                    var reader = new StreamReader(client, Encoding.UTF8);
-
-                    var req = new IpcRequest { Command = command, Payload = payload };
-                    writer.WriteLine(JsonSerializer.Serialize(req));
-                    writer.Flush();
-
-                    while (client.IsConnected)
-                    {
-                        string respJson = reader.ReadLine();
-                        if (string.IsNullOrEmpty(respJson)) break;
-
-                        var resp = JsonSerializer.Deserialize<IpcResponse>(respJson);
-                        if (resp == null) break;
-
-                        if (resp.Status == "Progress")
-                            onProgress?.Invoke(resp);
-                        else
-                            return resp;
-                    }
-                }
-
-                return new IpcResponse { Status = "Error", Message = "The engine closed the connection before the operation finished." };
-            }
-            catch (Exception ex)
-            {
-                return new IpcResponse { Status = "Error", Message = $"Failed to communicate with engine: {ex.Message}" };
-            }
-        }
+        // Streams progress (onProgress runs on the calling, background, thread) and returns the
+        // final reply. Cancelling ct asks the engine to stop; the final reply then says so.
+        private IpcResponse SendIpcRequestStreaming(string command, string? payload, Action<IpcResponse> onProgress,
+            System.Threading.CancellationToken ct = default) =>
+            _engine.SendStreaming(command, payload, onProgress, ct);
 
         private void SendAsyncIpcRequest(
             string command,
-            string payload,
+            string? payload,
             Action<IpcResponse> progressCallback,
-            Action<IpcResponse> completedCallback)
+            Action<IpcResponse> completedCallback,
+            System.Threading.CancellationToken ct = default)
         {
             Task.Run(() =>
             {
                 var final = SendIpcRequestStreaming(command, payload,
-                    progress => Dispatcher.Invoke(() => progressCallback(progress)));
+                    progress => Dispatcher.Invoke(() => progressCallback(progress)), ct);
                 Dispatcher.Invoke(() => completedCallback(final));
             });
         }
@@ -372,7 +274,7 @@ namespace TuneUpUI
             Task.Run(() =>
             {
                 // First check if already running by checking the pipe connection
-                var resp = SendIpcRequest("GetEngineStats");
+                var resp = SendIpcRequest(IpcCommands.GetEngineStats);
                 if (resp != null) return;
 
                 // Installed: the engine is a Windows service. Start it if it's stopped (the
@@ -462,7 +364,7 @@ namespace TuneUpUI
 
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("GetEngineStats");
+                var resp = SendIpcRequest(IpcCommands.GetEngineStats);
                 Dispatcher.Invoke(() =>
                 {
                     _isConnecting = false;
@@ -471,14 +373,28 @@ namespace TuneUpUI
             });
         }
 
+        private bool _shownOtherCopyWarning;
+
         private void UpdateStatsUI(IpcResponse resp)
         {
-            if (resp == null || resp.Status != "Success")
+            if (resp == null || resp.Status != IpcStatus.Success)
             {
                 StatusDot.Fill = System.Windows.Media.Brushes.Red;
-                TxtStatus.Text = "Engine Offline";
+                string? problem = _engine.LastConnectionProblem;
+                bool otherCopy = problem != null && problem.StartsWith("A different copy", StringComparison.Ordinal);
+                TxtStatus.Text = otherCopy ? "Another copy is running" : "Engine Offline";
+                TxtStatus.ToolTip = problem;
+
+                // Say it once, plainly, rather than leaving a silent "offline".
+                if (otherCopy && !_shownOtherCopyWarning)
+                {
+                    _shownOtherCopyWarning = true;
+                    UiLog.Warn($"[UI] {problem}");
+                    MessageBox.Show(problem, "Ram Raiders TuneUp Suite", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
                 return;
             }
+            TxtStatus.ToolTip = null;
 
             StatusDot.Fill = System.Windows.Media.Brushes.Green;
             TxtStatus.Text = "Engine Online";
@@ -577,7 +493,7 @@ namespace TuneUpUI
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[WPF Stats] Parse error: {ex.Message}");
+                UiLog.Warn($"[WPF Stats] Parse error: {ex.Message}");
             }
         }
 
@@ -592,11 +508,11 @@ namespace TuneUpUI
 
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("PurgeStandbyList");
+                var resp = SendIpcRequest(IpcCommands.PurgeStandbyList);
                 Dispatcher.Invoke(() =>
                 {
                     btn.IsEnabled = true;
-                    if (resp != null && resp.Status == "Success")
+                    if (resp != null && resp.Status == IpcStatus.Success)
                     {
                         long freedBytes = long.Parse(resp.Payload);
                         MessageBox.Show($"Standby list emptied.\nThe standby cache shrank by {freedBytes / (1024.0 * 1024.0):F1} MB, which is now free memory. Windows refills this cache over time as files are used.", "Standby Purge", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -612,32 +528,32 @@ namespace TuneUpUI
 
         private void ToggleProBalance_Checked(object sender, RoutedEventArgs e)
         {
-            Task.Run(() => SendIpcRequest("SetGovernorState", "true"));
+            Task.Run(() => SendIpcRequest(IpcCommands.SetGovernorState, "true"));
         }
 
         private void ToggleProBalance_Unchecked(object sender, RoutedEventArgs e)
         {
-            Task.Run(() => SendIpcRequest("SetGovernorState", "false"));
+            Task.Run(() => SendIpcRequest(IpcCommands.SetGovernorState, "false"));
         }
 
         private void ToggleAutoPurge_Checked(object sender, RoutedEventArgs e)
         {
-            Task.Run(() => SendIpcRequest("SetAutoPurgeState", "true"));
+            Task.Run(() => SendIpcRequest(IpcCommands.SetAutoPurgeState, "true"));
         }
 
         private void ToggleAutoPurge_Unchecked(object sender, RoutedEventArgs e)
         {
-            Task.Run(() => SendIpcRequest("SetAutoPurgeState", "false"));
+            Task.Run(() => SendIpcRequest(IpcCommands.SetAutoPurgeState, "false"));
         }
 
         private void ToggleGameMode_Checked(object sender, RoutedEventArgs e)
         {
-            Task.Run(() => SendIpcRequest("SetGameModeState", "true"));
+            Task.Run(() => SendIpcRequest(IpcCommands.SetGameModeState, "true"));
         }
 
         private void ToggleGameMode_Unchecked(object sender, RoutedEventArgs e)
         {
-            Task.Run(() => SendIpcRequest("SetGameModeState", "false"));
+            Task.Run(() => SendIpcRequest(IpcCommands.SetGameModeState, "false"));
         }
 
         // ==========================================
@@ -656,8 +572,9 @@ namespace TuneUpUI
 
             bool scanEmpty = ChkEmptyFolders.IsChecked == true;
             bool scanDups = ChkDuplicateFiles.IsChecked == true;
+            var ct = BeginCleanerOperation();
 
-            SendAsyncIpcRequest("ScanJunk", "", 
+            SendAsyncIpcRequest(IpcCommands.ScanJunk, "", 
                 (progress) =>
                 {
                     TxtCleanerStatus.Text = progress.Message;
@@ -665,7 +582,7 @@ namespace TuneUpUI
                 },
                 (completed) =>
                 {
-                    if (completed.Status == "Success")
+                    if (completed.Status == IpcStatus.Success)
                     {
                         var items = JsonSerializer.Deserialize<List<ScanItem>>(completed.Payload);
                         if (items != null) _scannedJunkItems.AddRange(items);
@@ -675,14 +592,37 @@ namespace TuneUpUI
                         TxtCleanerStatus.Text = $"Scan Failed: {completed.Message}";
                     }
 
-                    if (scanEmpty) RunAdvancedScan("ScanAdvancedEmptyFolders", scanDups);
-                    else if (scanDups) RunAdvancedScan("ScanAdvancedDuplicates", false);
+                    if (ct.IsCancellationRequested) FinishScan(cancelled: true);
+                    else if (scanEmpty) RunAdvancedScan(IpcCommands.ScanAdvancedEmptyFolders, scanDups, ct);
+                    else if (scanDups) RunAdvancedScan(IpcCommands.ScanAdvancedDuplicates, false, ct);
                     else FinishScan();
-                }
+                },
+                ct
             );
         }
 
-        private void RunAdvancedScan(string cmd, bool chainDups)
+        // ── Cancelling cleaner work ─────────────────────────────────────────────
+        private System.Threading.CancellationTokenSource? _cleanerCts;
+
+        private System.Threading.CancellationToken BeginCleanerOperation()
+        {
+            _cleanerCts?.Dispose();
+            _cleanerCts = new System.Threading.CancellationTokenSource();
+            BtnCancelCleaner.IsEnabled = true;
+            BtnCancelCleaner.Visibility = Visibility.Visible;
+            return _cleanerCts.Token;
+        }
+
+        private void EndCleanerOperation() => BtnCancelCleaner.Visibility = Visibility.Collapsed;
+
+        private void BtnCancelCleaner_Click(object sender, RoutedEventArgs e)
+        {
+            _cleanerCts?.Cancel();
+            BtnCancelCleaner.IsEnabled = false;
+            TxtCleanerStatus.Text = "Cancelling…";
+        }
+
+        private void RunAdvancedScan(string cmd, bool chainDups, System.Threading.CancellationToken ct)
         {
             ProgCleaner.IsIndeterminate = true;
             SendAsyncIpcRequest(cmd, "",
@@ -692,24 +632,29 @@ namespace TuneUpUI
                 },
                 (completed) =>
                 {
-                    if (completed.Status == "Success")
+                    if (completed.Status == IpcStatus.Success)
                     {
                         var items = JsonSerializer.Deserialize<List<ScanItem>>(completed.Payload);
                         if (items != null) _scannedJunkItems.AddRange(items);
                     }
 
-                    if (chainDups) RunAdvancedScan("ScanAdvancedDuplicates", false);
+                    if (ct.IsCancellationRequested) FinishScan(cancelled: true);
+                    else if (chainDups) RunAdvancedScan(IpcCommands.ScanAdvancedDuplicates, false, ct);
                     else FinishScan();
-                });
+                },
+                ct);
         }
 
-        private void FinishScan()
+        private void FinishScan(bool cancelled = false)
         {
+            EndCleanerOperation();
             ProgCleaner.IsIndeterminate = false;
             ProgCleaner.Visibility = Visibility.Collapsed;
             LvwJunkItems.ItemsSource = _scannedJunkItems;
             long totalBytes = _scannedJunkItems.Sum(item => item.TotalSizeBytes);
-            TxtCleanerStatus.Text = $"Scan complete. Found {_scannedJunkItems.Count} rules mapping to {totalBytes / (1024.0 * 1024.0):F1} MB. Check the items you want to clean, then click Empty Junk Files.";
+            TxtCleanerStatus.Text = cancelled
+                ? $"Scan cancelled. Showing what was found before stopping: {_scannedJunkItems.Count} items, {totalBytes / (1024.0 * 1024.0):F1} MB."
+                : $"Scan complete. Found {_scannedJunkItems.Count} rules mapping to {totalBytes / (1024.0 * 1024.0):F1} MB. Check the items you want to clean, then click Empty Junk Files.";
             BtnCleanJunk.IsEnabled = _scannedJunkItems.Count > 0;
             BtnToggleSelectJunk.IsEnabled = _scannedJunkItems.Count > 0;
             // Scan results arrive unchecked, so the button's first action must be "Select All".
@@ -891,7 +836,8 @@ namespace TuneUpUI
             // Only result IDs go to the engine — it cleans what its own scan found, never paths we send.
             string payload = JsonSerializer.Serialize(selectedItems.Select(i => i.Id));
 
-            SendAsyncIpcRequest("CleanJunk", payload,
+            var cleanCt = BeginCleanerOperation();
+            SendAsyncIpcRequest(IpcCommands.CleanJunk, payload,
                 (progress) =>
                 {
                     TxtCleanerStatus.Text = progress.Message;
@@ -899,10 +845,11 @@ namespace TuneUpUI
                 },
                 (completed) =>
                 {
+                    EndCleanerOperation();
                     ProgCleaner.Visibility = Visibility.Collapsed;
-                    if (completed.Status == "Success")
+                    if (completed.Status == IpcStatus.Success)
                     {
-                        long cleanedBytes = long.Parse(completed.Payload);
+                        long cleanedBytes = long.Parse(completed.Payload ?? "0");
                         MessageBox.Show($"File Clean Complete!\nSafely deleted {cleanedBytes / (1024.0 * 1024.0):F1} MB of cached files.", "System Cleaned", MessageBoxButton.OK, MessageBoxImage.Information);
                         TxtCleanerStatus.Text = "System fully optimized.";
                         LvwJunkItems.ItemsSource = null;
@@ -911,9 +858,18 @@ namespace TuneUpUI
                     }
                     else
                     {
-                        TxtCleanerStatus.Text = $"Clean Failed: {completed.Message}";
+                        // A cancelled clean stops between files and reports what it freed.
+                        TxtCleanerStatus.Text = cleanCt.IsCancellationRequested
+                            ? (completed.Message ?? "Clean cancelled.") + " Scan again to see what's left."
+                            : $"Clean Failed: {completed.Message}";
+                        if (cleanCt.IsCancellationRequested)
+                        {
+                            LvwJunkItems.ItemsSource = null;
+                            _scannedJunkItems.Clear();
+                        }
                     }
-                }
+                },
+                cleanCt
             );
         }
 
@@ -927,7 +883,7 @@ namespace TuneUpUI
             ProgRegistry.Value = 0;
             BtnRepairRegistry.IsEnabled = false;
 
-            SendAsyncIpcRequest("ScanRegistry", "",
+            SendAsyncIpcRequest(IpcCommands.ScanRegistry, "",
                 (progress) =>
                 {
                     TxtRegistryStatus.Text = progress.Message;
@@ -936,7 +892,7 @@ namespace TuneUpUI
                 (completed) =>
                 {
                     ProgRegistry.Visibility = Visibility.Collapsed;
-                    if (completed.Status == "Success")
+                    if (completed.Status == IpcStatus.Success)
                     {
                         _scannedRegistryIssues = JsonSerializer.Deserialize<List<RegistryIssue>>(completed.Payload) ?? new List<RegistryIssue>();
                         LvwRegistryIssues.ItemsSource = _scannedRegistryIssues;
@@ -995,7 +951,7 @@ namespace TuneUpUI
             // Only result IDs go to the engine — it repairs what its own scan found, never keys we send.
             string payload = JsonSerializer.Serialize(selectedIssues.Select(i => i.Id));
 
-            SendAsyncIpcRequest("RepairRegistry", payload,
+            SendAsyncIpcRequest(IpcCommands.RepairRegistry, payload,
                 (progress) =>
                 {
                     TxtRegistryStatus.Text = progress.Message;
@@ -1004,7 +960,7 @@ namespace TuneUpUI
                 (completed) =>
                 {
                     ProgRegistry.Visibility = Visibility.Collapsed;
-                    if (completed.Status == "Success")
+                    if (completed.Status == IpcStatus.Success)
                     {
                         MessageBox.Show($"Registry repair complete.\n{selectedIssues.Count} selected entr{(selectedIssues.Count == 1 ? "y was" : "ies were")} backed up and removed.", "Registry Restored", MessageBoxButton.OK, MessageBoxImage.Information);
                         TxtRegistryStatus.Text = "Registry cleaned and backed up.";
@@ -1034,11 +990,11 @@ namespace TuneUpUI
 
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("GetSystemIntegrityStatus");
+                var resp = SendIpcRequest(IpcCommands.GetSystemIntegrityStatus);
                 Dispatcher.Invoke(() =>
                 {
                     btn.IsEnabled = true;
-                    if (resp != null && resp.Status == "Success")
+                    if (resp != null && resp.Status == IpcStatus.Success)
                     {
                         var report = JsonSerializer.Deserialize<Dictionary<string, object>>(resp.Payload);
                         if (report == null) return;
@@ -1072,7 +1028,7 @@ namespace TuneUpUI
             ProgComponent.Value = 0;
             BtnRepairComponent.IsEnabled = false;
 
-            SendAsyncIpcRequest("RunSystemRepair", "",
+            SendAsyncIpcRequest(IpcCommands.RunSystemRepair, "",
                 (progress) =>
                 {
                     TxtComponentStatus.Text = progress.Message;
@@ -1082,7 +1038,7 @@ namespace TuneUpUI
                 {
                     ProgComponent.Visibility = Visibility.Collapsed;
                     BtnRepairComponent.IsEnabled = true;
-                    if (completed.Status == "Success")
+                    if (completed.Status == IpcStatus.Success)
                     {
                         // The engine now reports what DISM and SFC actually found and did.
                         MessageBox.Show(completed.Message ?? "System repair finished.", "System Repair", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1090,10 +1046,10 @@ namespace TuneUpUI
                         // Re-scan CBS to refresh the log view
                         Task.Run(() =>
                         {
-                            var r = SendIpcRequest("GetSystemIntegrityStatus");
+                            var r = SendIpcRequest(IpcCommands.GetSystemIntegrityStatus);
                             Dispatcher.Invoke(() =>
                             {
-                                if (r != null && r.Status == "Success")
+                                if (r != null && r.Status == IpcStatus.Success)
                                 {
                                     var report = JsonSerializer.Deserialize<Dictionary<string, object>>(r.Payload);
                                     if (report != null)
@@ -1119,7 +1075,7 @@ namespace TuneUpUI
             if (_isExplicitExit || !_settings.MinimizeToTrayOnClose)
             {
                 // Only stop an engine this UI started itself; a service engine keeps running.
-                if (_launchedOwnEngine) SendIpcRequest("ShutdownEngine");
+                if (_launchedOwnEngine) SendIpcRequest(IpcCommands.ShutdownEngine);
                 _trayIcon?.Dispose();
                 base.OnClosing(e);
             }
@@ -1200,7 +1156,7 @@ namespace TuneUpUI
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[Settings] Failed to set startup registry: {ex.Message}");
+                UiLog.Warn($"[Settings] Failed to set startup registry: {ex.Message}");
             }
         }
 
@@ -1289,12 +1245,12 @@ namespace TuneUpUI
             BtnMsiScan.IsEnabled = false;
             TxtMsiStatus.Text = "Scanning PCI devices...";
             
-            SendAsyncIpcRequest("CheckMsiCompliance", "",
+            SendAsyncIpcRequest(IpcCommands.CheckMsiCompliance, "",
                 progress => { },
                 completed =>
                 {
                     BtnMsiScan.IsEnabled = true;
-                    if (completed.Status == "Success")
+                    if (completed.Status == IpcStatus.Success)
                     {
                         TxtMsiStatus.Text = completed.Payload;
                         if (completed.Payload.StartsWith("Compliant"))
@@ -1325,12 +1281,12 @@ namespace TuneUpUI
                 BtnMsiScan.IsEnabled = false;
                 TxtMsiStatus.Text = "Applying MSI tweaks...";
                 
-                SendAsyncIpcRequest("ProvisionMSIInterrupts", "",
+                SendAsyncIpcRequest(IpcCommands.ProvisionMSIInterrupts, "",
                     progress => { },
                     completed =>
                     {
                         BtnMsiScan.IsEnabled = true;
-                        if (completed.Status == "Success")
+                        if (completed.Status == IpcStatus.Success)
                         {
                             TxtMsiStatus.Text = completed.Payload;
                         }
@@ -1359,13 +1315,13 @@ namespace TuneUpUI
                 BtnMsiScan.IsEnabled = false;
                 TxtMsiStatus.Text = "Reverting MSI tweaks...";
 
-                SendAsyncIpcRequest("RevertMSIInterrupts", "",
+                SendAsyncIpcRequest(IpcCommands.RevertMSIInterrupts, "",
                     progress => { },
                     completed =>
                     {
                         BtnMsiScan.IsEnabled = true;
                         BtnMsiRevert.IsEnabled = true;
-                        TxtMsiStatus.Text = completed.Status == "Success"
+                        TxtMsiStatus.Text = completed.Status == IpcStatus.Success
                             ? completed.Payload
                             : "Error: " + completed.Message;
                     });
@@ -1399,8 +1355,8 @@ namespace TuneUpUI
         {
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("GetRegistryTweaks");
-                if (resp != null && resp.Status == "Success")
+                var resp = SendIpcRequest(IpcCommands.GetRegistryTweaks);
+                if (resp != null && resp.Status == IpcStatus.Success)
                 {
                     Dispatcher.Invoke(() =>
                     {
@@ -1438,8 +1394,8 @@ namespace TuneUpUI
                 bool enable = chk.IsChecked ?? false;
                 Task.Run(() =>
                 {
-                    var resp = SendIpcRequest("SetRegistryTweak", $"{tweakName}|{enable}");
-                    if (resp?.Status != "Success")
+                    var resp = _engine.SendJson(IpcCommands.SetRegistryTweak, new SetTweakRequest(tweakName, enable));
+                    if (resp?.Status != IpcStatus.Success)
                     {
                         // The toggle flipped optimistically; re-read the real state so it doesn't
                         // claim a change that never happened.
@@ -1505,7 +1461,7 @@ namespace TuneUpUI
         {
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("StartLatencyAudit", null);
+                var resp = SendIpcRequest(IpcCommands.StartLatencyAudit, null);
                 Dispatcher.Invoke(() =>
                 {
                     BtnStartLatency.IsEnabled = false;
@@ -1525,7 +1481,7 @@ namespace TuneUpUI
             _latencyRefreshTimer = null;
             Task.Run(() =>
             {
-                SendIpcRequest("StopLatencyAudit", null);
+                SendIpcRequest(IpcCommands.StopLatencyAudit, null);
                 Dispatcher.Invoke(() =>
                 {
                     BtnStartLatency.IsEnabled = true;
@@ -1539,8 +1495,8 @@ namespace TuneUpUI
         {
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("GetLatencyReport", null);
-                if (resp?.Status == "Success" && !string.IsNullOrEmpty(resp.Payload))
+                var resp = SendIpcRequest(IpcCommands.GetLatencyReport, null);
+                if (resp?.Status == IpcStatus.Success && !string.IsNullOrEmpty(resp.Payload))
                 {
                     try
                     {
@@ -1566,8 +1522,8 @@ namespace TuneUpUI
 
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("GetDebloatStatus", null);
-                if (resp?.Status == "Success" && !string.IsNullOrEmpty(resp.Payload))
+                var resp = SendIpcRequest(IpcCommands.GetDebloatStatus, null);
+                if (resp?.Status == IpcStatus.Success && !string.IsNullOrEmpty(resp.Payload))
                 {
                     try
                     {
@@ -1631,7 +1587,7 @@ namespace TuneUpUI
                 bool disable = !(chk.IsChecked ?? false);
                 Task.Run(() =>
                 {
-                    var resp = SendIpcRequest("SetServiceState", $"{svcName}|{disable}");
+                    var resp = _engine.SendJson(IpcCommands.SetServiceState, new SetServiceRequest(svcName, disable));
                     Dispatcher.Invoke(() =>
                     {
                         if (resp?.Message != null)
@@ -1648,13 +1604,13 @@ namespace TuneUpUI
 
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("GetDebloatStatus", null);
+                var resp = SendIpcRequest(IpcCommands.GetDebloatStatus, null);
                 Dispatcher.Invoke(() =>
                 {
                     BtnScanAppx.IsEnabled = true;
                     BtnScanAppx.Content = "Scan Packages";
 
-                    if (resp?.Status == "Success" && !string.IsNullOrEmpty(resp.Payload))
+                    if (resp?.Status == IpcStatus.Success && !string.IsNullOrEmpty(resp.Payload))
                     {
                         try
                         {
@@ -1705,7 +1661,7 @@ namespace TuneUpUI
                 // returns only on the final reply), instead of firing the next after a fixed delay.
                 foreach (var pkg in selected)
                 {
-                    var resp = SendIpcRequestStreaming("RemoveAppxPackage", pkg.PackageFullName,
+                    var resp = SendIpcRequestStreaming(IpcCommands.RemoveAppxPackage, pkg.PackageFullName,
                         progress => Dispatcher.Invoke(() => BtnRemoveAppx.Content = progress.Message));
                     Dispatcher.Invoke(() => AppendMonitorEvent(resp?.Message ?? $"Processed {pkg.FriendlyName}"));
                 }
@@ -1749,8 +1705,8 @@ namespace TuneUpUI
         {
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("GetNetworkOptimizationStatus", null);
-                if (resp?.Status == "Success" && !string.IsNullOrEmpty(resp.Payload))
+                var resp = SendIpcRequest(IpcCommands.GetNetworkOptimizationStatus, null);
+                if (resp?.Status == IpcStatus.Success && !string.IsNullOrEmpty(resp.Payload))
                 {
                     try
                     {
@@ -1774,7 +1730,7 @@ namespace TuneUpUI
             BtnNetApply.Content = "Applying...";
             Task.Run(() =>
             {
-                var resp = SendIpcRequestStreaming("ApplyNetworkOptimizations", null,
+                var resp = SendIpcRequestStreaming(IpcCommands.ApplyNetworkOptimizations, null,
                     progress => Dispatcher.Invoke(() => BtnNetApply.Content = progress.Message));
                 Dispatcher.Invoke(() =>
                 {
@@ -1791,7 +1747,7 @@ namespace TuneUpUI
             BtnNetRevert.IsEnabled = false;
             Task.Run(() =>
             {
-                var resp = SendIpcRequestStreaming("RevertNetworkOptimizations", null,
+                var resp = SendIpcRequestStreaming(IpcCommands.RevertNetworkOptimizations, null,
                     progress => Dispatcher.Invoke(() => AppendMonitorEvent($"[NetOptimizer] {progress.Message}")));
                 Dispatcher.Invoke(() =>
                 {
@@ -1866,10 +1822,10 @@ namespace TuneUpUI
             TxtMigAnalysis.Visibility = Visibility.Collapsed;
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("AnalyzeMigration", _migSource);
+                var resp = SendIpcRequest(IpcCommands.AnalyzeMigration, _migSource);
                 Dispatcher.Invoke(() =>
                 {
-                    if (resp?.Status == "Success" && !string.IsNullOrEmpty(resp.Payload))
+                    if (resp?.Status == IpcStatus.Success && !string.IsNullOrEmpty(resp.Payload))
                     {
                         try
                         {
@@ -1904,22 +1860,29 @@ namespace TuneUpUI
             TxtMigProgress.Visibility = Visibility.Visible;
             ProgMigrate.Value = 0;
 
+            _migrationCts?.Dispose();
+            _migrationCts = new System.Threading.CancellationTokenSource();
+            var migrationCt = _migrationCts.Token;
+            BtnCancelMigration.IsEnabled = true;
+            BtnCancelMigration.Visibility = Visibility.Visible;
+
             Task.Run(() =>
             {
-                var resp = SendIpcRequestStreaming("MigrateDirectory", $"{_migSource}|{_migDest}",
+                var resp = SendIpcRequestStreaming(IpcCommands.MigrateDirectory, IpcPayload.Serialize(new MigrateRequest(_migSource, _migDest)),
                     progress => Dispatcher.Invoke(() =>
                     {
                         ProgMigrate.Value = progress.ProgressPercent;
                         TxtMigProgress.Text = progress.Message;
-                    }));
+                    }), migrationCt);
                 Dispatcher.Invoke(() =>
                 {
+                    BtnCancelMigration.Visibility = Visibility.Collapsed;
                     BtnMigrate.IsEnabled = true;
                     BtnMigAnalyze.IsEnabled = true;
                     ProgMigrate.Visibility = Visibility.Collapsed;
                     TxtMigProgress.Visibility = Visibility.Collapsed;
 
-                    if (resp?.Status == "Success")
+                    if (resp?.Status == IpcStatus.Success)
                     {
                         AppendMonitorEvent($"[StorageMigrator] {resp.Message}");
                         RefreshMigrationHistory();
@@ -1942,10 +1905,10 @@ namespace TuneUpUI
         {
             Task.Run(() =>
             {
-                var resp = SendIpcRequest("GetMigrationHistory", null);
+                var resp = SendIpcRequest(IpcCommands.GetMigrationHistory, null);
                 Dispatcher.Invoke(() =>
                 {
-                    if (resp?.Status == "Success" && !string.IsNullOrEmpty(resp.Payload))
+                    if (resp?.Status == IpcStatus.Success && !string.IsNullOrEmpty(resp.Payload))
                     {
                         try
                         {
@@ -1961,6 +1924,15 @@ namespace TuneUpUI
         }
 
         private void BtnMigRefreshHistory_Click(object sender, RoutedEventArgs e) => RefreshMigrationHistory();
+
+        private System.Threading.CancellationTokenSource? _migrationCts;
+
+        private void BtnCancelMigration_Click(object sender, RoutedEventArgs e)
+        {
+            _migrationCts?.Cancel();
+            BtnCancelMigration.IsEnabled = false;
+            TxtMigProgress.Text = "Cancelling… (only possible while files are still being copied)";
+        }
 
         private void BtnUndoMigration_Click(object sender, RoutedEventArgs e)
         {
@@ -1979,7 +1951,7 @@ namespace TuneUpUI
 
             Task.Run(() =>
             {
-                var resp = SendIpcRequestStreaming("UndoMigration", originalPath,
+                var resp = SendIpcRequestStreaming(IpcCommands.UndoMigration, originalPath,
                     progress => Dispatcher.Invoke(() =>
                     {
                         ProgMigrate.Value = progress.ProgressPercent;
@@ -1990,7 +1962,7 @@ namespace TuneUpUI
                     btn.IsEnabled = true;
                     ProgMigrate.Visibility = Visibility.Collapsed;
                     TxtMigProgress.Visibility = Visibility.Collapsed;
-                    AppendMonitorEvent($"[StorageMigrator] {(resp?.Status == "Success" ? "" : "\u26A0\uFE0F ")}{resp?.Message ?? "Undo failed"}");
+                    AppendMonitorEvent($"[StorageMigrator] {(resp?.Status == IpcStatus.Success ? "" : "\u26A0\uFE0F ")}{resp?.Message ?? "Undo failed"}");
                     RefreshMigrationHistory();
                 });
             });
