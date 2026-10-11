@@ -192,7 +192,7 @@
                                 <StackPanel Grid.Column="1" HorizontalAlignment="Center">
                                     <TextBlock Text="STANDBY LIST SIZE" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold"/>
                                     <TextBlock x:Name="TxtStandbyListSize" Text="-- MB" Foreground="{StaticResource BrushAccentPurple}" FontSize="28" FontWeight="Bold" Margin="0,5"/>
-                                    <TextBlock Text="Reclaimable inactive pages" Foreground="{StaticResource BrushTextMain}" FontSize="12"/>
+                                    <TextBlock Text="Cached files Windows can drop" Foreground="{StaticResource BrushTextMain}" FontSize="12"/>
                                 </StackPanel>
 
                                 <!-- Metric 3: Saved Total -->
@@ -217,14 +217,14 @@
                                     <Border Style="{StaticResource GlassCard}" Margin="0,0,0,15">
                                         <StackPanel>
                                             <TextBlock Text="Standby Page Cleaner" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,5"/>
-                                            <TextBlock Text="Clear standby cache list pages instantly. This is a non-placebo RAM release, which keeps working sets intact and flushes only dead standby cache layers back to system pool." 
+                                            <TextBlock Text="Turns the standby list (recently used files Windows keeps cached in RAM) back into free memory. Running programs keep their memory. Windows refills the cache over time, so this mainly helps games that stutter when free memory runs out." 
                                                        Foreground="{StaticResource BrushTextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,15"/>
                                             <StackPanel>
                                                 <Button Content="Purge Standby Memory" Style="{StaticResource PremiumButton}" Width="200" Click="BtnPurgeMemory_Click" HorizontalAlignment="Left" Margin="0,0,0,15"/>
                                                 <CheckBox x:Name="ToggleAutoPurge" Style="{StaticResource PremiumToggle}" Checked="ToggleAutoPurge_Checked" Unchecked="ToggleAutoPurge_Unchecked">
                                                     <StackPanel Margin="5,0,0,0">
-                                                        <TextBlock Text="Auto-Purge (Free &lt; 10%)" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
-                                                        <TextBlock Text="Automatically flushes the Standby List when available memory drops below 10%, eliminating game stutter caused by aggressive Windows memory caching." Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                                        <TextBlock Text="Auto-Purge (free memory &lt; 10%)" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                        <TextBlock Text="Empties the standby list when truly free memory drops below 10% of RAM while the cache holds at least as much, at most once a minute." Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
                                                     </StackPanel>
                                                 </CheckBox>
                                             </StackPanel>
@@ -604,9 +604,10 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="DPC Latency Watchdog" Foreground="White" FontSize="14" FontWeight="Bold"/>
+                                        <TextBlock Text="Driver DPC &amp; Interrupt Load" Foreground="White" FontSize="14" FontWeight="Bold"/>
                                         <TextBlock x:Name="TxtLatencyStatus" Foreground="{StaticResource BrushTextMuted}" FontSize="12"
-                                                   Text="Monitor kernel driver interrupt latency. Spikes above 1,000&#x03BC;s indicate a problematic driver."/>
+                                                   TextWrapping="Wrap"
+                                                   Text="Measures how much of each CPU core's time goes to driver DPCs and interrupts (Windows performance counters). Sustained high values point to a misbehaving driver; LatencyMon can show which one."/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                         <Button x:Name="BtnStartLatency" Content="&#xE768; Start Audit" Style="{StaticResource PremiumButton}"
@@ -624,9 +625,9 @@
                                         <ColumnDefinition Width="100"/>
                                         <ColumnDefinition Width="70"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Driver" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold"/>
-                                    <TextBlock Grid.Column="1" Text="Max DPC (&#x03BC;s)" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"/>
-                                    <TextBlock Grid.Column="2" Text="Avg DPC (&#x03BC;s)" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="0" Text="CPU core" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="1" Text="Peak DPC %" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="2" Text="Peak ISR %" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"/>
                                     <TextBlock Grid.Column="3" Text="Status" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Center"/>
                                 </Grid>
                                 <Separator Background="#333350" Margin="0,0,0,6"/>
@@ -642,11 +643,11 @@
                                                         <ColumnDefinition Width="100"/>
                                                         <ColumnDefinition Width="70"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{Binding FriendlyName}" Foreground="White" FontSize="12"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding MaxDpcMicroseconds, StringFormat='{}{0:F0}'}" 
+                                                    <TextBlock Grid.Column="0" Text="{Binding Name}" Foreground="White" FontSize="12"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding PeakDpcPercent, StringFormat='{}{0:F1}'}" 
                                                                Foreground="{Binding IsSpike, Converter={x:Static local:BoolToColorConverter.Instance}}" 
                                                                FontSize="12" TextAlignment="Right"/>
-                                                    <TextBlock Grid.Column="2" Text="{Binding AvgDpcMicroseconds, StringFormat='{}{0:F0}'}" 
+                                                    <TextBlock Grid.Column="2" Text="{Binding PeakInterruptPercent, StringFormat='{}{0:F1}'}" 
                                                                Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextAlignment="Right"/>
                                                     <Border Grid.Column="3" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
                                                             Background="{Binding IsSpike, Converter={x:Static local:BoolToBadgeConverter.Instance}}">

@@ -4,6 +4,15 @@ using System.Threading;
 
 namespace TuneUpEngine
 {
+    // Windows' physical-memory page lists, in bytes (what RAMMap shows).
+    public readonly record struct MemoryLists(long ZeroBytes, long FreeBytes, long ModifiedBytes, long StandbyBytes)
+    {
+        // Memory that is truly unused right now (free + zeroed pages).
+        public long UnusedBytes => ZeroBytes + FreeBytes;
+    }
+
+    public readonly record struct PurgeResult(bool Success, long FreedBytes, string? Error);
+
     public class StandbyListManager
     {
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
@@ -29,9 +38,28 @@ namespace TuneUpEngine
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 
+        [DllImport("ntdll.dll")]
+        private static extern int NtQuerySystemInformation(int infoClass, IntPtr buffer, int length, out int returnLength);
+
+        // SYSTEM_MEMORY_LIST_INFORMATION is 22 pointer-sized counters:
+        //   ZeroPageCount, FreePageCount, ModifiedPageCount, ModifiedNoWritePageCount, BadPageCount,
+        //   PageCountByPriority[8] (the standby list, by priority), RepurposedPagesByPriority[8],
+        //   ModifiedPageCountPageFile.
+        private const int MemoryListFieldCount = 22;
+        private const int StandbyFirstField = 5;
+        private const int StandbyFieldCount = 8;
+
+        // Auto-purge policy. Purging the standby list only helps when memory that is truly FREE is
+        // short while the standby cache holds plenty that could be given back. The old trigger was
+        // "available < 10%" — but "available" already includes the standby cache, so by the time it
+        // fired there was almost nothing left to purge, and it could fire every 5 seconds.
+        internal const double AutoPurgeUnusedBelowFraction = 0.10;   // free+zero pages < 10% of RAM
+        internal const double AutoPurgeStandbyAtLeastFraction = 0.10; // and standby >= 10% of RAM
+        internal static readonly TimeSpan AutoPurgeCooldown = TimeSpan.FromSeconds(60);
+        private DateTime _lastAutoPurge = DateTime.MinValue;
+
         private bool _isAutoPurging = false;
         private Thread _monitorThread;
-        private double _autoPurgeThreshold = 10.0; // Purge when free RAM < 10%
         private readonly object _lock = new object();
 
         public event Action<long> OnAutoPurgeTriggered;
@@ -64,38 +92,99 @@ namespace TuneUpEngine
             return (0, 0, 0);
         }
 
-        public long PurgeStandbyList()
+        // Reads the real page lists. Needs administrator rights (the engine has them); returns null
+        // when they can't be read — callers then show "unknown" rather than a guess.
+        public MemoryLists? GetMemoryLists()
+        {
+            NativeMethods.EnablePrivilege(NativeMethods.SE_PROFILE_SINGLE_PROCESS_NAME);
+
+            int size = MemoryListFieldCount * IntPtr.Size;
+            IntPtr buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                int status = NtQuerySystemInformation(NativeMethods.SystemMemoryListInformation, buffer, size, out _);
+                if (status != 0) return null;
+
+                long[] fields = new long[MemoryListFieldCount];
+                for (int i = 0; i < MemoryListFieldCount; i++)
+                    fields[i] = Marshal.ReadIntPtr(buffer, i * IntPtr.Size).ToInt64();
+
+                return FromPageCounts(fields, Environment.SystemPageSize);
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+
+        internal static MemoryLists FromPageCounts(long[] fields, long pageSize)
+        {
+            long standbyPages = 0;
+            for (int i = StandbyFirstField; i < StandbyFirstField + StandbyFieldCount; i++)
+                standbyPages += fields[i];
+
+            return new MemoryLists(
+                ZeroBytes: fields[0] * pageSize,
+                FreeBytes: fields[1] * pageSize,
+                ModifiedBytes: fields[2] * pageSize,
+                StandbyBytes: standbyPages * pageSize);
+        }
+
+        internal static bool ShouldAutoPurge(MemoryLists lists, ulong totalPhys, DateTime now, DateTime lastPurge)
+        {
+            if (totalPhys == 0) return false;
+            if (now - lastPurge < AutoPurgeCooldown) return false;
+            return lists.UnusedBytes < totalPhys * AutoPurgeUnusedBelowFraction &&
+                   lists.StandbyBytes >= totalPhys * AutoPurgeStandbyAtLeastFraction;
+        }
+
+        // Empties the standby list. "Freed" is how much the standby list actually shrank, measured
+        // from Windows' page lists — the old figure compared "available" memory before and after,
+        // and since available memory already counts the standby list it reported roughly zero.
+        public PurgeResult PurgeStandbyList()
         {
             lock (_lock)
             {
-                // Get memory before purge
-                var statusBefore = GetMemoryStatus();
-                if (statusBefore.TotalPhys == 0) return 0;
+                var before = GetMemoryLists();
 
-                // We need SeProfileSingleProcessPrivilege or SeIncreaseQuotaPrivilege to flush memory
-                bool priv1 = NativeMethods.EnablePrivilege(NativeMethods.SE_PROFILE_SINGLE_PROCESS_NAME);
-                bool priv2 = NativeMethods.EnablePrivilege(NativeMethods.SE_INCREASE_QUOTA_NAME);
+                NativeMethods.EnablePrivilege(NativeMethods.SE_PROFILE_SINGLE_PROCESS_NAME);
+                NativeMethods.EnablePrivilege(NativeMethods.SE_INCREASE_QUOTA_NAME);
 
                 int command = (int)NativeMethods.SYSTEM_MEMORY_LIST_COMMAND.MemoryPurgeStandbyList;
                 IntPtr pCommand = Marshal.AllocHGlobal(sizeof(int));
-                Marshal.WriteInt32(pCommand, command);
+                int ntStatus;
+                try
+                {
+                    Marshal.WriteInt32(pCommand, command);
+                    ntStatus = NativeMethods.NtSetSystemInformation(
+                        NativeMethods.SystemMemoryListInformation, pCommand, sizeof(int));
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(pCommand);
+                }
 
-                int ntStatus = NativeMethods.NtSetSystemInformation(
-                    NativeMethods.SystemMemoryListInformation,
-                    pCommand,
-                    sizeof(int)
-                );
+                if (ntStatus != 0)
+                {
+                    // 0xC0000061 = STATUS_PRIVILEGE_NOT_HELD: the engine isn't running elevated.
+                    string reason = unchecked((uint)ntStatus) == 0xC0000061
+                        ? "the engine is not running with administrator rights"
+                        : $"Windows returned 0x{ntStatus:X8}";
+                    return new PurgeResult(false, 0, $"Standby purge failed: {reason}.");
+                }
 
-                Marshal.FreeHGlobal(pCommand);
-
-                // Wait a brief moment for Windows to process page transitions
+                // Give Windows a moment to move the pages to the free list.
                 Thread.Sleep(100);
+                var after = GetMemoryLists();
 
-                // Get memory after purge
-                var statusAfter = GetMemoryStatus();
-                long freedBytes = (long)statusAfter.AvailPhys - (long)statusBefore.AvailPhys;
-
-                return freedBytes > 0 ? freedBytes : 0;
+                long freed = before.HasValue && after.HasValue
+                    ? Math.Max(0, before.Value.StandbyBytes - after.Value.StandbyBytes)
+                    : 0;
+                return new PurgeResult(true, freed, null);
             }
         }
 
@@ -113,12 +202,15 @@ namespace TuneUpEngine
                     }
 
                     var status = GetMemoryStatus();
-                    if (status.TotalPhys > 0 && status.FreePercent < _autoPurgeThreshold)
+                    var lists = GetMemoryLists();
+                    var now = DateTime.UtcNow;
+                    if (lists.HasValue && ShouldAutoPurge(lists.Value, status.TotalPhys, now, _lastAutoPurge))
                     {
-                        long freed = PurgeStandbyList();
-                        if (freed > 0)
+                        _lastAutoPurge = now;
+                        var result = PurgeStandbyList();
+                        if (result.Success && result.FreedBytes > 0)
                         {
-                            OnAutoPurgeTriggered?.Invoke(freed);
+                            OnAutoPurgeTriggered?.Invoke(result.FreedBytes);
                         }
                     }
 

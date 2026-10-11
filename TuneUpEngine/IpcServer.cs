@@ -35,6 +35,10 @@ namespace TuneUpEngine
         public bool AutoPurgeEnabled { get; set; }
         public bool GameModeEnabled { get; set; }
         public long TotalMemoryFreedBytes { get; set; }
+        // Real page-list sizes from Windows; -1 when they couldn't be read (never an estimate).
+        public long StandbyBytes { get; set; } = -1;
+        public long UnusedBytes { get; set; } = -1;   // free + zeroed pages
+        public long ModifiedBytes { get; set; } = -1;
         public List<string> EventLogs { get; set; }
     }
 
@@ -158,7 +162,7 @@ namespace TuneUpEngine
             _memoryManager.OnAutoPurgeTriggered += (bytesFreed) =>
             {
                 Interlocked.Add(ref _totalMemoryFreed, bytesFreed);
-                LogEvent($"[Memory] Standby list auto-purged. Freed {bytesFreed / (1024 * 1024):F1} MB");
+                LogEvent($"[Memory] Standby list auto-purged. Freed {bytesFreed / (1024.0 * 1024.0):F1} MB");
             };
             _gameMode.OnGameBoosted += (name, pid) =>
             {
@@ -178,7 +182,7 @@ namespace TuneUpEngine
             };
             _latencyAuditor.OnSpikeDetected += (record) =>
             {
-                LogEvent($"[LatencyAuditor] ⚠️ SPIKE: {record.FriendlyName} peaked at {record.MaxDpcMicroseconds:F0}µs DPC time");
+                LogEvent($"[LatencyAuditor] ⚠️ {record.Name} spent {record.CurrentDpcPercent + record.CurrentInterruptPercent:F1}% of its time on driver DPCs/interrupts");
             };
         }
 
@@ -480,6 +484,12 @@ namespace TuneUpEngine
                         TotalMemoryFreedBytes = Interlocked.Read(ref _totalMemoryFreed),
                         EventLogs = logs
                     };
+                    if (_memoryManager.GetMemoryLists() is MemoryLists lists)
+                    {
+                        stats.StandbyBytes = lists.StandbyBytes;
+                        stats.UnusedBytes = lists.UnusedBytes;
+                        stats.ModifiedBytes = lists.ModifiedBytes;
+                    }
 
                     SendResponse(writer, new IpcResponse
                     {
@@ -568,13 +578,19 @@ namespace TuneUpEngine
                     break;
 
                 case "PurgeStandbyList":
-                    long freedBytes = _memoryManager.PurgeStandbyList();
-                    Interlocked.Add(ref _totalMemoryFreed, freedBytes);
-                    LogEvent($"[Manual Purge] Purged standby list pages. Freed {freedBytes / (1024 * 1024):F1} MB");
+                    var purge = _memoryManager.PurgeStandbyList();
+                    if (!purge.Success)
+                    {
+                        LogEvent($"[Manual Purge] {purge.Error}");
+                        SendResponse(writer, new IpcResponse { Status = "Error", Message = purge.Error });
+                        break;
+                    }
+                    Interlocked.Add(ref _totalMemoryFreed, purge.FreedBytes);
+                    LogEvent($"[Manual Purge] Standby list emptied. Freed {purge.FreedBytes / (1024.0 * 1024.0):F1} MB");
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
-                        Payload = freedBytes.ToString()
+                        Payload = purge.FreedBytes.ToString()
                     });
                     break;
 

@@ -30,7 +30,8 @@ A professional-grade, high-performance Windows system optimization and maintenan
 
 ### ⚡ 1. Memory Health & Auto-Purging
 * **Standby List Flusher**: Purges inactive system standby memory instantly via the low-level `NtSetSystemInformation` native API (safe and non-destructive).
-* **Standby Auto-Purger**: Monitors physical RAM usage in a 5-second background loop. If free memory drops below 10%, it automatically flushes the standby list and logs the recovered space.
+* **Standby Auto-Purger**: Checks every 5 seconds and empties the standby list only when truly free memory is below 10% of RAM while the standby cache holds at least as much (at most once a minute), logging the measured amount freed.
+* **Driver DPC & Interrupt Load**: Per-core share of CPU time spent in driver DPCs and interrupts, from Windows performance counters, with peaks and averages. (Counters can't name the responsible driver; LatencyMon can.)
 
 ### 🧠 2. CPU ProBalance & Game Booster
 * **ProBalance Governor**: Automatically throttles abusive background applications consuming excessive CPU time by temporarily lowering their scheduling priority class, giving the active foreground application 100% responsiveness.

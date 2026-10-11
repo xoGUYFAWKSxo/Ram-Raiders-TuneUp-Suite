@@ -75,7 +75,7 @@ The Dashboard is the home screen and provides a live overview of system health, 
 |---|---|
 | **Free RAM %** | Percentage of physical RAM currently available to applications. |
 | **Free RAM (GB)** | Available vs. total physical memory in gigabytes. |
-| **Standby List Size** | Estimated size of Windows' standby memory cache (inactive pages held in RAM). High standby usage is normal but can be purged to free RAM for active applications. |
+| **Standby List Size** | The real size of Windows' standby cache (recently used file data kept in RAM), read from Windows' page lists — the same figure RAMMap shows. Shows "n/a" if it can't be read. A large standby list is normal and healthy. |
 | **Total Memory Freed** | Cumulative amount of RAM recovered by all standby list purges since the engine started. |
 
 ### Purge Standby Memory Button
@@ -87,7 +87,7 @@ Manually triggers an immediate flush of the Windows Standby List using the `NtSe
 | Toggle | What it controls |
 |---|---|
 | **ProBalance Monitoring** | Enables the ProBalance Governor — an automated background process that detects when non-foreground processes are consuming excessive CPU and temporarily lowers their priority class, giving the active foreground application more CPU time. Priority is restored the moment the offending process becomes the foreground window. |
-| **Standby Auto-Purge** | When enabled, the engine monitors free RAM every 30 seconds. If free RAM drops below 10% of total installed RAM, a standby list purge is automatically triggered. |
+| **Standby Auto-Purge** | When enabled, the engine checks every 5 seconds and empties the standby list only when truly free memory (free + zeroed pages) is below 10% of RAM **and** the standby cache holds at least 10% of RAM — at most once a minute. "Freed" figures are the measured shrink of the standby list. |
 | **Game Mode Booster** | When enabled, the engine monitors the active foreground window every second. If the active process is identified as a game (by executable name whitelist or install path heuristics), it receives High process priority and is pinned to all CPU cores except Core 0 (which is reserved for OS and driver interrupt handling). When the game loses focus, its priority is restored. |
 
 ### Event Log
@@ -221,7 +221,7 @@ Events are categorized by source:
 - `[GameMode]` — Game detection boost/restore events
 - `[Engine]` — Informational engine status messages
 - `[Downloader]` — Definition update events
-- `[LatencyAuditor]` — Real-time interrupt spike detections
+- `[LatencyAuditor]` — CPU cores spending 10%+ of their time on driver DPCs/interrupts
 
 The log retains the most recent 100 entries, rotating out older ones automatically.
 
