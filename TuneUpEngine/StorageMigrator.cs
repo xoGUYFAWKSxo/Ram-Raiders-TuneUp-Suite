@@ -47,11 +47,145 @@ namespace TuneUpEngine
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RamRaidersTuneUpSuite", "migration_history.json");
 
+        // ── Path safety ─────────────────────────────────────────────────────────
+
+        // Migration copies a folder and then recursively DELETES the original with administrator
+        // rights, and both paths arrive over IPC. These checks stop it from being pointed at the
+        // operating system, whole drives, or folders that contain other people's / the system's data.
+        // Returns null when the source is acceptable, otherwise a human-readable reason.
+        internal static string? ValidateSource(string? sourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath) || !Path.IsPathFullyQualified(sourcePath))
+                return "Source must be a full path (e.g. C:\\Games\\MyGame).";
+
+            string source;
+            try { source = Normalize(sourcePath); }
+            catch { return "The source path is not valid."; }
+
+            // Note: normalising "C:\" leaves it as "C:\" (the root keeps its separator), so compare
+            // against the normalised root rather than a trimmed one.
+            string? root = Path.GetPathRoot(source);
+            if (root != null && Normalize(root).Equals(source, StringComparison.OrdinalIgnoreCase))
+                return "A whole drive cannot be migrated.";
+
+            foreach (var protectedDir in ProtectedFolders())
+            {
+                // The source may not BE a protected folder, nor contain one (e.g. C:\Users).
+                if (IsSameOrInside(protectedDir, source))
+                    return $"'{source}' is or contains a protected system folder and cannot be migrated.";
+            }
+
+            foreach (var systemTree in SystemTrees())
+            {
+                // Nothing inside these trees may be moved at all.
+                if (IsSameOrInside(source, systemTree))
+                    return $"'{source}' is inside a protected system location and cannot be migrated.";
+            }
+
+            return null;
+        }
+
+        internal static string? ValidateDestination(string? sourcePath, string? destinationPath)
+        {
+            if (string.IsNullOrWhiteSpace(destinationPath) || !Path.IsPathFullyQualified(destinationPath))
+                return "Destination must be a full path.";
+
+            string destination, source;
+            try
+            {
+                destination = Normalize(destinationPath);
+                source = string.IsNullOrWhiteSpace(sourcePath) ? string.Empty : Normalize(sourcePath);
+            }
+            catch { return "The destination path is not valid."; }
+
+            // Copying a folder into itself recurses forever; copying it onto its own parent would
+            // then delete the copy along with the source.
+            if (IsSameOrInside(destination, source) || IsSameOrInside(source, destination))
+                return "Destination cannot be inside the source folder (or the other way round).";
+
+            foreach (var systemTree in SystemTrees())
+            {
+                if (IsSameOrInside(destination, systemTree))
+                    return $"'{destination}' is inside a protected system location.";
+            }
+
+            return null;
+        }
+
+        // .NET accepts characters Windows forbids in file names (e.g. '|', '?', '*'), so reject them
+        // explicitly — wildcards in particular must never reach a recursive delete.
+        private static readonly char[] ForbiddenPathChars = { '<', '>', '"', '|', '?', '*' };
+
+        private static string Normalize(string path)
+        {
+            string full = Path.GetFullPath(path);
+            // Skip the root ("C:\" or "\\?\") when looking for forbidden characters.
+            string afterRoot = full.Substring(Path.GetPathRoot(full)?.Length ?? 0);
+            if (afterRoot.IndexOfAny(ForbiddenPathChars) >= 0 || full.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+                throw new ArgumentException("Path contains characters that are not allowed.", nameof(path));
+            return Path.TrimEndingDirectorySeparator(full);
+        }
+
+        // True when 'path' equals 'container' or lies somewhere beneath it.
+        internal static bool IsSameOrInside(string path, string container)
+        {
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(container)) return false;
+            path = Normalize(path);
+            container = Normalize(container);
+            return path.Equals(container, StringComparison.OrdinalIgnoreCase) ||
+                   path.StartsWith(container + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Folders that must never be the source themselves, or be swallowed by a source.
+        // Their subfolders (e.g. a game under Program Files, a folder in Documents) are fine.
+        private static IEnumerable<string> ProtectedFolders()
+        {
+            var folders = new[]
+            {
+                Environment.SpecialFolder.ProgramFiles,
+                Environment.SpecialFolder.ProgramFilesX86,
+                Environment.SpecialFolder.CommonApplicationData, // C:\ProgramData
+                Environment.SpecialFolder.UserProfile,
+                Environment.SpecialFolder.ApplicationData,
+                Environment.SpecialFolder.LocalApplicationData,
+                Environment.SpecialFolder.MyDocuments,
+                Environment.SpecialFolder.Desktop,
+            }.Select(Environment.GetFolderPath)
+             .Append(Path.GetDirectoryName(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)) ?? "") // C:\Users
+             .Append(AppContext.BaseDirectory); // This app's own install folder
+
+            return folders.Where(f => !string.IsNullOrEmpty(f)).Select(Normalize);
+        }
+
+        // Locations where nothing at all may be moved, or moved into.
+        private static IEnumerable<string> SystemTrees()
+        {
+            string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            var trees = new List<string>();
+            if (!string.IsNullOrEmpty(windows))
+            {
+                trees.Add(windows);
+                string root = Path.GetPathRoot(windows) ?? "C:\\";
+                trees.Add(Path.Combine(root, "System Volume Information"));
+                trees.Add(Path.Combine(root, "$Recycle.Bin"));
+                trees.Add(Path.Combine(root, "Recovery"));
+            }
+            return trees.Select(Normalize);
+        }
+
         // ── Analysis ────────────────────────────────────────────────────────────
 
         public static MigrationAnalysis Analyze(string sourcePath)
         {
             var result = new MigrationAnalysis { SourcePath = sourcePath };
+
+            string? sourceError = ValidateSource(sourcePath);
+            if (sourceError != null)
+            {
+                result.SourceExists = !string.IsNullOrWhiteSpace(sourcePath) && Directory.Exists(sourcePath);
+                result.Error = sourceError;
+                return result;
+            }
 
             if (string.IsNullOrWhiteSpace(sourcePath) || !Directory.Exists(sourcePath))
             {
@@ -92,8 +226,17 @@ namespace TuneUpEngine
             Action<string, double> progressCallback, CancellationToken ct = default)
         {
             // Validate
+            string? pathError = ValidateSource(sourcePath) ?? ValidateDestination(sourcePath, destinationPath);
+            if (pathError != null)
+                return $"Error: {pathError}";
+
             if (!Directory.Exists(sourcePath))
                 return "Error: Source directory does not exist.";
+
+            // A source that is itself a link was already migrated; "copying" it would duplicate the
+            // target and then delete through the link.
+            if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0)
+                return "Error: Source is already a symbolic link — it was previously migrated.";
 
             string destParent = Path.GetDirectoryName(destinationPath);
             if (!Directory.Exists(destParent))

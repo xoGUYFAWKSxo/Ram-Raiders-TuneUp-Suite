@@ -24,6 +24,8 @@ namespace TuneUpEngine
 
     public class ScanItem : System.ComponentModel.INotifyPropertyChanged
     {
+        // Identifies this result to the engine's ResultStore. Cleaning sends back only these IDs.
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public string RuleName { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;
         public List<string> FilePaths { get; set; } = new List<string>();
@@ -71,6 +73,7 @@ namespace TuneUpEngine
 
         private readonly List<CleanRule> _rules = new List<CleanRule>();
         private readonly object _rulesLock = new object();
+        private readonly AdvancedScanner _hasher = new AdvancedScanner();
 
         public Winapp2Parser()
         {
@@ -391,8 +394,23 @@ namespace TuneUpEngine
                 progressCallback?.Invoke($"Cleaning {item.RuleName}", (count * 100) / items.Count);
                 count++;
 
+                // Duplicates are re-verified at delete time: files can change between scan and
+                // clean. If the copy we keep is gone or unreadable, deleting the "extras" would
+                // leave the user with no copy at all, so the whole set is skipped.
+                string? keptHash = null;
+                bool isDuplicateSet = item.Category == AdvancedScanner.DuplicateFilesCategory;
+                if (isDuplicateSet)
+                {
+                    string? kept = GetKeptDuplicate(item);
+                    keptHash = kept == null ? null : _hasher.GetFullHash(kept);
+                    if (keptHash == null) continue;
+                }
+
                 foreach (var path in GetDeletionTargets(item))
                 {
+                    if (isDuplicateSet && _hasher.GetFullHash(path) != keptHash)
+                        continue; // No longer identical to the kept copy — leave it alone.
+
                     if (path == "RECYCLE_BIN")
                     {
                         try
@@ -455,6 +473,14 @@ namespace TuneUpEngine
                 .ToList();
 
             return distinct.Count < 2 ? Enumerable.Empty<string>() : distinct.Skip(1);
+        }
+
+        // The copy of a duplicate set that cleaning keeps (the first listed path).
+        internal static string? GetKeptDuplicate(ScanItem item)
+        {
+            string? first = item?.FilePaths?.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
+            if (first == null) return null;
+            try { return Path.GetFullPath(first); } catch { return first; }
         }
 
         // Parses "FILE|<dir>|<pattern>", "FILE|<full path>" or "PATH|<dir>[|<pattern>]".

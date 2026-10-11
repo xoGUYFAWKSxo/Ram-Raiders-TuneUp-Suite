@@ -40,7 +40,8 @@ namespace TuneUpEngine
 
     public class IpcServer
     {
-        private const string PipeName = "TuneUpEnginePipe";
+        public const string DefaultPipeName = "TuneUpEnginePipe";
+        private readonly string _pipeName;
         private readonly ProBalanceGovernor _governor;
         private readonly StandbyListManager _memoryManager;
         private readonly Winapp2Parser _cleaner;
@@ -51,7 +52,27 @@ namespace TuneUpEngine
         private readonly LatencyAuditor _latencyAuditor;
         private readonly EngineSettings _settings;
         private Thread _serverThread;
-        private bool _isRunning = false;
+        private volatile bool _isRunning = false;
+
+        // ── Connection security ────────────────────────────────────────────────
+        // Extra accounts (besides the engine's own) allowed to open the pipe. The UI passes its own
+        // SID with --allow-sid when it launches the engine, which covers "over-the-shoulder" UAC,
+        // where the engine runs as a different (admin) account from the logged-in user.
+        private readonly IReadOnlyList<SecurityIdentifier> _allowedClientSids;
+        // In service mode the engine runs as SYSTEM, so "the engine's own account" doesn't include
+        // the desktop user; fall back to interactive logons (still filtered by ClientVerifier).
+        private readonly bool _allowInteractiveUsers;
+        private readonly IReadOnlyList<string> _trustedClientPaths;
+        private NamedPipeServerStream? _firstInstance;
+
+        // Requests are single JSON lines. Destructive commands now carry only IDs, so nothing
+        // legitimate comes close to this; it stops a client from making the elevated engine buffer
+        // an unbounded line in memory.
+        internal const int MaxRequestChars = 1024 * 1024;
+
+        // Results of the engine's own scans. Destructive commands refer to these by ID only.
+        private readonly ResultStore<ScanItem> _scanResults = new(item => item.Id);
+        private readonly ResultStore<RegistryIssue> _registryResults = new(issue => issue.Id);
 
         private readonly List<string> _eventLogs = new List<string>();
         private readonly object _logLock = new object();
@@ -74,8 +95,17 @@ namespace TuneUpEngine
             GameModeManager gameMode,
             Winapp2Downloader downloader,
             LatencyAuditor latencyAuditor,
-            EngineSettings settings)
+            EngineSettings settings,
+            IReadOnlyList<SecurityIdentifier>? allowedClientSids = null,
+            bool allowInteractiveUsers = false,
+            string pipeName = DefaultPipeName,  // Overridable so tests never touch the real engine's pipe
+            IReadOnlyList<string>? trustedClientPaths = null) // Test-only override of the trusted UI location(s)
         {
+            _pipeName = pipeName;
+            _allowedClientSids = allowedClientSids ?? Array.Empty<SecurityIdentifier>();
+            _allowInteractiveUsers = allowInteractiveUsers;
+            _trustedClientPaths = trustedClientPaths ?? ClientVerifier.TrustedClientPaths(AppContext.BaseDirectory);
+
             _governor = governor;
             _memoryManager = memoryManager;
             _cleaner = cleaner;
@@ -125,6 +155,14 @@ namespace TuneUpEngine
         public void Start()
         {
             if (_isRunning) return;
+
+            // Claim the pipe name before anything else can. FirstPipeInstance makes creation FAIL if
+            // a pipe with this name already exists — otherwise another program could create
+            // "TuneUpEnginePipe" first and the UI would unknowingly send its commands to it. A
+            // failure here also means a second engine is already running. Either way we must not
+            // start, so the exception propagates to the caller.
+            _firstInstance = CreatePipeInstance(firstInstance: true);
+
             _isRunning = true;
             _serverThread = new Thread(ServerLoop)
             {
@@ -146,68 +184,72 @@ namespace TuneUpEngine
             }
         }
 
+        // This pipe belongs to the ELEVATED engine, which deletes files, writes HKLM, changes
+        // services and runs DISM/SFC on request, so access is kept to the minimum:
+        //   * the engine's own account — FullControl, so it can create further pipe instances;
+        //   * any account the launching UI vouched for via --allow-sid — ReadWrite;
+        //   * in service mode only, interactive logons — ReadWrite (the engine runs as SYSTEM).
+        // Previously every interactive user could connect, i.e. any other person signed in to the
+        // same PC could drive this user's elevated engine. Low-integrity (sandboxed) processes are
+        // still blocked by the pipe's default medium mandatory label, and every connection is then
+        // checked by ClientVerifier.
+        private PipeSecurity BuildPipeSecurity()
+        {
+            var security = new PipeSecurity();
+
+            var currentUser = WindowsIdentity.GetCurrent().User;
+            if (currentUser != null)
+                security.AddAccessRule(new PipeAccessRule(currentUser, PipeAccessRights.FullControl, AccessControlType.Allow));
+
+            foreach (var sid in _allowedClientSids)
+                security.AddAccessRule(new PipeAccessRule(sid, PipeAccessRights.ReadWrite, AccessControlType.Allow));
+
+            if (_allowInteractiveUsers)
+            {
+                var interactiveSid = new SecurityIdentifier(WellKnownSidType.InteractiveSid, null);
+                security.AddAccessRule(new PipeAccessRule(interactiveSid, PipeAccessRights.ReadWrite, AccessControlType.Allow));
+            }
+
+            return security;
+        }
+
+        private NamedPipeServerStream CreatePipeInstance(bool firstInstance)
+        {
+            var options = PipeOptions.Asynchronous;
+            if (firstInstance) options |= PipeOptions.FirstPipeInstance;
+
+            return NamedPipeServerStreamAcl.Create(
+                _pipeName,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                options,
+                0,
+                0,
+                BuildPipeSecurity());
+        }
+
         private void ServerLoop()
         {
             while (_isRunning)
             {
                 try
                 {
-                    NamedPipeServerStream pipeServer;
-                    if (OperatingSystem.IsWindows())
-                    {
-                        var security = new PipeSecurity();
-
-                        // This pipe is owned by the ELEVATED engine and accepts commands that
-                        // delete files, write HKLM, disable services, remove AppX packages and
-                        // run DISM/SFC. Granting access to 'Everyone' (as a previous revision did)
-                        // would let ANY local process — including a low-privilege or sandboxed one —
-                        // drive the elevated engine, which is a local privilege-escalation vector.
-                        //
-                        // Instead we grant the minimum needed for the legitimate UI to connect:
-                        //   1. The engine's own identity (the user who launched/elevated it, or
-                        //      SYSTEM in service mode) FullControl, so the server can spin up
-                        //      additional concurrent pipe instances.
-                        //   2. Interactive logon users ReadWrite, so the desktop UI — which runs at
-                        //      the user's normal (non-elevated) integrity — can connect. The
-                        //      Interactive SID excludes remote, network, service, batch and
-                        //      anonymous logons. Low-integrity / sandboxed processes are additionally
-                        //      blocked by the pipe's default medium mandatory label (no write-up).
-                        var currentUser = WindowsIdentity.GetCurrent().User;
-                        if (currentUser != null)
-                        {
-                            security.AddAccessRule(new PipeAccessRule(
-                                currentUser,
-                                PipeAccessRights.FullControl,
-                                AccessControlType.Allow));
-                        }
-
-                        var interactiveSid = new SecurityIdentifier(WellKnownSidType.InteractiveSid, null);
-                        security.AddAccessRule(new PipeAccessRule(
-                            interactiveSid,
-                            PipeAccessRights.ReadWrite,
-                            AccessControlType.Allow));
-
-                        pipeServer = NamedPipeServerStreamAcl.Create(
-                            PipeName,
-                            PipeDirection.InOut,
-                            NamedPipeServerStream.MaxAllowedServerInstances,
-                            PipeTransmissionMode.Byte,
-                            PipeOptions.Asynchronous,
-                            0,
-                            0,
-                            security);
-                    }
-                    else
-                    {
-                        pipeServer = new NamedPipeServerStream(
-                            PipeName,
-                            PipeDirection.InOut,
-                            NamedPipeServerStream.MaxAllowedServerInstances,
-                            PipeTransmissionMode.Byte,
-                            PipeOptions.Asynchronous);
-                    }
+                    NamedPipeServerStream pipeServer = _firstInstance ?? CreatePipeInstance(firstInstance: false);
+                    _firstInstance = null;
 
                     pipeServer.WaitForConnection();
+
+                    // Only the genuine UI may issue commands; anything else is dropped unanswered.
+                    string? clientImage = ClientVerifier.GetClientImagePath(pipeServer);
+                    if (!ClientVerifier.IsTrustedClient(clientImage, _trustedClientPaths))
+                    {
+                        Console.WriteLine($"[Engine IPC] Rejected connection from untrusted client: {clientImage ?? "(unknown process)"}");
+                        LogEvent($"[Security] Rejected a connection from {Path.GetFileName(clientImage ?? "an unknown process")}");
+                        try { pipeServer.Disconnect(); } catch { }
+                        pipeServer.Dispose();
+                        continue;
+                    }
 
                     Console.WriteLine("[Engine IPC] A client has connected.");
 
@@ -223,6 +265,30 @@ namespace TuneUpEngine
             }
         }
 
+        // Reads one '\n'-terminated line, refusing lines longer than maxChars. Returns null at end
+        // of stream or when the limit is exceeded (tooLong tells the two apart).
+        internal static string? ReadLineBounded(TextReader reader, int maxChars, out bool tooLong)
+        {
+            tooLong = false;
+            var sb = new StringBuilder();
+            while (true)
+            {
+                int c = reader.Read();
+                if (c == -1) return sb.Length == 0 ? null : sb.ToString();
+                if (c == '\n')
+                {
+                    if (sb.Length > 0 && sb[sb.Length - 1] == '\r') sb.Length--;
+                    return sb.ToString();
+                }
+                if (sb.Length >= maxChars)
+                {
+                    tooLong = true;
+                    return null;
+                }
+                sb.Append((char)c);
+            }
+        }
+
         private void HandleClientSession(NamedPipeServerStream pipeServer)
         {
             using (pipeServer)
@@ -234,12 +300,19 @@ namespace TuneUpEngine
 
                     while (_isRunning && pipeServer.IsConnected)
                     {
-                        string requestLine = reader.ReadLine();
+                        string? requestLine = ReadLineBounded(reader, MaxRequestChars, out bool tooLong);
+                        if (tooLong)
+                        {
+                            SendResponse(writer, new IpcResponse { Status = "Error", Message = "Request too large." });
+                            break;
+                        }
                         if (string.IsNullOrEmpty(requestLine)) break;
 
                         try
                         {
                             var request = JsonSerializer.Deserialize<IpcRequest>(requestLine);
+                            if (request?.Command == null)
+                                throw new JsonException("Missing command.");
                             HandleRequest(request, writer);
                         }
                         catch (Exception ex)
@@ -330,7 +403,11 @@ namespace TuneUpEngine
                     break;
 
                 case "SetGovernorState":
-                    bool govEnabled = bool.Parse(request.Payload);
+                    if (!bool.TryParse(request.Payload, out bool govEnabled))
+                    {
+                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload for SetGovernorState" });
+                        break;
+                    }
                     _governor.IsEnabled = govEnabled;
                     _settings.ProBalanceEnabled = govEnabled;
                     _settings.Save();
@@ -339,7 +416,11 @@ namespace TuneUpEngine
                     break;
 
                 case "SetAutoPurgeState":
-                    bool purgeEnabled = bool.Parse(request.Payload);
+                    if (!bool.TryParse(request.Payload, out bool purgeEnabled))
+                    {
+                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload for SetAutoPurgeState" });
+                        break;
+                    }
                     _memoryManager.IsAutoPurging = purgeEnabled;
                     _settings.AutoPurgeEnabled = purgeEnabled;
                     _settings.Save();
@@ -348,7 +429,11 @@ namespace TuneUpEngine
                     break;
 
                 case "SetGameModeState":
-                    bool gameEnabled = bool.Parse(request.Payload);
+                    if (!bool.TryParse(request.Payload, out bool gameEnabled))
+                    {
+                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload for SetGameModeState" });
+                        break;
+                    }
                     _gameMode.IsEnabled = gameEnabled;
                     _settings.GameModeEnabled = gameEnabled;
                     _settings.Save();
@@ -419,6 +504,7 @@ namespace TuneUpEngine
                         });
                     });
 
+                    _scanResults.Replace("junk", scanResults);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -427,7 +513,14 @@ namespace TuneUpEngine
                     break;
 
                 case "CleanJunk":
-                    var cleanItems = JsonSerializer.Deserialize<List<ScanItem>>(request.Payload);
+                    // The payload is a list of result IDs from an earlier scan — never paths. Only
+                    // items the engine itself found can be cleaned; unknown IDs match nothing.
+                    var cleanItems = _scanResults.Take(JsonSerializer.Deserialize<List<string>>(request.Payload ?? "[]"));
+                    if (cleanItems.Count == 0)
+                    {
+                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Nothing to clean. The results may be out of date — please scan again." });
+                        break;
+                    }
                     var cleanBytes = _cleaner.Clean(cleanItems, (ruleName, percent) =>
                     {
                         SendResponse(writer, new IpcResponse
@@ -455,6 +548,7 @@ namespace TuneUpEngine
                             Message = msg
                         });
                     });
+                    _scanResults.Replace("emptyFolders", emptyFoldersResults);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -472,6 +566,7 @@ namespace TuneUpEngine
                             Message = msg
                         });
                     });
+                    _scanResults.Replace("duplicates", dupResults);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -490,6 +585,7 @@ namespace TuneUpEngine
                         });
                     });
 
+                    _registryResults.Replace("registry", regIssues);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -498,7 +594,13 @@ namespace TuneUpEngine
                     break;
 
                 case "RepairRegistry":
-                    var repairIssues = JsonSerializer.Deserialize<List<RegistryIssue>>(request.Payload);
+                    // As with CleanJunk: IDs from the engine's own scan only, never raw registry paths.
+                    var repairIssues = _registryResults.Take(JsonSerializer.Deserialize<List<string>>(request.Payload ?? "[]"));
+                    if (repairIssues.Count == 0)
+                    {
+                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Nothing to repair. The results may be out of date — please scan again." });
+                        break;
+                    }
                     _registryVerifier.Repair(repairIssues, (step, percent) =>
                     {
                         SendResponse(writer, new IpcResponse
@@ -596,7 +698,8 @@ namespace TuneUpEngine
                         {
                             string result = DebloatGuard.SetServiceState(parts2[0], disable);
                             LogEvent($"[DebloatGuard] {result}");
-                            SendResponse(writer, new IpcResponse { Status = "Success", Message = result });
+                            bool changed = !result.StartsWith("Refused") && !result.StartsWith("Failed");
+                            SendResponse(writer, new IpcResponse { Status = changed ? "Success" : "Error", Message = result });
                         }
                         else
                             SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload" });

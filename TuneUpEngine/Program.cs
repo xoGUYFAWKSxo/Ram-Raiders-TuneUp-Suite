@@ -23,15 +23,20 @@ namespace TuneUpEngine
             var downloader = new Winapp2Downloader();
             var latencyAuditor = new LatencyAuditor();
 
-            // Restore the user's last feature-toggle choices (falls back to sensible defaults on a
-            // first run: ProBalance on, AutoPurge off, GameMode on).
             // ProBalance must never throttle the game Game Mode has just boosted.
             governor.IsProcessExempt = pid => pid != 0 && pid == gameMode.BoostedProcessId;
 
+            // Restore the user's last feature-toggle choices (falls back to sensible defaults on a
+            // first run: ProBalance on, AutoPurge off, GameMode on). Enabling modules has side
+            // effects (Game Mode writes registry and boot settings), so in console mode this only
+            // happens after this instance has claimed the pipe — i.e. it is the only engine running.
             var engineSettings = EngineSettings.Load();
-            governor.IsEnabled = engineSettings.ProBalanceEnabled;
-            memoryManager.IsAutoPurging = engineSettings.AutoPurgeEnabled;
-            gameMode.IsEnabled = engineSettings.GameModeEnabled;
+            void ApplySavedModuleStates()
+            {
+                governor.IsEnabled = engineSettings.ProBalanceEnabled;
+                memoryManager.IsAutoPurging = engineSettings.AutoPurgeEnabled;
+                gameMode.IsEnabled = engineSettings.GameModeEnabled;
+            }
 
             // Load any previously synced winapp2.ini definitions on startup
             string winapp2Path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "winapp2.ini");
@@ -41,11 +46,14 @@ namespace TuneUpEngine
             }
 
             // 3. Initialize IPC Server
-            var ipcServer = new IpcServer(governor, memoryManager, cleaner, integrityAgent, registryVerifier, gameMode, downloader, latencyAuditor, engineSettings);
+            var ipcServer = new IpcServer(governor, memoryManager, cleaner, integrityAgent, registryVerifier, gameMode, downloader, latencyAuditor, engineSettings,
+                allowedClientSids: ParseAllowedSids(args),
+                allowInteractiveUsers: isServiceMode);
 
             if (isServiceMode)
             {
-                // Headless Windows Service Mode
+                // Headless Windows Service Mode (the Service Control Manager guarantees one instance)
+                ApplySavedModuleStates();
                 using (var service = new TuneUpService(governor, memoryManager, ipcServer))
                 {
                     ServiceBase.Run(service);
@@ -77,7 +85,23 @@ namespace TuneUpEngine
                 }
 
                 Console.WriteLine("[Engine] Initializing Named Pipe IPC Server...");
-                ipcServer.Start();
+                try
+                {
+                    ipcServer.Start();
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+                {
+                    // FirstPipeInstance failed: another engine — or some other program — already owns
+                    // the pipe name. Never run alongside it.
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("[Engine] The engine pipe is already in use (another TuneUp engine, or another program).");
+                    Console.WriteLine($"         {ex.Message}");
+                    Console.ResetColor();
+                    Environment.ExitCode = 1;
+                    return;
+                }
+
+                ApplySavedModuleStates();
 
                 Console.WriteLine("[Engine] Engine is fully loaded and running.");
                 Console.WriteLine("[Engine] Press Ctrl+C to terminate the engine service.");
@@ -92,6 +116,28 @@ namespace TuneUpEngine
 
                 keepAliveEvent.WaitOne();
             }
+        }
+
+        // "--allow-sid <SID>" (repeatable): extra accounts allowed to connect to the engine's pipe.
+        // The UI passes its own user's SID when launching the engine, so it can still connect when
+        // UAC elevation was done with a different administrator account. Malformed SIDs are ignored.
+        internal static List<SecurityIdentifier> ParseAllowedSids(string[] args)
+        {
+            var sids = new List<SecurityIdentifier>();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (!args[i].Equals("--allow-sid", StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    var sid = new SecurityIdentifier(args[i + 1]);
+                    // Only real user accounts — never broad groups such as Everyone or Users.
+                    if (sid.IsAccountSid()) sids.Add(sid);
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+            return sids;
         }
 
         private static bool IsRunningAsAdmin()

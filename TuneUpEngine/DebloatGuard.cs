@@ -157,8 +157,22 @@ namespace TuneUpEngine
             return results;
         }
 
+        // Only the services this tool lists may be changed. The name arrives over IPC; without this
+        // check any client could have the elevated engine stop and disable an arbitrary service
+        // (Windows Defender, the firewall, event logging…), and a name containing '\' would even
+        // address a different registry key under Services.
+        internal static bool IsManagedService(string? serviceName) =>
+            !string.IsNullOrEmpty(serviceName) &&
+            _targetServices.Any(s => s.Name.Equals(serviceName, StringComparison.OrdinalIgnoreCase));
+
         public static string SetServiceState(string serviceName, bool disable)
         {
+            if (!IsManagedService(serviceName))
+                return $"Refused: '{serviceName}' is not a service this tool manages.";
+
+            // Use the canonical spelling from our own list from here on.
+            serviceName = _targetServices.First(s => s.Name.Equals(serviceName, StringComparison.OrdinalIgnoreCase)).Name;
+
             try
             {
                 using var sc = new ServiceController(serviceName);
