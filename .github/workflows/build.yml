@@ -1,0 +1,61 @@
+# Builds the whole solution and runs the test suite on every pull request and on every push to
+# main, so a change is checked on a clean Windows machine before it is merged.
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token: this workflow only needs to check out the code.
+permissions:
+  contents: read
+
+# A newer push to the same branch/PR cancels the run it supersedes.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # WPF and the engine's Windows APIs (registry, named pipes, performance counters) need Windows.
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The projects target net11.0. Until .NET 11 is released, its SDK ships as a preview/RC
+      # build, so preview-quality SDKs must be allowed.
+      - name: Set up .NET 11
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Show SDK
+        run: dotnet --info
+
+      - name: Restore
+        run: dotnet restore TuneUpApp.slnx
+
+      - name: Build (Release)
+        run: dotnet build TuneUpApp.slnx --configuration Release --no-restore
+
+      # The tests only touch throwaway HKCU\Software\RRTU_Test_* keys, temp folders and
+      # test-only named pipes; system settings are never changed.
+      - name: Test
+        run: >
+          dotnet test TuneUpApp.slnx --configuration Release --no-build
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore

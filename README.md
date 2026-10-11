@@ -1,6 +1,6 @@
 # Ram Raiders TuneUp Suite
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
+[![Build and test](https://github.com/xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite/actions/workflows/build.yml/badge.svg)](https://github.com/xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite/actions/workflows/build.yml)
 [![Target Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](#)
 [![Language](https://img.shields.io/badge/language-C%23-violet.svg)](#)
 [![Framework](https://img.shields.io/badge/framework-.NET%2011%20%7C%20WPF-red.svg)](#)
