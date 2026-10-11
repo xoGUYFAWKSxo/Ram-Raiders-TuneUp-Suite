@@ -14,9 +14,16 @@ namespace TuneUpEngine
         public DateTime ScanTime { get; set; }
     }
 
+    public record RepairResult(bool Success, string Message);
+
     public class SystemIntegrityAgent
     {
-        private const string CbsLogPath = @"C:\Windows\Logs\CBS\CBS.log";
+        private static readonly string CbsLogPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Logs", "CBS", "CBS.log");
+
+        // Only the end of CBS.log is relevant (it grows to hundreds of MB); reading it whole on every
+        // scan was slow and memory-hungry.
+        internal const long CbsTailBytes = 8L * 1024 * 1024;
 
         public IntegrityReport ScanIntegrityLogs()
         {
@@ -38,7 +45,14 @@ namespace TuneUpEngine
                 using (var fs = new FileStream(CbsLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 using (var reader = new StreamReader(fs, Encoding.UTF8))
                 {
-                    // Read last 5000 lines to keep scan fast and relevant
+                    if (fs.Length > CbsTailBytes)
+                    {
+                        fs.Seek(-CbsTailBytes, SeekOrigin.End);
+                        reader.DiscardBufferedData();
+                        reader.ReadLine(); // Skip the partial line we landed in
+                    }
+
+                    // Keep the last 5000 lines of that tail
                     var lastLines = new Queue<string>(5000);
                     string line;
                     while ((line = reader.ReadLine()) != null)
@@ -84,29 +98,31 @@ namespace TuneUpEngine
             return report;
         }
 
-        public void RunIntegrityRepair(Action<string, double> progressCallback)
+        // Runs DISM RestoreHealth then SFC, and reports what actually happened. It used to report
+        // "complete" regardless of exit codes, so a failed repair looked like a successful one.
+        public RepairResult RunIntegrityRepair(Action<string, double> progressCallback)
         {
             try
             {
-                // Stage 1: Running DISM RestoreHealth
+                // Stage 1: DISM RestoreHealth (repairs the component store SFC restores files from)
                 progressCallback?.Invoke("Running DISM System Repair...", 0.0);
-                ExecuteCommand("dism.exe", "/Online /Cleanup-Image /RestoreHealth", (line) =>
+                int dismExit = ExecuteCommand("dism.exe", "/Online /Cleanup-Image /RestoreHealth", (line) =>
                 {
                     // Parse DISM progress, e.g. "[=================== 30.5% ===================]"
                     var match = Regex.Match(line, @"(\d+\.\d+)%");
-                    if (match.Success && double.TryParse(match.Groups[1].Value, out double percent))
+                    if (match.Success && double.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double percent))
                     {
                         progressCallback?.Invoke($"DISM Repair in Progress: {percent:F1}%", percent * 0.5); // Map to 0-50%
                     }
                 });
 
-                // Stage 2: Running SFC Scannow
-                // sfc.exe writes its output as UTF-16; without the matching encoding the text comes
-                // back full of NUL bytes and the progress regex below never matches.
+                // Stage 2: SFC. sfc.exe writes UTF-16; without the matching encoding the text comes
+                // back full of NUL bytes and neither progress nor the verdict can be read.
                 progressCallback?.Invoke("Running System File Checker (SFC)...", 50.0);
-                ExecuteCommand("sfc.exe", "/scannow", (line) =>
+                var sfcOutput = new StringBuilder();
+                int sfcExit = ExecuteCommand("sfc.exe", "/scannow", (line) =>
                 {
-                    // Parse SFC progress, e.g. "Verification 45% complete."
+                    sfcOutput.AppendLine(line);
                     var match = Regex.Match(line, @"Verification\s+(\d+)%\s+complete", RegexOptions.IgnoreCase);
                     if (match.Success && double.TryParse(match.Groups[1].Value, out double percent))
                     {
@@ -114,16 +130,47 @@ namespace TuneUpEngine
                     }
                 }, System.Text.Encoding.Unicode);
 
-                progressCallback?.Invoke("System Integrity Repair Complete", 100.0);
+                var result = Summarize(dismExit, sfcExit, sfcOutput.ToString());
+                progressCallback?.Invoke(result.Success ? "System Integrity Repair Complete" : "System Integrity Repair Finished With Problems", 100.0);
+                return result;
             }
             catch (Exception ex)
             {
-                progressCallback?.Invoke($"Repair failed: {ex.Message}", -1.0);
+                return new RepairResult(false, $"Repair could not run: {ex.Message}");
             }
         }
 
-        private void ExecuteCommand(string exe, string args, Action<string> outputLineCallback,
-            System.Text.Encoding outputEncoding = null)
+        // DISM: 0 = success, 3010 = success but a restart is needed; anything else failed.
+        // SFC: its exit code is unreliable, so its final verdict line is read (English Windows);
+        // on other languages the exit code is used.
+        internal static RepairResult Summarize(int dismExit, int sfcExit, string sfcOutput)
+        {
+            var parts = new List<string>();
+            bool ok = true;
+
+            if (dismExit == 0) parts.Add("DISM: component store is healthy or was repaired.");
+            else if (dismExit == 3010) parts.Add("DISM: repaired — restart required.");
+            else { ok = false; parts.Add($"DISM failed (exit code {dismExit}). Check C:\\Windows\\Logs\\DISM\\dism.log."); }
+
+            string sfc = sfcOutput.ToLowerInvariant();
+            if (sfc.Contains("did not find any integrity violations"))
+                parts.Add("SFC: no integrity violations found.");
+            else if (sfc.Contains("successfully repaired"))
+                parts.Add("SFC: found corrupt files and repaired them.");
+            else if (sfc.Contains("unable to fix some of them"))
+            { ok = false; parts.Add("SFC: found corrupt files it could NOT fully repair. Details are in CBS.log."); }
+            else if (sfc.Contains("could not perform the requested operation") || sfc.Contains("pending system repair"))
+            { ok = false; parts.Add("SFC could not run (a repair may be pending — restart and try again)."); }
+            else if (sfcExit != 0)
+            { ok = false; parts.Add($"SFC failed (exit code {sfcExit})."); }
+            else
+                parts.Add("SFC: completed.");
+
+            return new RepairResult(ok, string.Join(" ", parts));
+        }
+
+        private int ExecuteCommand(string exe, string args, Action<string> outputLineCallback,
+            System.Text.Encoding? outputEncoding = null)
         {
             var psi = new ProcessStartInfo
             {
@@ -173,6 +220,7 @@ namespace TuneUpEngine
             // Parameterless WaitForExit() also waits for the async output handlers to finish, so all
             // buffered output is delivered before this method returns.
             process.WaitForExit();
+            return process.ExitCode;
         }
 
         private string CleanLogLine(string rawLine)

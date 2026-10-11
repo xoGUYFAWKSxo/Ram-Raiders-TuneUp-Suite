@@ -51,11 +51,13 @@ namespace TuneUpEngine
         // ─── Curated Microsoft bloatware package family prefixes ──────────────────
         private static readonly (string FamilyPrefix, string FriendlyName, string Category)[] _curatedPackages =
         {
-            ("Microsoft.XboxApp",                   "Xbox App",                   "Microsoft Bloat"),
-            ("Microsoft.GamingApp",                 "Xbox Gaming Overlay",        "Microsoft Bloat"),
-            ("Microsoft.XboxGameOverlay",            "Xbox Game Overlay",          "Microsoft Bloat"),
-            ("Microsoft.XboxGamingOverlay",          "Xbox Gaming Services",       "Microsoft Bloat"),
-            ("Microsoft.XboxIdentityProvider",       "Xbox Identity Provider",     "Microsoft Bloat"),
+            // Labels corrected (GamingApp is the Xbox app, XboxGamingOverlay is Game Bar).
+            // Microsoft.XboxIdentityProvider is deliberately NOT listed: it handles Xbox / Game Pass
+            // sign-in inside PC games, and removing it breaks those games.
+            ("Microsoft.XboxApp",                   "Xbox Console Companion (legacy)", "Microsoft Bloat"),
+            ("Microsoft.GamingApp",                 "Xbox app",                   "Microsoft Bloat"),
+            ("Microsoft.XboxGameOverlay",            "Xbox Game Overlay (legacy)", "Microsoft Bloat"),
+            ("Microsoft.XboxGamingOverlay",          "Xbox Game Bar",              "Microsoft Bloat"),
             ("Microsoft.XboxSpeechToTextOverlay",    "Xbox Speech Overlay",        "Microsoft Bloat"),
             ("Microsoft.BingWeather",                "MSN Weather",                "Microsoft Bloat"),
             ("Microsoft.BingNews",                   "Microsoft Start (Bing News)", "Microsoft Bloat"),

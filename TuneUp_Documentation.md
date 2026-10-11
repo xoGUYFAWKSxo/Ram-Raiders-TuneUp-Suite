@@ -88,7 +88,7 @@ Manually triggers an immediate flush of the Windows Standby List using the `NtSe
 |---|---|
 | **ProBalance Monitoring** | Enables the ProBalance Governor — an automated background process that detects when non-foreground processes are consuming excessive CPU and temporarily lowers their priority class, giving the active foreground application more CPU time. Priority is restored the moment the offending process becomes the foreground window. |
 | **Standby Auto-Purge** | When enabled, the engine checks every 5 seconds and empties the standby list only when truly free memory (free + zeroed pages) is below 10% of RAM **and** the standby cache holds at least 10% of RAM — at most once a minute. "Freed" figures are the measured shrink of the standby list. |
-| **Game Mode Booster** | When enabled, the engine monitors the active foreground window every second. If the active process is identified as a game (by executable name whitelist or install path heuristics), it receives High process priority and is pinned to all CPU cores except Core 0 (which is reserved for OS and driver interrupt handling). When the game loses focus, its priority is restored. |
+| **Game Mode Booster** | When enabled, the engine monitors the active foreground window every second. If the active process is identified as a game (by executable name whitelist or install path heuristics), it receives High process priority. On hybrid CPUs (performance + efficiency cores) with at least three performance cores it is kept on the performance cores; on other CPUs it is not pinned, per Microsoft's guidance for games. When the game loses focus, its priority (and affinity) is restored. |
 
 ### Event Log
 
@@ -206,6 +206,8 @@ If corruption is detected, click this button to run a two-phase system repair:
 | **1** | `DISM /RestoreHealth` | Contacts Windows Update to download and restore the Windows component store (WinSxS), fixing the source files that SFC uses. |
 | **2** | `sfc /scannow` | System File Checker — scans all protected system files and replaces corrupted ones from the now-repaired component store. |
 
+The result shown afterwards is the real outcome: DISM's exit code (0 = healthy/repaired, 3010 = repaired, restart needed) and SFC's verdict (no violations / repaired / could not repair everything / could not run).
+
 ---
 
 ## 5. Live Monitor
@@ -285,7 +287,9 @@ A grid of quick-launch buttons that open built-in Windows administrative tools d
 **Navigation label:** Storage Tools  
 **Tab index:** 8
 
-Allows users to analyze their directories and migrate large folders (such as game folders or application data) to a different drive, establishing automatic, robust NTFS symbolic links in the background so Windows and launchers continue reading them seamlessly without needing reinstallation.
+Allows users to analyze their directories and migrate large folders (such as game folders or application data) to a different drive, establishing NTFS symbolic links so Windows and launchers continue reading them seamlessly without needing reinstallation.
+
+**How a migration stays safe:** files are copied and verified first; the original is then renamed aside (instant on the same drive), the link is created and checked, and only then is the original deleted. If the link can't be created, the rename is reversed and nothing changes. **Undo** on a history entry copies the folder back, verifies it, replaces the link with the real folder and removes the migrated copy.
 
 ---
 

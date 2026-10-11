@@ -120,7 +120,7 @@ namespace TuneUpEngine.Tests
             File.WriteAllText(Path.Combine(cache, "settings.json"), "keep me");
 
             string rule = "RRTU Test Exclude " + Guid.NewGuid().ToString("N");
-            var parser = new Winapp2Parser();
+            var parser = new Winapp2Parser(includeBuiltInRules: false);
             parser.LoadExternalWinapp2Ini(WriteIni(rule,
                 $"FileKey1={cache}|*.*\nExcludeKey1=FILE|{cache}\\|settings.json"));
 
@@ -137,7 +137,7 @@ namespace TuneUpEngine.Tests
 
             string rule = "RRTU Test Reload " + Guid.NewGuid().ToString("N");
             string ini = WriteIni(rule, $"FileKey1={cache}|*.*");
-            var parser = new Winapp2Parser();
+            var parser = new Winapp2Parser(includeBuiltInRules: false);
             parser.LoadExternalWinapp2Ini(ini);
             parser.LoadExternalWinapp2Ini(ini);
 
@@ -156,7 +156,7 @@ namespace TuneUpEngine.Tests
             CreateJunction(link, outside);
 
             string rule = "RRTU Test Junction " + Guid.NewGuid().ToString("N");
-            var parser = new Winapp2Parser();
+            var parser = new Winapp2Parser(includeBuiltInRules: false);
             parser.LoadExternalWinapp2Ini(WriteIni(rule, $"FileKey1={cache}|*.*|RECURSE"));
 
             var item = Assert.Single(ScanRule(parser, rule));
