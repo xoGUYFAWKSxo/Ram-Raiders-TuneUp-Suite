@@ -177,7 +177,7 @@ namespace TuneUpEngine.Tests
         [Fact]
         public void SetServiceState_RefusesUnlistedService_WithoutTouchingIt()
         {
-            Assert.StartsWith("Refused", DebloatGuard.SetServiceState("WinDefend", disable: true));
+            Assert.StartsWith("Refused", DebloatGuard.SetServiceState("WinDefend", disable: true, new ChangeJournal(null)));
         }
 
         [Fact]

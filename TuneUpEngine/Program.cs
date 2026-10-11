@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Principal;
 using System.ServiceProcess;
 using System.Threading;
@@ -13,13 +14,28 @@ namespace TuneUpEngine
             // 1. Check if launched in Windows Service mode
             bool isServiceMode = args.Length > 0 && args[0].Equals("--service", StringComparison.OrdinalIgnoreCase);
 
+            // The record of every system setting the engine has changed (ProgramData, admin-only).
+            var journal = ChangeJournal.CreateDefault();
+
+            // "--revert-all": undo every change this app has ever made, then exit. Used by the
+            // uninstaller (stop the engine first).
+            if (args.Any(a => a.Equals("--revert-all", StringComparison.OrdinalIgnoreCase)))
+            {
+                int failed = journal.ReleaseAll();
+                Console.WriteLine(failed == 0
+                    ? "[Engine] All changes reverted."
+                    : $"[Engine] {failed} change(s) could not be reverted.");
+                Environment.ExitCode = failed == 0 ? 0 : 1;
+                return;
+            }
+
             // 2. Initialize Engine Modules
             var governor = new ProBalanceGovernor();
             var memoryManager = new StandbyListManager();
             var cleaner = new Winapp2Parser();
             var integrityAgent = new SystemIntegrityAgent();
             var registryVerifier = new RegistryVerifier();
-            var gameMode = new GameModeManager();
+            var gameMode = new GameModeManager(journal);
             var downloader = new Winapp2Downloader();
             var latencyAuditor = new LatencyAuditor();
 
@@ -33,6 +49,12 @@ namespace TuneUpEngine
             var engineSettings = EngineSettings.Load();
             void ApplySavedModuleStates()
             {
+                // Crash recovery first: anything that was only meant to last while the previous
+                // engine was running (e.g. the power plan switched for a boosted game) is undone,
+                // and restores that failed last time (e.g. a user hive that wasn't loaded) retried.
+                journal.ReleaseTransient();
+                journal.RetryPendingRestores();
+
                 governor.IsEnabled = engineSettings.ProBalanceEnabled;
                 memoryManager.IsAutoPurging = engineSettings.AutoPurgeEnabled;
                 gameMode.IsEnabled = engineSettings.GameModeEnabled;
@@ -48,13 +70,27 @@ namespace TuneUpEngine
             // 3. Initialize IPC Server
             var ipcServer = new IpcServer(governor, memoryManager, cleaner, integrityAgent, registryVerifier, gameMode, downloader, latencyAuditor, engineSettings,
                 allowedClientSids: ParseAllowedSids(args),
-                allowInteractiveUsers: isServiceMode);
+                allowInteractiveUsers: isServiceMode,
+                journal: journal);
+
+            // On any orderly exit, hand back everything temporary: the boosted game's priority and
+            // the power plan, and every process ProBalance throttled. (Turning the governor off here
+            // is not saved as the user's preference.) Persistent tweaks stay applied by design.
+            int cleanedUp = 0;
+            void ReleaseTemporaryChanges()
+            {
+                if (Interlocked.Exchange(ref cleanedUp, 1) == 1) return;
+                gameMode.EndActiveBoost();
+                governor.IsEnabled = false;
+                journal.ReleaseTransient();
+            }
+            ipcServer.ShuttingDown += ReleaseTemporaryChanges;
 
             if (isServiceMode)
             {
                 // Headless Windows Service Mode (the Service Control Manager guarantees one instance)
                 ApplySavedModuleStates();
-                using (var service = new TuneUpService(governor, memoryManager, ipcServer))
+                using (var service = new TuneUpService(governor, memoryManager, ipcServer, ReleaseTemporaryChanges))
                 {
                     ServiceBase.Run(service);
                 }
@@ -111,6 +147,9 @@ namespace TuneUpEngine
                 Console.CancelKeyPress += (sender, e) =>
                 {
                     Console.WriteLine("[Engine] Terminating engine background service...");
+                    // Clean up before exiting rather than letting Ctrl+C kill the process mid-way.
+                    e.Cancel = true;
+                    ReleaseTemporaryChanges();
                     keepAliveEvent.Set();
                 };
 

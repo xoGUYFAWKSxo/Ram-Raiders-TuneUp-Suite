@@ -165,13 +165,26 @@ namespace TuneUpEngine
             !string.IsNullOrEmpty(serviceName) &&
             _targetServices.Any(s => s.Name.Equals(serviceName, StringComparison.OrdinalIgnoreCase));
 
-        public static string SetServiceState(string serviceName, bool disable)
+        // Windows' own start type for each managed service (2 = Automatic, 3 = Manual). Only used to
+        // re-enable a service that was disabled before the change journal existed.
+        private static readonly Dictionary<string, int> _windowsDefaultStart = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DiagTrack"] = 2,
+            ["dmwappushservice"] = 3,
+            ["SysMain"] = 2,
+        };
+
+        internal static string JournalOwnerFor(string serviceName) => $"service:{serviceName}";
+
+        public static string SetServiceState(string serviceName, bool disable, ChangeJournal journal)
         {
             if (!IsManagedService(serviceName))
                 return $"Refused: '{serviceName}' is not a service this tool manages.";
 
             // Use the canonical spelling from our own list from here on.
             serviceName = _targetServices.First(s => s.Name.Equals(serviceName, StringComparison.OrdinalIgnoreCase)).Name;
+            string serviceKey = $@"SYSTEM\CurrentControlSet\Services\{serviceName}";
+            string owner = JournalOwnerFor(serviceName);
 
             try
             {
@@ -179,23 +192,46 @@ namespace TuneUpEngine
 
                 if (disable)
                 {
+                    // Record the user's own start type (and delayed-start flag) before changing it.
+                    if (!journal.CaptureRegistryValue(owner, RegistryHive.LocalMachine, serviceKey, "Start") ||
+                        !journal.CaptureRegistryValue(owner, RegistryHive.LocalMachine, serviceKey, "DelayedAutostart"))
+                    {
+                        journal.Release(owner);
+                        return $"Failed to change '{serviceName}': its current start type couldn't be recorded, so nothing was changed.";
+                    }
+
                     if (sc.Status == ServiceControllerStatus.Running)
                         sc.Stop();
 
-                    // Change startup type to Disabled via registry
-                    using var key = Registry.LocalMachine.OpenSubKey(
-                        $@"SYSTEM\CurrentControlSet\Services\{serviceName}", writable: true);
+                    using var key = Registry.LocalMachine.OpenSubKey(serviceKey, writable: true);
                     key?.SetValue("Start", 4, RegistryValueKind.DWord);
                     return $"Service '{serviceName}' stopped and disabled.";
                 }
+
+                // Re-enable: put back exactly the start type the user had. Previously this always
+                // set Manual, so an Automatic service (e.g. SysMain) never came back on its own.
+                if (journal.IsOwned(owner))
+                {
+                    if (journal.Release(owner) > 0)
+                        return $"Failed to change '{serviceName}': its previous start type couldn't be restored yet.";
+                }
                 else
                 {
-                    using var key = Registry.LocalMachine.OpenSubKey(
-                        $@"SYSTEM\CurrentControlSet\Services\{serviceName}", writable: true);
-                    key?.SetValue("Start", 3, RegistryValueKind.DWord); // Manual
-                    sc.Start();
-                    return $"Service '{serviceName}' re-enabled and started.";
+                    using var key = Registry.LocalMachine.OpenSubKey(serviceKey, writable: true);
+                    key?.SetValue("Start", _windowsDefaultStart.GetValueOrDefault(serviceName, 3), RegistryValueKind.DWord);
                 }
+
+                int startType;
+                using (var key = Registry.LocalMachine.OpenSubKey(serviceKey))
+                    startType = key?.GetValue("Start") as int? ?? 3;
+
+                if (startType == 4)
+                    return $"Service '{serviceName}' restored to its previous start type (Disabled).";
+
+                sc.Refresh();
+                if (sc.Status == ServiceControllerStatus.Stopped)
+                    sc.Start();
+                return $"Service '{serviceName}' re-enabled with its previous start type and started.";
             }
             catch (Exception ex)
             {

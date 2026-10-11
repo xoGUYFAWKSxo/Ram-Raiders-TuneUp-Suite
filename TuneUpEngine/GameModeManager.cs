@@ -31,7 +31,19 @@ namespace TuneUpEngine
         // PID of the game currently boosted (0 when none). Read by ProBalance so it never throttles it.
         public int BoostedProcessId => _lastBoostedPid;
 
-        private string _originalPowerPlanGuid = "";
+        // Every system setting Game Mode changes is recorded in the change journal first, so turning
+        // Game Mode off restores the user's real previous values — even after a crash or reboot.
+        // (Previously the originals were cached in memory only: closing the engine lost them, and
+        // the next start then cached the already-tweaked values as the "originals".)
+        private const string JournalOwner = "gamemode";
+        // Changes that only apply while a game is boosted. Transient: undone on the next engine
+        // start if the engine died mid-game.
+        private const string BoostJournalOwner = "gamemode-boost";
+        private readonly ChangeJournal _journal;
+
+        private const string MmcssProfileKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
+        private const string GamesTaskKey = MmcssProfileKey + @"\Tasks\Games";
+        private const string KernelKey = @"SYSTEM\CurrentControlSet\Control\Session Manager\kernel";
 
         // e9a42b02-… is Windows' hidden Ultimate Performance *template*. `powercfg -duplicatescheme`
         // copies it to a brand-new random GUID, so the template GUID normally never appears in
@@ -41,9 +53,6 @@ namespace TuneUpEngine
         private const string UltimateTemplateGuid = "e9a42b02-d5df-448d-aa00-03f14749eb61";
         private const string AppUltimatePlanGuid = "5c6a6e1d-7b0a-4d8e-9f3a-52a1d0c7e4b9";
         private string _ultimatePlanGuid = ""; // Resolved plan to activate while a game is boosted
-        private int _cachedSystemResponsiveness = 20;
-        private int _cachedGpuPriority = 8;
-        private int _cachedGamePriority = 2;
 
         // Dynamic game path keywords
         private readonly List<string> _gameKeywords = new List<string>
@@ -61,6 +70,12 @@ namespace TuneUpEngine
 
         public event Action<string, int> OnGameBoosted;
         public event Action<string, int> OnGameBoostRestored;
+
+        // journal == null keeps an in-memory journal (tests); the engine passes the persisted one.
+        public GameModeManager(ChangeJournal? journal = null)
+        {
+            _journal = journal ?? new ChangeJournal(null);
+        }
 
         public bool IsEnabled
         {
@@ -92,47 +107,24 @@ namespace TuneUpEngine
         {
             try
             {
+                if (!_journal.IsOwned(JournalOwner))
+                    ResetStateLeftByOlderVersion();
+
                 // 1. MMCSS SystemResponsiveness
-                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", true))
-                {
-                    if (key != null)
-                    {
-                        object val = key.GetValue("SystemResponsiveness");
-                        if (val != null) _cachedSystemResponsiveness = (int)val;
-                        key.SetValue("SystemResponsiveness", 0, RegistryValueKind.DWord);
-                    }
-                }
+                SetJournaledDword(MmcssProfileKey, "SystemResponsiveness", 0);
 
                 // 2. MMCSS Game Tasks Priority
-                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", true))
-                {
-                    if (key != null)
-                    {
-                        object gpuVal = key.GetValue("GPU Priority");
-                        object prioVal = key.GetValue("Priority");
-                        if (gpuVal != null) _cachedGpuPriority = (int)gpuVal;
-                        if (prioVal != null) _cachedGamePriority = (int)prioVal;
+                SetJournaledDword(GamesTaskKey, "GPU Priority", 8);
+                SetJournaledDword(GamesTaskKey, "Priority", 6);
 
-                        key.SetValue("GPU Priority", 8, RegistryValueKind.DWord);
-                        key.SetValue("Priority", 6, RegistryValueKind.DWord);
-                    }
-                }
+                // 3. Kernel Timer Resolution (now also reverted — it previously never was)
+                SetJournaledDword(KernelKey, "GlobalTimerResolutionRequests", 1, createKey: true);
 
-                // 3. Kernel Timer Resolution
-                using (var key = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\kernel"))
-                {
-                    key.SetValue("GlobalTimerResolutionRequests", 1, RegistryValueKind.DWord);
-                }
+                // 4. BCDEdit Dynamic Tick. Reverting deletes the value if it wasn't set before,
+                // rather than writing "no" (which left a non-default boot setting behind).
+                if (_journal.CaptureBcd(JournalOwner, "disabledynamictick"))
+                    _journal.Commands.SetBcdValue("disabledynamictick", "yes");
 
-                // 4. BCDEdit Dynamic Tick
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "bcdedit",
-                    Arguments = "/set disabledynamictick yes",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                })?.WaitForExit();
-                
                 // 5. Ultimate Power Plan — resolve (creating it at most once) the plan to activate
                 // while a game is boosted.
                 _ultimatePlanGuid = EnsureUltimatePlan();
@@ -143,32 +135,60 @@ namespace TuneUpEngine
             }
         }
 
+        private void SetJournaledDword(string keyPath, string valueName, int value, bool createKey = false)
+        {
+            if (!createKey)
+            {
+                using var existing = Registry.LocalMachine.OpenSubKey(keyPath);
+                if (existing == null) return; // Only adjust MMCSS values on systems that have them.
+            }
+
+            if (!_journal.CaptureRegistryValue(JournalOwner, RegistryHive.LocalMachine, keyPath, valueName))
+                return; // Original couldn't be recorded — don't make a change we couldn't undo.
+
+            using var key = Registry.LocalMachine.CreateSubKey(keyPath);
+            key.SetValue(valueName, value, RegistryValueKind.DWord);
+        }
+
+        // Versions before the change journal applied Game Mode's settings without recording the
+        // originals. If they are still in place with no journal entry, recording them now would
+        // make "revert" restore the tweaked values. Recognise that exact signature and put the
+        // Windows defaults back first, so those become the recorded originals.
+        private void ResetStateLeftByOlderVersion()
+        {
+            using var profile = Registry.LocalMachine.OpenSubKey(MmcssProfileKey, writable: true);
+            using var games = Registry.LocalMachine.OpenSubKey(GamesTaskKey, writable: true);
+            if (profile == null || games == null) return;
+
+            bool looksLegacyApplied =
+                profile.GetValue("SystemResponsiveness") is int sr && sr == 0 &&
+                games.GetValue("GPU Priority") is int gpu && gpu == 8 &&
+                games.GetValue("Priority") is int prio && prio == 6;
+            if (!looksLegacyApplied) return;
+
+            Console.WriteLine("[GameMode] Found settings left by an older version; restoring Windows defaults before recording originals.");
+            profile.SetValue("SystemResponsiveness", 20, RegistryValueKind.DWord);
+            games.SetValue("Priority", 2, RegistryValueKind.DWord);
+            using (var kernel = Registry.LocalMachine.OpenSubKey(KernelKey, writable: true))
+                kernel?.DeleteValue("GlobalTimerResolutionRequests", throwOnMissingValue: false);
+            _journal.Commands.DeleteBcdValue("disabledynamictick");
+        }
+
         private void RevertGlobalTweaks()
         {
-            try
-            {
-                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", true))
-                {
-                    key?.SetValue("SystemResponsiveness", _cachedSystemResponsiveness, RegistryValueKind.DWord);
-                }
+            int failed = _journal.Release(JournalOwner);
+            if (failed > 0)
+                Console.WriteLine($"[GameMode] {failed} setting(s) could not be restored yet; they will be retried on the next engine start.");
+        }
 
-                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", true))
-                {
-                    key?.SetValue("GPU Priority", _cachedGpuPriority, RegistryValueKind.DWord);
-                    key?.SetValue("Priority", _cachedGamePriority, RegistryValueKind.DWord);
-                }
-
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "bcdedit",
-                    Arguments = "/set disabledynamictick no",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                })?.WaitForExit();
-            }
-            catch (Exception ex)
+        // Called when the engine shuts down: hand the boosted game and the power plan back. Game
+        // Mode's persistent settings stay (the feature is still on); they're reverted when the
+        // user switches Game Mode off.
+        public void EndActiveBoost()
+        {
+            lock (_lock)
             {
-                Debug.WriteLine($"[GameMode] Failed to revert global tweaks: {ex.Message}");
+                RestoreLastBoosted();
             }
         }
 
@@ -271,10 +291,10 @@ namespace TuneUpEngine
                             _lastBoostedName = procName;
                             
                             // Apply Active Enhancements
-                            if (!string.IsNullOrEmpty(_ultimatePlanGuid))
+                            if (!string.IsNullOrEmpty(_ultimatePlanGuid) &&
+                                _journal.CapturePowerPlan(BoostJournalOwner, transient: true))
                             {
-                                _originalPowerPlanGuid = GetActivePowerPlanGuid();
-                                SetPowerPlan(_ultimatePlanGuid);
+                                _journal.Commands.SetActivePowerPlan(_ultimatePlanGuid);
                             }
                             NtSetTimerResolution(5000, true, out uint _); // 0.5ms Timer
 
@@ -335,11 +355,7 @@ namespace TuneUpEngine
             {
                 // Revert Active Enhancements
                 NtSetTimerResolution(5000, false, out uint _);
-                if (!string.IsNullOrEmpty(_originalPowerPlanGuid))
-                {
-                    SetPowerPlan(_originalPowerPlanGuid);
-                    _originalPowerPlanGuid = "";
-                }
+                _journal.Release(BoostJournalOwner); // Back to the user's own power plan
 
                 using (var proc = Process.GetProcessById(_lastBoostedPid))
                 {
@@ -442,54 +458,6 @@ namespace TuneUpEngine
                     UseShellExecute = false,
                     CreateNoWindow = true
                 })?.WaitForExit(10000);
-            }
-            catch { }
-        }
-
-        private string GetActivePowerPlanGuid()
-        {
-            try
-            {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "powercfg",
-                        Arguments = "/getactivescheme",
-                        RedirectStandardOutput = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                process.Start();
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
-                
-                if (output.Contains("GUID:"))
-                {
-                    int startIndex = output.IndexOf("GUID:") + 5;
-                    int endIndex = output.IndexOf("(", startIndex);
-                    if (endIndex > startIndex)
-                    {
-                        return output.Substring(startIndex, endIndex - startIndex).Trim();
-                    }
-                }
-            }
-            catch { }
-            return "";
-        }
-
-        private void SetPowerPlan(string guid)
-        {
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "powercfg",
-                    Arguments = $"-setactive {guid}",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                })?.WaitForExit();
             }
             catch { }
         }

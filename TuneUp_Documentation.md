@@ -293,6 +293,9 @@ Allows users to analyze their directories and migrate large folders (such as gam
 | **Act on scan results only** | Cleaning and registry repair send back only the IDs of items the engine's own scan found — never file paths or registry keys — so the engine cannot be asked to delete arbitrary data. Each ID can be used once. |
 | **Duplicate re-verification** | Before deleting an extra copy of a duplicate, the engine re-hashes it and the kept copy; if the kept copy is missing or the files no longer match, nothing in that set is deleted. |
 | **Allowlists** | Service changes are limited to the services listed in OS Tweaks, AppX removal to the curated/OEM package list, and Storage Migrator refuses drive roots, Windows, `Program Files`/`ProgramData`/`Users` themselves, your profile root, and destinations inside the source. |
+| **Change journal (exact undo)** | Before changing any system setting — registry tweaks, Game Mode's MMCSS/timer/boot settings, the power plan, TCP settings, service start types, MSI mode — the engine records the original value in `%ProgramData%\RamRaidersTuneUpSuite\change_journal.json` (writable only by Administrators/SYSTEM). Switching a feature off restores the values you actually had, even after a crash or reboot. A setting shared by two features is restored only when both are off. |
+| **Crash recovery** | Changes meant to last only while a game is boosted (the power plan) are undone automatically on the next engine start if the engine stopped unexpectedly. Closing the app hands back the boosted game's priority, the power plan and any processes ProBalance throttled. |
+| **Full revert** | `TuneUpEngine.exe --revert-all` (run as administrator, with the engine stopped) undoes every change the app has recorded. |
 
 ---
 

@@ -87,7 +87,9 @@ namespace TuneUpEngine
             }
         }
 
-        public static string EnableMSI()
+        internal const string JournalOwner = "msi";
+
+        public static string EnableMSI(ChangeJournal journal)
         {
             int updatedCount = 0;
             int skipped = 0;
@@ -124,15 +126,26 @@ namespace TuneUpEngine
                             using var imKey = paramKey.OpenSubKey("Interrupt Management", writable: true);
                             if (imKey == null) { skipped++; continue; }
 
+                            string msiKeyPath =
+                                $@"{PciRoot}\{devId}\{instId}\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties";
+
+                            // Record the true original in the change journal BEFORE writing. The
+                            // journal keeps the first original it sees, so running Enable twice no
+                            // longer makes "revert" restore the already-enabled value.
+                            if (!journal.CaptureRegistryValue(JournalOwner, RegistryHive.LocalMachine, msiKeyPath, "MSISupported"))
+                            {
+                                skipped++;
+                                continue;
+                            }
+
                             using var msiKey = imKey.CreateSubKey("MessageSignaledInterruptProperties");
                             if (msiKey == null) { skipped++; continue; }
 
-                            // Record the prior state BEFORE writing, so this run can be reverted.
+                            // Also keep the human-readable backup file the user can inspect.
                             object existing = msiKey.GetValue("MSISupported");
                             backup.Add(new MsiBackupEntry
                             {
-                                MsiPropertiesKeyPath =
-                                    $@"{PciRoot}\{devId}\{instId}\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties",
+                                MsiPropertiesKeyPath = msiKeyPath,
                                 DeviceDesc = devDesc.Contains(';') ? devDesc.Split(';')[^1] : devDesc,
                                 HadValue = existing != null,
                                 PreviousValue = existing is int v ? v : 0
@@ -162,10 +175,19 @@ namespace TuneUpEngine
 
         // Restores MSISupported to its pre-tweak state using the most recent backup: the value is
         // either set back to what it was, or removed entirely if we were the ones who created it.
-        public static string RevertMSI()
+        public static string RevertMSI(ChangeJournal journal)
         {
             try
             {
+                if (journal.IsOwned(JournalOwner))
+                {
+                    int failed = journal.Release(JournalOwner);
+                    return failed == 0
+                        ? "Success: Restored every device's original MSI setting. Reboot required."
+                        : $"Error: {failed} device setting(s) could not be restored yet; they will be retried on the next engine start.";
+                }
+
+                // Enabled by a version without the change journal: fall back to the backup files.
                 if (!Directory.Exists(BackupDir))
                     return "No MSI backup found to revert.";
 

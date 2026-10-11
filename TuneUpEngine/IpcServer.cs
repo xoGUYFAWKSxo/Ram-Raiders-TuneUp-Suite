@@ -51,6 +51,13 @@ namespace TuneUpEngine
         private readonly Winapp2Downloader _downloader;
         private readonly LatencyAuditor _latencyAuditor;
         private readonly EngineSettings _settings;
+        // Records the original value of every system setting the engine changes, so each change
+        // can be undone exactly (see ChangeJournal).
+        private readonly ChangeJournal _journal;
+
+        // Raised just before the engine exits on a ShutdownEngine request, so the host can hand
+        // back anything temporary (boosted game priority, power plan, throttled processes).
+        public event Action? ShuttingDown;
         private Thread _serverThread;
         private volatile bool _isRunning = false;
 
@@ -99,8 +106,11 @@ namespace TuneUpEngine
             IReadOnlyList<SecurityIdentifier>? allowedClientSids = null,
             bool allowInteractiveUsers = false,
             string pipeName = DefaultPipeName,  // Overridable so tests never touch the real engine's pipe
-            IReadOnlyList<string>? trustedClientPaths = null) // Test-only override of the trusted UI location(s)
+            IReadOnlyList<string>? trustedClientPaths = null, // Test-only override of the trusted UI location(s)
+            ChangeJournal? journal = null)
         {
+            _journal = journal ?? new ChangeJournal(null);
+            _journal.OnLog += msg => LogEvent(msg);
             _pipeName = pipeName;
             _allowedClientSids = allowedClientSids ?? Array.Empty<SecurityIdentifier>();
             _allowInteractiveUsers = allowInteractiveUsers;
@@ -447,13 +457,13 @@ namespace TuneUpEngine
                     break;
 
                 case "ProvisionMSIInterrupts":
-                    string provisionResult = HardwareController.EnableMSI();
+                    string provisionResult = HardwareController.EnableMSI(_journal);
                     LogEvent($"MSI Provisioning Executed: {provisionResult}");
                     SendResponse(writer, new IpcResponse { Status = "Success", Payload = provisionResult });
                     break;
 
                 case "RevertMSIInterrupts":
-                    string msiRevertResult = HardwareController.RevertMSI();
+                    string msiRevertResult = HardwareController.RevertMSI(_journal);
                     LogEvent($"MSI Revert Executed: {msiRevertResult}");
                     SendResponse(writer, new IpcResponse
                     {
@@ -655,7 +665,7 @@ namespace TuneUpEngine
                         var parts = request.Payload.Split('|');
                         if (parts.Length == 2 && bool.TryParse(parts[1], out bool enable))
                         {
-                            bool ok = RegistryTweaker.SetTweakStatus(parts[0], enable);
+                            bool ok = RegistryTweaker.SetTweakStatus(parts[0], enable, _journal);
                             SendResponse(writer, new IpcResponse { Status = ok ? "Success" : "Error" });
                             break;
                         }
@@ -696,7 +706,7 @@ namespace TuneUpEngine
                         var parts2 = request.Payload?.Split('|');
                         if (parts2?.Length == 2 && bool.TryParse(parts2[1], out bool disable))
                         {
-                            string result = DebloatGuard.SetServiceState(parts2[0], disable);
+                            string result = DebloatGuard.SetServiceState(parts2[0], disable, _journal);
                             LogEvent($"[DebloatGuard] {result}");
                             bool changed = !result.StartsWith("Refused") && !result.StartsWith("Failed");
                             SendResponse(writer, new IpcResponse { Status = changed ? "Success" : "Error", Message = result });
@@ -730,7 +740,7 @@ namespace TuneUpEngine
                     RunInBackground(writer, "Network optimization", () =>
                     {
                         string netResult = NetOptimizer.ApplyOptimizations(
-                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }));
+                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }), _journal);
                         LogEvent($"[NetOptimizer] {netResult}");
                         SendResponse(writer, new IpcResponse { Status = "Success", Message = netResult });
                     });
@@ -740,7 +750,7 @@ namespace TuneUpEngine
                     RunInBackground(writer, "Network revert", () =>
                     {
                         string revertResult = NetOptimizer.RevertToDefaults(
-                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }));
+                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }), _journal);
                         LogEvent($"[NetOptimizer] {revertResult}");
                         SendResponse(writer, new IpcResponse { Status = "Success", Message = revertResult });
                     });
@@ -818,6 +828,8 @@ namespace TuneUpEngine
                     Task.Run(() =>
                     {
                         Thread.Sleep(100);
+                        try { ShuttingDown?.Invoke(); }
+                        catch (Exception ex) { Console.WriteLine($"[Engine] Shutdown cleanup failed: {ex.Message}"); }
                         Environment.Exit(0);
                     });
                     break;

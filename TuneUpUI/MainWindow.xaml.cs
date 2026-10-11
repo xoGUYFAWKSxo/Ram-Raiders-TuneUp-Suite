@@ -1342,12 +1342,12 @@ namespace TuneUpUI
                         // The toggle flipped optimistically; re-read the real state so it doesn't
                         // claim a change that never happened.
                         Dispatcher.Invoke(() => AppendMonitorEvent($"[Tweaks] Could not {(enable ? "apply" : "revert")} '{tweakName}'. Is the engine running as Administrator?"));
-                        FetchRegistryTweaks();
                     }
-                    else if (RegistryTweaker.RetiredTweaks.Contains(tweakName))
-                    {
-                        FetchRegistryTweaks(); // Hide the retired row now that it's switched off.
-                    }
+
+                    // Always re-read the real state. Besides failures, a setting shared with another
+                    // feature (e.g. SystemResponsiveness, also used by Game Mode) correctly stays in
+                    // place when only one of them is switched off, and retired rows hide once off.
+                    FetchRegistryTweaks();
                 });
             }
         }

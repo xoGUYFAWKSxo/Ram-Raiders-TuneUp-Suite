@@ -117,7 +117,7 @@ namespace TuneUpEngine.Tests
         public void RetiredSecurityTweaks_CannotBeEnabled(string tweak)
         {
             // Refused before any registry access, so this is safe to run anywhere.
-            Assert.False(RegistryTweaker.SetTweakStatus(tweak, enable: true));
+            Assert.False(RegistryTweaker.SetTweakStatus(tweak, enable: true, new ChangeJournal(null)));
         }
     }
 }
