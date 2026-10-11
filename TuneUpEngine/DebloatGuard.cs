@@ -106,11 +106,13 @@ namespace TuneUpEngine
 
         // ─────────────────────────────────────────────────────────────────────────
 
-        public static DebloatStatus GetStatus()
+        public static DebloatStatus GetStatus() => GetStatus(ClientContext.ForCurrentProcess());
+
+        public static DebloatStatus GetStatus(ClientContext ctx)
         {
             var status = new DebloatStatus();
             status.Services = GetServiceStatuses();
-            status.DetectedPackages = DetectInstalledPackages();
+            status.DetectedPackages = DetectInstalledPackages(ctx);
             return status;
         }
 
@@ -239,8 +241,10 @@ namespace TuneUpEngine
             }
         }
 
-        public static List<AppxPackageInfo> DetectInstalledPackages()
+        // Installed packages are partly per-user, so the user's own hive is read (not the engine's).
+        public static List<AppxPackageInfo> DetectInstalledPackages(ClientContext ctx)
         {
+            using var userHive = ctx.OpenUserHive();
             var found = new List<AppxPackageInfo>();
 
             // Read installed packages from registry (works without WinRT reference)
@@ -259,7 +263,7 @@ namespace TuneUpEngine
                 {
                     // Open from HKCU if it's the Local Settings hive, otherwise HKLM
                     RegistryKey root = hive.StartsWith("SOFTWARE\\Classes", StringComparison.OrdinalIgnoreCase)
-                        ? Registry.CurrentUser.OpenSubKey(hive)
+                        ? userHive.Key?.OpenSubKey(hive)
                         : Registry.LocalMachine.OpenSubKey(hive);
 
                     if (root == null) continue;
@@ -337,7 +341,9 @@ namespace TuneUpEngine
             return "OEM";
         }
 
-        public static string RemoveAppxPackage(string packageFullName, Action<string> progressCallback)
+        // Removes the package for the requesting user (-User <SID>) — the engine's own account
+        // (SYSTEM when running as a service) has no such packages installed.
+        public static string RemoveAppxPackage(string packageFullName, Action<string> progressCallback, ClientContext ctx)
         {
             // The package identity arrives over IPC and is interpolated into a PowerShell
             // command below, so it MUST be validated first. Without validation, a crafted
@@ -378,14 +384,31 @@ namespace TuneUpEngine
                 psi.ArgumentList.Add("-NoProfile");
                 psi.ArgumentList.Add("-NonInteractive");
                 psi.ArgumentList.Add("-Command");
+                // The SID is validated by SecurityIdentifier, so it is a plain S-1-... string.
+                string sid = new System.Security.Principal.SecurityIdentifier(ctx.Sid).Value;
+                // -ErrorAction Stop + exit codes: previously errors were silenced, so a failed
+                // removal still reported "Successfully removed". Exit 2 = nothing was installed.
                 psi.ArgumentList.Add(
-                    $"Get-AppxPackage '{identity}*' | Remove-AppxPackage -ErrorAction SilentlyContinue");
+                    $"$p = @(Get-AppxPackage -User '{sid}' -Name '{identity}*'); " +
+                    "if ($p.Count -eq 0) { exit 2 }; " +
+                    $"try {{ $p | ForEach-Object {{ Remove-AppxPackage -Package $_.PackageFullName -User '{sid}' -ErrorAction Stop }}; exit 0 }} " +
+                    "catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }");
 
-                using var proc = System.Diagnostics.Process.Start(psi);
-                proc.WaitForExit(30000);
-                return proc.ExitCode == 0
-                    ? $"Successfully removed: {identity}"
-                    : $"Removal returned exit code {proc.ExitCode} for: {identity}";
+                using var proc = System.Diagnostics.Process.Start(psi)!;
+                var stderr = proc.StandardError.ReadToEndAsync();
+                proc.StandardOutput.ReadToEnd();
+                if (!proc.WaitForExit(60000))
+                {
+                    try { proc.Kill(); } catch { }
+                    return $"Error removing {identity}: timed out.";
+                }
+
+                return proc.ExitCode switch
+                {
+                    0 => $"Successfully removed: {identity}",
+                    2 => $"{identity} is not installed for this user.",
+                    _ => $"Error removing {identity}: {stderr.Result.Trim()}"
+                };
             }
             catch (Exception ex)
             {

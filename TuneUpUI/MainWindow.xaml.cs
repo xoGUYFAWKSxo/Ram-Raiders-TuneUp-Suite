@@ -111,6 +111,8 @@ namespace TuneUpUI
             EnsureEngineRunning();
 
             // Set up a 3-second timer, which will tick every 3 seconds once running
+            StartForegroundReporting();
+
             _statsTimer = new DispatcherTimer();
             _statsTimer.Interval = TimeSpan.FromSeconds(3);
             _statsTimer.Tick += StatsTimer_Tick;
@@ -146,6 +148,39 @@ namespace TuneUpUI
                     });
                 }
             });
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        private DispatcherTimer _foregroundTimer;
+        private bool _reportingForeground;
+
+        // When the engine runs as a Windows service it can't see this desktop, so Game Mode and
+        // ProBalance rely on the UI (which keeps running in the tray) to say which program is in
+        // front. Sent once a second; the engine ignores reports older than a few seconds.
+        private void StartForegroundReporting()
+        {
+            _foregroundTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _foregroundTimer.Tick += (s, e) =>
+            {
+                if (_reportingForeground) return;
+                IntPtr hWnd = GetForegroundWindow();
+                if (hWnd == IntPtr.Zero) return;
+                GetWindowThreadProcessId(hWnd, out uint pid);
+                if (pid == 0) return;
+
+                _reportingForeground = true;
+                Task.Run(() =>
+                {
+                    try { SendIpcRequest("ReportForeground", pid.ToString()); }
+                    finally { _reportingForeground = false; }
+                });
+            };
+            _foregroundTimer.Start();
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
@@ -192,13 +227,39 @@ namespace TuneUpUI
         // NAMED PIPE IPC CLIENT CODE
         // ==========================================
 
+        private static readonly IReadOnlyList<string> TrustedEnginePaths =
+            ClientVerifier.TrustedEnginePaths(AppContext.BaseDirectory);
+
+        // Opens the engine's pipe. The connection lets the engine act as this user (impersonation)
+        // so your settings and files are changed as you, not as SYSTEM. That's a real permission,
+        // so before sending anything the UI checks the pipe belongs to the genuine engine — Windows
+        // only lets the server act as us after it has read from the pipe, so a fake engine that
+        // grabbed the name never gets the chance.
+        private static NamedPipeClientStream ConnectToEngine(int timeoutMs)
+        {
+            var client = new NamedPipeClientStream(".", "TuneUpEnginePipe", PipeDirection.InOut,
+                PipeOptions.None, System.Security.Principal.TokenImpersonationLevel.Impersonation);
+            try
+            {
+                client.Connect(timeoutMs);
+                string? server = ClientVerifier.GetServerImagePath(client);
+                if (!ClientVerifier.IsTrustedClient(server, TrustedEnginePaths))
+                    throw new UnauthorizedAccessException($"Refusing to talk to an unexpected engine process: {server ?? "unknown"}");
+                return client;
+            }
+            catch
+            {
+                client.Dispose();
+                throw;
+            }
+        }
+
         private IpcResponse SendIpcRequest(string command, string payload = "")
         {
             try
             {
-                using (var client = new NamedPipeClientStream(".", "TuneUpEnginePipe", PipeDirection.InOut))
+                using (var client = ConnectToEngine(3000))
                 {
-                    client.Connect(3000); // 3-second timeout
                     var writer = new StreamWriter(client, Encoding.UTF8);
                     var reader = new StreamReader(client, Encoding.UTF8);
 
@@ -231,9 +292,8 @@ namespace TuneUpUI
         {
             try
             {
-                using (var client = new NamedPipeClientStream(".", "TuneUpEnginePipe", PipeDirection.InOut))
+                using (var client = ConnectToEngine(5000)) // 5-second timeout for heavy active tasks
                 {
-                    client.Connect(5000); // 5-second timeout for heavy active tasks
 
                     var writer = new StreamWriter(client, Encoding.UTF8);
                     var reader = new StreamReader(client, Encoding.UTF8);
@@ -301,6 +361,12 @@ namespace TuneUpUI
             if (dashList != null) LstDashboardEvents.Items.Refresh();
         }
 
+        private const string EngineServiceName = "TuneUpEngineService";
+
+        // True only when this UI started its own (console) engine — then it also stops it on exit.
+        // An engine running as a Windows service is shared and keeps running.
+        private bool _launchedOwnEngine;
+
         private void EnsureEngineRunning()
         {
             Task.Run(() =>
@@ -308,6 +374,31 @@ namespace TuneUpUI
                 // First check if already running by checking the pipe connection
                 var resp = SendIpcRequest("GetEngineStats");
                 if (resp != null) return;
+
+                // Installed: the engine is a Windows service. Start it if it's stopped (the
+                // installer lets signed-in users start it), with no UAC prompt.
+                try
+                {
+                    using var service = new System.ServiceProcess.ServiceController(EngineServiceName);
+                    if (service.Status == System.ServiceProcess.ServiceControllerStatus.Stopped)
+                    {
+                        service.Start();
+                        service.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Running, TimeSpan.FromSeconds(15));
+                    }
+                    return;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Service not installed (development build) — fall back to launching the engine.
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.Invoke(() => MessageBox.Show(
+                        $"The TuneUp engine service isn't running and couldn't be started:\n{ex.Message}\n\n" +
+                        "You can start \"TuneUp Engine\" from Windows Services, or reinstall the app.",
+                        "Engine Link Warning", MessageBoxButton.OK, MessageBoxImage.Warning));
+                    return;
+                }
 
                 // Search for TuneUpEngine.exe in typical build outputs or locally
                 string[] searchPaths = new string[]
@@ -338,6 +429,7 @@ namespace TuneUpUI
                         // uses a different administrator account, the engine would otherwise only
                         // accept that account and this UI could not connect.
                         string? ourSid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value;
+                        _launchedOwnEngine = true;
                         Process.Start(new ProcessStartInfo
                         {
                             FileName = foundPath,
@@ -1017,7 +1109,8 @@ namespace TuneUpUI
         {
             if (_isExplicitExit || !_settings.MinimizeToTrayOnClose)
             {
-                SendIpcRequest("ShutdownEngine");
+                // Only stop an engine this UI started itself; a service engine keeps running.
+                if (_launchedOwnEngine) SendIpcRequest("ShutdownEngine");
                 _trayIcon?.Dispose();
                 base.OnClosing(e);
             }

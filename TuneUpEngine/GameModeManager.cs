@@ -10,12 +10,6 @@ namespace TuneUpEngine
 {
     public class GameModeManager
     {
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
         [DllImport("ntdll.dll", SetLastError = true)]
         private static extern int NtSetTimerResolution(uint DesiredResolution, bool SetResolution, out uint CurrentResolution);
 
@@ -228,10 +222,8 @@ namespace TuneUpEngine
 
         private void CheckForegroundProcess()
         {
-            IntPtr hWnd = GetForegroundWindow();
-            if (hWnd == IntPtr.Zero) return;
-
-            GetWindowThreadProcessId(hWnd, out uint pid);
+            // Works in service mode too: the UI reports the foreground process (see ForegroundTracker).
+            int pid = ForegroundTracker.GetForegroundProcessId();
             if (pid == 0) return;
 
             // If it's already the boosted game, do nothing

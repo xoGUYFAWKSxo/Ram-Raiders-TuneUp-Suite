@@ -93,7 +93,73 @@ namespace TuneUpEngine
             return paths;
         }
 
-        internal static bool IsTrustedClient(string? clientImagePath, IReadOnlyList<string> trustedPaths)
+        // ── The other direction: the UI checking the engine ─────────────────────
+        // The UI now lets the engine act as the user (impersonation), so it must be sure the pipe
+        // it opened belongs to the real engine and not to something that claimed the name first.
+
+        public const string EngineExecutableName = "TuneUpEngine.exe";
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
+
+        public static string? GetServerImagePath(NamedPipeClientStream pipe)
+        {
+            try
+            {
+                if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out uint pid) || pid == 0)
+                    return null;
+                return GetImagePath(pid);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // The engine locations a UI trusts: the engine next to it (installed layout, and the copy
+        // in the UI's build output) or, for a development build, the engine built from the same
+        // solution (...\TuneUpEngine\bin\<Config>\<TFM>\TuneUpEngine.exe).
+        public static IReadOnlyList<string> TrustedEnginePaths(string uiDirectory)
+        {
+            var paths = new List<string>();
+            if (string.IsNullOrWhiteSpace(uiDirectory)) return paths;
+
+            string dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(uiDirectory));
+            paths.Add(Path.Combine(dir, EngineExecutableName));
+
+            var tfmDir = new DirectoryInfo(dir);
+            var configDir = tfmDir.Parent;
+            var binDir = configDir?.Parent;
+            var projectDir = binDir?.Parent;
+            var solutionDir = projectDir?.Parent;
+
+            if (binDir != null && projectDir != null && solutionDir != null &&
+                binDir.Name.Equals("bin", StringComparison.OrdinalIgnoreCase) &&
+                projectDir.Name.Equals("TuneUpUI", StringComparison.OrdinalIgnoreCase))
+            {
+                paths.Add(Path.Combine(solutionDir.FullName, "TuneUpEngine", "bin", configDir!.Name, tfmDir.Name, EngineExecutableName));
+            }
+
+            return paths;
+        }
+
+        private static string? GetImagePath(uint pid)
+        {
+            IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+            if (hProcess == IntPtr.Zero) return null;
+            try
+            {
+                var buffer = new StringBuilder(1024);
+                uint size = (uint)buffer.Capacity;
+                return QueryFullProcessImageName(hProcess, 0, buffer, ref size) ? buffer.ToString(0, (int)size) : null;
+            }
+            finally
+            {
+                CloseHandle(hProcess);
+            }
+        }
+
+        public static bool IsTrustedClient(string? clientImagePath, IReadOnlyList<string> trustedPaths)
         {
             if (string.IsNullOrWhiteSpace(clientImagePath)) return false;
 

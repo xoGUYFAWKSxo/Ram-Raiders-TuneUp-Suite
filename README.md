@@ -55,8 +55,8 @@ A professional-grade, high-performance Windows system optimization and maintenan
 * **Desktop & File Explorer**: Disables web-based Bing search suggestions, accelerates hover times, adds "Open Command Prompt as Admin" to context menus, and enables Windows 10/11 classic context menu overrides.
 
 ### 🔄 7. Synchronized Cohesive Lifecycle
-* **Silent Elevated Startup**: WPF launcher starts the background engine using hidden process execution (`ProcessWindowStyle.Hidden` and `CreateNoWindow`), suppressing console window popups.
-* **Graceful Exit Synchronization**: Closing the WPF GUI or triggering "Exit" from the system tray automatically dispatches a `"ShutdownEngine"` IPC command, ensuring the elevated engine terminates gracefully alongside the client.
+* **Windows Service Engine**: The installer registers the engine as an automatically starting Windows service, so there is no UAC prompt on launch or sign-in and background features keep running after the window is closed. (Development builds without the service fall back to launching the engine with a UAC prompt and stop it on exit.)
+* **Per-User Safety**: Each request is handled for the user who made it — your registry hive, your folders, and file deletion performed as you. Machine-wide changes require an administrator account.
 
 ---
 

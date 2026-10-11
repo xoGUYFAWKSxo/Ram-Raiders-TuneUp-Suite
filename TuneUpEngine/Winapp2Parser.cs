@@ -64,12 +64,6 @@ namespace TuneUpEngine
 
     public class Winapp2Parser
     {
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-        private static extern int SHEmptyRecycleBin(IntPtr hwnd, string pszRootPath, uint dwFlags);
-
-        private const uint SHERB_NOCONFIRMATION = 0x00000001;
-        private const uint SHERB_NOPROGRESSUI = 0x00000002;
-        private const uint SHERB_NOSOUND = 0x00000004;
 
         private readonly List<CleanRule> _rules = new List<CleanRule>();
         private readonly object _rulesLock = new object();
@@ -259,30 +253,38 @@ namespace TuneUpEngine
             }
         }
 
-        public string ExpandSpecialFolder(string path)
+        public string ExpandSpecialFolder(string path) => ExpandSpecialFolder(path, UserFolders.ForCurrentProcess());
+
+        // Translates winapp2 tokens to real folders. Per-user tokens (%LocalAppData%, %Temp%, ...)
+        // resolve to the REQUESTING user's folders - not the engine's, which would be SYSTEM's
+        // profile when running as a service. (Plain string replacement: a folder path containing
+        // '$' must not be treated as a regex substitution.)
+        public static string ExpandSpecialFolder(string path, UserFolders folders)
         {
             if (string.IsNullOrEmpty(path)) return string.Empty;
 
-            // Perform manual translations of Winapp2.ini custom tokens to standard folders
-            path = Regex.Replace(path, @"%LocalAppData%", Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), RegexOptions.IgnoreCase);
-            path = Regex.Replace(path, @"%AppData%", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), RegexOptions.IgnoreCase);
-            path = Regex.Replace(path, @"%UserProfile%", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), RegexOptions.IgnoreCase);
-            path = Regex.Replace(path, @"%Documents%", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), RegexOptions.IgnoreCase);
-            path = Regex.Replace(path, @"%CommonAppData%", Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), RegexOptions.IgnoreCase);
-            path = Regex.Replace(path, @"%WinDir%", Environment.GetFolderPath(Environment.SpecialFolder.Windows), RegexOptions.IgnoreCase);
-            path = Regex.Replace(path, @"%SystemDrive%", Path.GetPathRoot(Environment.SystemDirectory), RegexOptions.IgnoreCase);
-            path = Regex.Replace(path, @"%Temp%", Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), RegexOptions.IgnoreCase);
+            string R(string value, string token, string replacement) =>
+                value.Replace(token, replacement, StringComparison.OrdinalIgnoreCase);
+
+            path = R(path, "%LocalAppData%", folders.LocalAppData);
+            path = R(path, "%AppData%", folders.RoamingAppData);
+            path = R(path, "%UserProfile%", folders.Profile);
+            path = R(path, "%Documents%", folders.Documents);
+            path = R(path, "%Temp%", folders.Temp);
+            path = R(path, "%CommonAppData%", Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData));
+            path = R(path, "%WinDir%", Environment.GetFolderPath(Environment.SpecialFolder.Windows));
+            path = R(path, "%SystemDrive%", Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\");
 
             return path;
         }
 
-        private bool IsRuleDetected(CleanRule rule)
+        private static bool IsRuleDetected(CleanRule rule, UserFolders folders)
         {
             if (rule.DetectPaths.Count == 0) return true; // Always scan if no specific detection path is defined
 
             foreach (var detectPath in rule.DetectPaths)
             {
-                string expanded = ExpandSpecialFolder(detectPath);
+                string expanded = ExpandSpecialFolder(detectPath, folders);
                 if (Directory.Exists(expanded) || File.Exists(expanded))
                 {
                     return true;
@@ -292,7 +294,10 @@ namespace TuneUpEngine
             return false;
         }
 
-        public List<ScanItem> Scan(Action<string, int>? progressCallback = null)
+        public List<ScanItem> Scan(Action<string, int>? progressCallback = null) =>
+            Scan(ClientContext.ForCurrentProcess(), progressCallback);
+
+        public List<ScanItem> Scan(ClientContext ctx, Action<string, int>? progressCallback = null)
         {
             var results = new List<ScanItem>();
             int count = 0;
@@ -309,7 +314,7 @@ namespace TuneUpEngine
                 progressCallback?.Invoke(rule.Name, (count * 100) / rules.Count);
                 count++;
 
-                if (!IsRuleDetected(rule)) continue;
+                if (!IsRuleDetected(rule, ctx.Folders)) continue;
 
                 var item = new ScanItem
                 {
@@ -318,7 +323,7 @@ namespace TuneUpEngine
                 };
 
                 var excludes = rule.ExcludeKeys
-                    .Select(ParseExcludeKey)
+                    .Select(key => ParseExcludeKey(key, ctx.Folders))
                     .OfType<ExcludeRule>()
                     .ToList();
                 var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -327,16 +332,21 @@ namespace TuneUpEngine
                 {
                     if (fileKey.StartsWith("RECYCLE_BIN", StringComparison.OrdinalIgnoreCase))
                     {
-                        // We cannot list files in Recycle Bin easily, so we assign a placeholder size or query shell
-                        item.FilePaths.Add("RECYCLE_BIN");
-                        item.TotalSizeBytes += 1024 * 1024 * 50; // Estimate 50 MB if not empty
+                        // The user's own recycle folders on every fixed drive, with their real
+                        // size (this used to be a flat 50 MB guess).
+                        long binBytes = RecycleBinSize(ctx.Sid);
+                        if (binBytes > 0)
+                        {
+                            item.FilePaths.Add("RECYCLE_BIN");
+                            item.TotalSizeBytes += binBytes;
+                        }
                         continue;
                     }
 
                     string[] parts = fileKey.Split('|');
                     if (parts.Length < 1) continue;
 
-                    string expandedPath = ExpandSpecialFolder(parts[0]);
+                    string expandedPath = ExpandSpecialFolder(parts[0], ctx.Folders);
                     string pattern = parts.Length > 1 ? parts[1] : "*.*";
                     bool recurse = parts.Length > 2 && parts[2].Equals("RECURSE", StringComparison.OrdinalIgnoreCase);
 
@@ -384,7 +394,16 @@ namespace TuneUpEngine
             return results;
         }
 
-        public long Clean(List<ScanItem> items, Action<string, int>? progressCallback = null)
+        public long Clean(List<ScanItem> items, Action<string, int>? progressCallback = null) =>
+            Clean(items, ClientContext.ForCurrentProcess(), progressCallback);
+
+        // Who deletes what:
+        //   * Files inside the requesting user's profile are deleted AS that user, so Windows itself
+        //     guarantees nothing is removed that the user couldn't remove — a junction swapped into
+        //     a cache folder between scan and clean can't borrow the engine's rights.
+        //   * Anything outside the profile (Windows logs, Prefetch, Delivery Optimization) needs
+        //     administrator rights and is only cleaned for administrator accounts.
+        public long Clean(List<ScanItem> items, ClientContext ctx, Action<string, int>? progressCallback = null)
         {
             long deletedBytes = 0;
             int count = 0;
@@ -413,46 +432,125 @@ namespace TuneUpEngine
 
                     if (path == "RECYCLE_BIN")
                     {
-                        try
-                        {
-                            int result = SHEmptyRecycleBin(IntPtr.Zero, null, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
-                            if (result == 0)
-                            {
-                                deletedBytes += item.TotalSizeBytes;
-                            }
-                        }
-                        catch { }
+                        deletedBytes += ctx.RunAsUser(() => EmptyRecycleBin(ctx.Sid));
                         continue;
                     }
 
-                    if (Directory.Exists(path))
-                    {
-                        try
-                        {
-                            Directory.Delete(path, false); // only delete if empty
-                        }
-                        catch { }
-                        continue;
-                    }
-
-                    if (!File.Exists(path)) continue;
-
-                    try
-                    {
-                        var fi = new FileInfo(path);
-                        long size = fi.Length;
-                        File.Delete(path);
-                        deletedBytes += size;
-                    }
-                    catch
-                    {
-                        // File locked or access denied, skip silently
-                    }
+                    if (ctx.Folders.Contains(path))
+                        deletedBytes += ctx.RunAsUser(() => DeletePath(path));
+                    else if (ctx.IsAdministrator)
+                        deletedBytes += DeletePath(path);
+                    // else: a system location and the user isn't an administrator — skip.
                 }
             }
 
             progressCallback?.Invoke("Clean Complete", 100);
             return deletedBytes;
+        }
+
+        // Deletes one scanned path; returns the bytes freed. Folders (from the empty-folder scan)
+        // are only removed if still empty.
+        private static long DeletePath(string path)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: false);
+                    return 0;
+                }
+
+                if (!File.Exists(path)) return 0;
+                long size = new FileInfo(path).Length;
+                File.Delete(path);
+                return size;
+            }
+            catch
+            {
+                return 0; // File locked or access denied — skip silently
+            }
+        }
+
+        // X:\$Recycle.Bin\<SID> on every fixed drive: where Windows keeps this user's deleted files.
+        private static IEnumerable<string> RecycleFolders(string sid)
+        {
+            if (string.IsNullOrEmpty(sid)) yield break;
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                bool usable;
+                try { usable = drive.DriveType == DriveType.Fixed && drive.IsReady; }
+                catch { usable = false; }
+                if (!usable) continue;
+
+                string folder = Path.Combine(drive.RootDirectory.FullName, "$Recycle.Bin", sid);
+                if (Directory.Exists(folder)) yield return folder;
+            }
+        }
+
+        private static readonly EnumerationOptions RecycleEnumeration = new()
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+
+        internal static long RecycleBinSize(string sid)
+        {
+            long total = 0;
+            foreach (var folder in RecycleFolders(sid))
+            {
+                try
+                {
+                    foreach (var file in Directory.EnumerateFiles(folder, "*", RecycleEnumeration))
+                    {
+                        if (Path.GetFileName(file).Equals("desktop.ini", StringComparison.OrdinalIgnoreCase)) continue;
+                        try { total += new FileInfo(file).Length; } catch { }
+                    }
+                }
+                catch { }
+            }
+            return total;
+        }
+
+        // Empties the user's recycle folders (the $R data and $I info files Windows keeps there),
+        // leaving the folder itself and its desktop.ini in place.
+        private static long EmptyRecycleBin(string sid)
+        {
+            long freed = 0;
+            foreach (var folder in RecycleFolders(sid))
+            {
+                foreach (var entry in new DirectoryInfo(folder).EnumerateFileSystemInfos())
+                {
+                    if (entry.Name.Equals("desktop.ini", StringComparison.OrdinalIgnoreCase)) continue;
+                    try
+                    {
+                        if (entry is DirectoryInfo dir)
+                        {
+                            long size = 0;
+                            if ((dir.Attributes & FileAttributes.ReparsePoint) == 0)
+                            {
+                                foreach (var f in dir.EnumerateFiles("*", RecycleEnumeration))
+                                {
+                                    try { size += f.Length; } catch { }
+                                }
+                            }
+                            dir.Delete(recursive: true); // Removes a link itself, never its target
+                            freed += size;
+                        }
+                        else
+                        {
+                            long size = ((FileInfo)entry).Length;
+                            entry.Delete();
+                            freed += size;
+                        }
+                    }
+                    catch
+                    {
+                        // In use or access denied — leave it.
+                    }
+                }
+            }
+            return freed;
         }
 
         // The paths that cleaning an item is allowed to delete. A duplicate set lists every copy of
@@ -485,7 +583,10 @@ namespace TuneUpEngine
 
         // Parses "FILE|<dir>|<pattern>", "FILE|<full path>" or "PATH|<dir>[|<pattern>]".
         // REG exclusions (and anything unrecognised) return null: this cleaner never touches the registry.
-        internal ExcludeRule? ParseExcludeKey(string excludeKey)
+        internal ExcludeRule? ParseExcludeKey(string excludeKey) =>
+            ParseExcludeKey(excludeKey, UserFolders.ForCurrentProcess());
+
+        internal static ExcludeRule? ParseExcludeKey(string excludeKey, UserFolders folders)
         {
             if (string.IsNullOrWhiteSpace(excludeKey)) return null;
 
@@ -497,7 +598,7 @@ namespace TuneUpEngine
             bool isFile = kind.Equals("FILE", StringComparison.OrdinalIgnoreCase);
             if (!isPath && !isFile) return null;
 
-            string? location = ExpandSpecialFolder(parts[1].Trim());
+            string? location = ExpandSpecialFolder(parts[1].Trim(), folders);
             string? pattern = parts.Length > 2 ? parts[2].Trim() : null;
 
             if (isFile && string.IsNullOrEmpty(pattern))

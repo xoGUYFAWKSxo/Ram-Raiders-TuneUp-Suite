@@ -69,6 +69,22 @@ namespace TuneUpEngine
         // In service mode the engine runs as SYSTEM, so "the engine's own account" doesn't include
         // the desktop user; fall back to interactive logons (still filtered by ClientVerifier).
         private readonly bool _allowInteractiveUsers;
+        private readonly bool _isServiceMode;
+        private readonly Func<NamedPipeServerStream, ClientContext> _contextFactory;
+
+        // Commands that change machine-wide state. Since every signed-in user can reach the
+        // service's pipe, these require an administrator account — otherwise a standard user could
+        // use the engine to make system changes they aren't allowed to make themselves.
+        // (Per-user work — scanning and cleaning your own files, your own HKCU tweaks — is open to
+        // everyone; SetRegistryTweak, CleanJunk and RepairRegistry check per item.)
+        internal static readonly IReadOnlySet<string> AdministratorCommands = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "SetGovernorState", "SetAutoPurgeState", "SetGameModeState", "PurgeStandbyList",
+            "ProvisionMSIInterrupts", "RevertMSIInterrupts", "UpdateCleanerDefinitions",
+            "RunSystemRepair", "SetServiceState", "RemoveAppxPackage",
+            "ApplyNetworkOptimizations", "RevertNetworkOptimizations", "MigrateDirectory",
+            "StartLatencyAudit", "StopLatencyAudit", "ShutdownEngine",
+        };
         private readonly IReadOnlyList<string> _trustedClientPaths;
         private NamedPipeServerStream? _firstInstance;
 
@@ -105,15 +121,19 @@ namespace TuneUpEngine
             EngineSettings settings,
             IReadOnlyList<SecurityIdentifier>? allowedClientSids = null,
             bool allowInteractiveUsers = false,
+            bool isServiceMode = false,
             string pipeName = DefaultPipeName,  // Overridable so tests never touch the real engine's pipe
             IReadOnlyList<string>? trustedClientPaths = null, // Test-only override of the trusted UI location(s)
-            ChangeJournal? journal = null)
+            ChangeJournal? journal = null,
+            Func<NamedPipeServerStream, ClientContext>? contextFactory = null) // Test-only: simulate other users
         {
+            _contextFactory = contextFactory ?? ClientContext.FromPipe;
             _journal = journal ?? new ChangeJournal(null);
             _journal.OnLog += msg => LogEvent(msg);
             _pipeName = pipeName;
             _allowedClientSids = allowedClientSids ?? Array.Empty<SecurityIdentifier>();
             _allowInteractiveUsers = allowInteractiveUsers;
+            _isServiceMode = isServiceMode;
             _trustedClientPaths = trustedClientPaths ?? ClientVerifier.TrustedClientPaths(AppContext.BaseDirectory);
 
             _governor = governor;
@@ -308,6 +328,12 @@ namespace TuneUpEngine
                     var reader = new StreamReader(pipeServer, Encoding.UTF8);
                     var writer = new StreamWriter(pipeServer, Encoding.UTF8);
 
+                    // Who is this connection for? Everything per-user (HKCU, personal folders, file
+                    // deletion inside the profile) is done for — and as — this user. Windows only
+                    // allows a pipe server to act as its client after reading from the pipe, so this
+                    // is resolved once the first request line has arrived.
+                    ClientContext? ctx = null;
+
                     while (_isRunning && pipeServer.IsConnected)
                     {
                         string? requestLine = ReadLineBounded(reader, MaxRequestChars, out bool tooLong);
@@ -318,12 +344,26 @@ namespace TuneUpEngine
                         }
                         if (string.IsNullOrEmpty(requestLine)) break;
 
+                        if (ctx == null)
+                        {
+                            try
+                            {
+                                ctx = _contextFactory(pipeServer);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Engine IPC] Could not identify client: {ex.Message}");
+                                SendResponse(writer, new IpcResponse { Status = "Error", Message = "The engine could not identify your user account. Please update TuneUp." });
+                                break;
+                            }
+                        }
+
                         try
                         {
                             var request = JsonSerializer.Deserialize<IpcRequest>(requestLine);
                             if (request?.Command == null)
                                 throw new JsonException("Missing command.");
-                            HandleRequest(request, writer);
+                            HandleRequest(request, writer, ctx);
                         }
                         catch (Exception ex)
                         {
@@ -379,11 +419,47 @@ namespace TuneUpEngine
             });
         }
 
-        private void HandleRequest(IpcRequest request, StreamWriter writer)
+        private static bool IsInSession(int pid, int sessionId)
+        {
+            if (pid <= 0) return false;
+            try
+            {
+                using var proc = System.Diagnostics.Process.GetProcessById(pid);
+                return sessionId < 0 || proc.SessionId == sessionId;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void HandleRequest(IpcRequest request, StreamWriter writer, ClientContext ctx)
         {
             Console.WriteLine($"[Engine IPC] Handling request: {request.Command}");
+
+            if (AdministratorCommands.Contains(request.Command) && !ctx.IsAdministrator)
+            {
+                SendResponse(writer, new IpcResponse { Status = "Error", Message = "This needs an administrator account." });
+                return;
+            }
+
             switch (request.Command)
             {
+                // ── Foreground reporting (service mode) ──────────────────────────────
+                // A service can't see the user's desktop, so the UI reports which process is in
+                // front. Only processes in the reporting user's own session are accepted.
+                case "ReportForeground":
+                    if (int.TryParse(request.Payload, out int fgPid) && IsInSession(fgPid, ctx.SessionId))
+                    {
+                        ForegroundTracker.Report(fgPid);
+                        SendResponse(writer, new IpcResponse { Status = "Success" });
+                    }
+                    else
+                    {
+                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid foreground process." });
+                    }
+                    break;
+
                 case "GetEngineStats":
                     var mem = _memoryManager.GetMemoryStatus();
                     List<string> logs;
@@ -504,7 +580,7 @@ namespace TuneUpEngine
 
                 case "ScanJunk":
                     SendResponse(writer, new IpcResponse { Status = "Progress", ProgressPercent = 5.0, Message = "Scanning file structures..." });
-                    var scanResults = _cleaner.Scan((ruleName, percent) =>
+                    var scanResults = _cleaner.Scan(ctx, (ruleName, percent) =>
                     {
                         SendResponse(writer, new IpcResponse
                         {
@@ -514,7 +590,7 @@ namespace TuneUpEngine
                         });
                     });
 
-                    _scanResults.Replace("junk", scanResults);
+                    _scanResults.Replace("junk", scanResults, ctx.Sid);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -525,13 +601,13 @@ namespace TuneUpEngine
                 case "CleanJunk":
                     // The payload is a list of result IDs from an earlier scan — never paths. Only
                     // items the engine itself found can be cleaned; unknown IDs match nothing.
-                    var cleanItems = _scanResults.Take(JsonSerializer.Deserialize<List<string>>(request.Payload ?? "[]"));
+                    var cleanItems = _scanResults.Take(JsonSerializer.Deserialize<List<string>>(request.Payload ?? "[]"), ctx.Sid);
                     if (cleanItems.Count == 0)
                     {
                         SendResponse(writer, new IpcResponse { Status = "Error", Message = "Nothing to clean. The results may be out of date — please scan again." });
                         break;
                     }
-                    var cleanBytes = _cleaner.Clean(cleanItems, (ruleName, percent) =>
+                    var cleanBytes = _cleaner.Clean(cleanItems, ctx, (ruleName, percent) =>
                     {
                         SendResponse(writer, new IpcResponse
                         {
@@ -550,7 +626,7 @@ namespace TuneUpEngine
 
                 case "ScanAdvancedEmptyFolders":
                     var emptyFoldersScanner = new AdvancedScanner();
-                    var emptyFoldersResults = emptyFoldersScanner.ScanEmptyFolders((msg) =>
+                    var emptyFoldersResults = emptyFoldersScanner.ScanEmptyFolders(ctx.Folders, (msg) =>
                     {
                         SendResponse(writer, new IpcResponse
                         {
@@ -558,7 +634,7 @@ namespace TuneUpEngine
                             Message = msg
                         });
                     });
-                    _scanResults.Replace("emptyFolders", emptyFoldersResults);
+                    _scanResults.Replace("emptyFolders", emptyFoldersResults, ctx.Sid);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -568,7 +644,7 @@ namespace TuneUpEngine
 
                 case "ScanAdvancedDuplicates":
                     var dupScanner = new AdvancedScanner();
-                    var dupResults = dupScanner.ScanDuplicateFiles((msg) =>
+                    var dupResults = dupScanner.ScanDuplicateFiles(ctx.Folders, (msg) =>
                     {
                         SendResponse(writer, new IpcResponse
                         {
@@ -576,7 +652,7 @@ namespace TuneUpEngine
                             Message = msg
                         });
                     });
-                    _scanResults.Replace("duplicates", dupResults);
+                    _scanResults.Replace("duplicates", dupResults, ctx.Sid);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -585,7 +661,7 @@ namespace TuneUpEngine
                     break;
 
                 case "ScanRegistry":
-                    var regIssues = _registryVerifier.Scan((step, percent) =>
+                    var regIssues = _registryVerifier.Scan(ctx, (step, percent) =>
                     {
                         SendResponse(writer, new IpcResponse
                         {
@@ -595,7 +671,7 @@ namespace TuneUpEngine
                         });
                     });
 
-                    _registryResults.Replace("registry", regIssues);
+                    _registryResults.Replace("registry", regIssues, ctx.Sid);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -605,13 +681,13 @@ namespace TuneUpEngine
 
                 case "RepairRegistry":
                     // As with CleanJunk: IDs from the engine's own scan only, never raw registry paths.
-                    var repairIssues = _registryResults.Take(JsonSerializer.Deserialize<List<string>>(request.Payload ?? "[]"));
+                    var repairIssues = _registryResults.Take(JsonSerializer.Deserialize<List<string>>(request.Payload ?? "[]"), ctx.Sid);
                     if (repairIssues.Count == 0)
                     {
                         SendResponse(writer, new IpcResponse { Status = "Error", Message = "Nothing to repair. The results may be out of date — please scan again." });
                         break;
                     }
-                    _registryVerifier.Repair(repairIssues, (step, percent) =>
+                    _registryVerifier.Repair(repairIssues, ctx, (step, percent) =>
                     {
                         SendResponse(writer, new IpcResponse
                         {
@@ -654,7 +730,7 @@ namespace TuneUpEngine
                     break;
 
                 case "GetRegistryTweaks":
-                    var tweaks = RegistryTweaker.GetTweakStatuses();
+                    var tweaks = RegistryTweaker.GetTweakStatuses(ctx);
                     var tweaksJson = JsonSerializer.Serialize(tweaks);
                     SendResponse(writer, new IpcResponse { Status = "Success", Payload = tweaksJson });
                     break;
@@ -665,7 +741,12 @@ namespace TuneUpEngine
                         var parts = request.Payload.Split('|');
                         if (parts.Length == 2 && bool.TryParse(parts[1], out bool enable))
                         {
-                            bool ok = RegistryTweaker.SetTweakStatus(parts[0], enable, _journal);
+                            if (RegistryTweaker.RequiresAdministrator(parts[0]) && !ctx.IsAdministrator)
+                            {
+                                SendResponse(writer, new IpcResponse { Status = "Error", Message = "This tweak changes the whole PC and needs an administrator account." });
+                                break;
+                            }
+                            bool ok = RegistryTweaker.SetTweakStatus(parts[0], enable, _journal, ctx);
                             SendResponse(writer, new IpcResponse { Status = ok ? "Success" : "Error" });
                             break;
                         }
@@ -693,7 +774,7 @@ namespace TuneUpEngine
 
                 // ── DebloatGuard ────────────────────────────────────────────────────
                 case "GetDebloatStatus":
-                    var debloat = DebloatGuard.GetStatus();
+                    var debloat = DebloatGuard.GetStatus(ctx);
                     SendResponse(writer, new IpcResponse
                     {
                         Status = "Success",
@@ -720,7 +801,7 @@ namespace TuneUpEngine
                     RunInBackground(writer, "AppX removal", () =>
                     {
                         string r = DebloatGuard.RemoveAppxPackage(request.Payload,
-                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }));
+                            msg => SendResponse(writer, new IpcResponse { Status = "Progress", Message = msg }), ctx);
                         LogEvent($"[DebloatGuard] {r}");
                         SendResponse(writer, new IpcResponse { Status = "Success", Message = r });
                     });
@@ -824,6 +905,13 @@ namespace TuneUpEngine
                     break;
 
                 case "ShutdownEngine":
+                    // The service is shared by every user on the PC and keeps working in the
+                    // background (ProBalance, Game Mode); closing one user's UI must not stop it.
+                    if (_isServiceMode)
+                    {
+                        SendResponse(writer, new IpcResponse { Status = "Error", Message = "The engine runs as a Windows service and keeps running in the background." });
+                        break;
+                    }
                     SendResponse(writer, new IpcResponse { Status = "Success", Message = "Engine shutting down." });
                     Task.Run(() =>
                     {

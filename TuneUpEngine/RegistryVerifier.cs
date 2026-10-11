@@ -37,24 +37,27 @@ namespace TuneUpEngine
 
     public class RegistryVerifier
     {
-        public List<RegistryIssue> Scan(Action<string, int>? progressCallback = null)
+        // "HKCU" in a scan always means the requesting user's own hive (HKEY_USERS\<their SID>),
+        // never the engine's - which is SYSTEM's when running as a service.
+        public List<RegistryIssue> Scan(ClientContext ctx, Action<string, int>? progressCallback = null)
         {
             var issues = new List<RegistryIssue>();
+            using var userHive = ctx.OpenUserHive();
             
             progressCallback?.Invoke("Scanning Startup Keys...", 10);
-            ScanStartupKeys(issues);
+            ScanStartupKeys(issues, userHive.Key);
 
             progressCallback?.Invoke("Scanning Shell Extensions...", 40);
-            ScanShellExtensions(issues);
+            ScanShellExtensions(issues, userHive.Key);
 
             progressCallback?.Invoke("Scanning User OLE/COM Registrations...", 70);
-            ScanUserComRegistrations(issues);
+            ScanUserComRegistrations(issues, userHive.Key);
 
             progressCallback?.Invoke("Registry Scan Complete", 100);
             return issues;
         }
 
-        private void ScanStartupKeys(List<RegistryIssue> issues)
+        private void ScanStartupKeys(List<RegistryIssue> issues, RegistryKey? userHive)
         {
             string[] runKeys = new string[]
             {
@@ -65,7 +68,7 @@ namespace TuneUpEngine
             // Scan HKCU Run keys
             foreach (var subKeyPath in runKeys)
             {
-                using (var key = Registry.CurrentUser.OpenSubKey(subKeyPath, false))
+                using (var key = userHive?.OpenSubKey(subKeyPath, false))
                 {
                     if (key == null) continue;
                     foreach (var valueName in key.GetValueNames())
@@ -119,7 +122,7 @@ namespace TuneUpEngine
             }
         }
 
-        private void ScanShellExtensions(List<RegistryIssue> issues)
+        private void ScanShellExtensions(List<RegistryIssue> issues, RegistryKey? userHive)
         {
             string approvedKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved";
 
@@ -133,7 +136,7 @@ namespace TuneUpEngine
                     string clsid = valueName;
                     
                     // Look up CLSID path
-                    string path = GetClsidPath(clsid);
+                    string? path = GetClsidPath(clsid, userHive);
                     if (string.IsNullOrEmpty(path)) continue;
 
                     string expanded = ExtractServerPath(path, isCommandLine: false);
@@ -153,12 +156,12 @@ namespace TuneUpEngine
             }
         }
 
-        private void ScanUserComRegistrations(List<RegistryIssue> issues)
+        private void ScanUserComRegistrations(List<RegistryIssue> issues, RegistryKey? userHive)
         {
             // Scanning HKEY_CURRENT_USER\Software\Classes\CLSID is fast and safe
             string userClsidPath = @"Software\Classes\CLSID";
 
-            using (var key = Registry.CurrentUser.OpenSubKey(userClsidPath, false))
+            using (var key = userHive?.OpenSubKey(userClsidPath, false))
             {
                 if (key == null) return;
 
@@ -219,26 +222,21 @@ namespace TuneUpEngine
             }
         }
 
-        private string GetClsidPath(string clsid)
+        // Resolves a CLSID the way Windows does for this user: their own classes first, then the
+        // machine's. (HKEY_CLASSES_ROOT can't be used - in a service it merges SYSTEM's classes.)
+        private string? GetClsidPath(string clsid, RegistryKey? userHive)
         {
-            // First check user classes CLSID
-            string path = $@"Software\Classes\CLSID\{clsid}\InprocServer32";
-            using (var k = Registry.CurrentUser.OpenSubKey(path))
+            foreach (var server in new[] { "InprocServer32", "LocalServer32" })
             {
-                if (k != null) return k.GetValue("")?.ToString();
-            }
+                using (var k = userHive?.OpenSubKey($@"Software\Classes\CLSID\{clsid}\{server}"))
+                {
+                    if (k != null) return k.GetValue("")?.ToString();
+                }
 
-            // Then check global machine classes CLSID
-            path = $@"CLSID\{clsid}\InprocServer32";
-            using (var k = Registry.ClassesRoot.OpenSubKey(path))
-            {
-                if (k != null) return k.GetValue("")?.ToString();
-            }
-
-            path = $@"CLSID\{clsid}\LocalServer32";
-            using (var k = Registry.ClassesRoot.OpenSubKey(path))
-            {
-                if (k != null) return k.GetValue("")?.ToString();
+                using (var k = Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Classes\CLSID\{clsid}\{server}"))
+                {
+                    if (k != null) return k.GetValue("")?.ToString();
+                }
             }
 
             return null;
@@ -316,86 +314,118 @@ namespace TuneUpEngine
             return !File.Exists(path);
         }
 
-        public bool Repair(List<RegistryIssue> issues, Action<string, int>? progressCallback = null)
+        // Machine-wide (HKLM) entries are only repaired for administrators; HKCU entries are the
+        // requesting user's own. Backups go to that user's AppData and are written AS that user.
+        public bool Repair(List<RegistryIssue> issues, ClientContext ctx, Action<string, int>? progressCallback = null)
         {
             int count = 0;
-
-            // Back up to the documented, user-visible location (the same folder the rest of the suite
-            // uses), NOT next to the executable where it would be wiped on reinstall.
-            string backupDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "RamRaidersTuneUpSuite", "RegistryBackups");
-            Directory.CreateDirectory(backupDir);
-
+            string backupDir = Path.Combine(ctx.Folders.RoamingAppData, "RamRaidersTuneUpSuite", "RegistryBackups");
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string manifestFile = Path.Combine(backupDir, $"RegistryRepair_{stamp}.txt");
-            using (var writer = new StreamWriter(manifestFile, false))
+            var manifest = new System.Text.StringBuilder();
+            var exports = new List<(string FileName, byte[] Content)>();
+
+            manifest.AppendLine($"; Ram Raiders TuneUp Registry Repair - Executed {DateTime.Now}");
+            manifest.AppendLine("; Each repaired key was exported to a .reg file in this folder before deletion.");
+            manifest.AppendLine("; To undo a repair, double-click the matching .reg file to re-import the key.");
+            manifest.AppendLine();
+
+            using var userHive = ctx.OpenUserHive(writable: true);
+
+            foreach (var issue in issues)
             {
-                writer.WriteLine($"; Ram Raiders TuneUp Registry Repair - Executed {DateTime.Now}");
-                writer.WriteLine("; Each repaired key was exported to a .reg file in this folder before deletion.");
-                writer.WriteLine("; To undo a repair, double-click the matching .reg file to re-import the key.");
-                writer.WriteLine();
+                progressCallback?.Invoke($"Repairing {issue.Title}", (count * 100) / Math.Max(1, issues.Count));
+                count++;
 
-                foreach (var issue in issues)
+                try
                 {
-                    progressCallback?.Invoke($"Repairing {issue.Title}", (count * 100) / issues.Count);
-                    count++;
+                    string hive = issue.KeyPath.Substring(0, 4);
+                    string subkey = issue.KeyPath.Substring(5);
 
-                    try
+                    RegistryKey? rootKey;
+                    string exportRoot;
+                    if (hive == "HKCU")
                     {
-                        // Parse Registry Key Path
-                        string hive = issue.KeyPath.Substring(0, 4);
-                        string subkey = issue.KeyPath.Substring(5);
-
-                        RegistryKey rootKey = null;
-                        if (hive == "HKCU") rootKey = Registry.CurrentUser;
-                        else if (hive == "HKLM") rootKey = Registry.LocalMachine;
-                        if (rootKey == null) continue;
-
-                        if (issue.IssueType == "COM")
-                        {
-                            // For a dead COM server we remove the whole CLSID key (not just the
-                            // InprocServer32/LocalServer32 child), so export the CLSID key itself.
-                            string clsidKeyPath = subkey.Substring(0, subkey.LastIndexOf('\\'));
-                            string fullClsidPath = $@"{hive}\{clsidKeyPath}";
-
-                            string regBackup = Path.Combine(backupDir, $"{stamp}_{count}_COM.reg");
-                            ExportKeyToReg(fullClsidPath, regBackup);
-                            writer.WriteLine($"[DELETE TREE] {fullClsidPath}  ->  {Path.GetFileName(regBackup)}");
-
-                            rootKey.DeleteSubKeyTree(clsidKeyPath, false);
-                        }
-                        else
-                        {
-                            // Export the containing key before removing the offending value.
-                            string regBackup = Path.Combine(backupDir, $"{stamp}_{count}_{issue.IssueType}.reg");
-                            ExportKeyToReg(issue.KeyPath, regBackup);
-                            writer.WriteLine($"[DELETE VALUE] {issue.KeyPath}\\{issue.ValueName}  ->  {Path.GetFileName(regBackup)}");
-
-                            using (var key = rootKey.OpenSubKey(subkey, true))
-                            {
-                                key?.DeleteValue(string.IsNullOrEmpty(issue.ValueName) ? "" : issue.ValueName, false);
-                            }
-                        }
+                        rootKey = userHive.Key;
+                        exportRoot = $@"HKU\{ctx.Sid}";
                     }
-                    catch (Exception ex)
+                    else if (hive == "HKLM")
                     {
-                        writer.WriteLine($"; ERROR: Failed to repair '{issue.Title}' - {ex.Message}");
+                        if (!ctx.IsAdministrator)
+                        {
+                            manifest.AppendLine($@"; SKIPPED (administrator account required): {issue.KeyPath}\{issue.ValueName}");
+                            continue;
+                        }
+                        rootKey = Registry.LocalMachine;
+                        exportRoot = "HKLM";
+                    }
+                    else continue;
+                    if (rootKey == null) continue;
+
+                    if (issue.IssueType == "COM")
+                    {
+                        // For a dead COM server we remove the whole CLSID key (not just the
+                        // InprocServer32/LocalServer32 child), so export the CLSID key itself.
+                        string clsidKeyPath = subkey.Substring(0, subkey.LastIndexOf('\\'));
+                        string fileName = $"{stamp}_{count}_COM.reg";
+                        exports.Add((fileName, ExportKeyToReg($@"{exportRoot}\{clsidKeyPath}")));
+                        manifest.AppendLine($@"[DELETE TREE] {hive}\{clsidKeyPath}  ->  {fileName}");
+
+                        rootKey.DeleteSubKeyTree(clsidKeyPath, false);
+                    }
+                    else
+                    {
+                        // Export the containing key before removing the offending value.
+                        string fileName = $"{stamp}_{count}_{issue.IssueType}.reg";
+                        exports.Add((fileName, ExportKeyToReg($@"{exportRoot}\{subkey}")));
+                        manifest.AppendLine($@"[DELETE VALUE] {issue.KeyPath}\{issue.ValueName}  ->  {fileName}");
+
+                        using (var key = rootKey.OpenSubKey(subkey, true))
+                        {
+                            key?.DeleteValue(string.IsNullOrEmpty(issue.ValueName) ? "" : issue.ValueName, false);
+                        }
                     }
                 }
+                catch (Exception ex)
+                {
+                    manifest.AppendLine($"; ERROR: Failed to repair '{issue.Title}' - {ex.Message}");
+                }
+            }
+
+            // Written as the user, so a link planted in their AppData can't redirect the engine's
+            // own (administrator/SYSTEM) rights to create files elsewhere.
+            try
+            {
+                ctx.RunAsUser(() =>
+                {
+                    Directory.CreateDirectory(backupDir);
+                    foreach (var (fileName, content) in exports)
+                    {
+                        if (content.Length > 0) File.WriteAllBytes(Path.Combine(backupDir, fileName), content);
+                    }
+                    File.WriteAllText(Path.Combine(backupDir, $"RegistryRepair_{stamp}.txt"), manifest.ToString());
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RegistryVerifier] Could not write backups to {backupDir}: {ex.Message}");
             }
 
             progressCallback?.Invoke("Repair Complete", 100);
             return true;
         }
 
-        // Exports a registry key to a .reg file via reg.exe so the repair is genuinely reversible
-        // (double-clicking the .reg re-imports the key). reg.exe accepts the short hive names
-        // (HKLM, HKCU, ...) used in our KeyPath strings.
-        private void ExportKeyToReg(string fullKeyPath, string regFilePath)
+        // Exports a registry key with reg.exe and returns the .reg file's bytes, so the caller can
+        // save them as the user. reg.exe runs with the engine's rights, so it writes into the
+        // engine's own protected ProgramData folder, never into a user-controlled path.
+        private static byte[] ExportKeyToReg(string fullKeyPath)
         {
+            string tempDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "RamRaidersTuneUpSuite", "tmp");
+            string tempFile = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + ".reg");
             try
             {
+                Directory.CreateDirectory(tempDir);
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "reg.exe",
@@ -406,16 +436,23 @@ namespace TuneUpEngine
                 };
                 psi.ArgumentList.Add("export");
                 psi.ArgumentList.Add(fullKeyPath);
-                psi.ArgumentList.Add(regFilePath);
+                psi.ArgumentList.Add(tempFile);
                 psi.ArgumentList.Add("/y");
 
-                using var p = System.Diagnostics.Process.Start(psi);
-                p?.WaitForExit(10000);
+                using (var p = System.Diagnostics.Process.Start(psi))
+                    p?.WaitForExit(10000);
+
+                return File.Exists(tempFile) ? File.ReadAllBytes(tempFile) : Array.Empty<byte>();
             }
             catch
             {
                 // Export is best-effort; a failed export must not block the repair, but the manifest
                 // line still records what was removed.
+                return Array.Empty<byte>();
+            }
+            finally
+            {
+                try { File.Delete(tempFile); } catch { }
             }
         }
     }
