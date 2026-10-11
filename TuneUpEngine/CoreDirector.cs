@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
@@ -64,6 +65,9 @@ namespace TuneUpEngine
             // Union follows — we only use PROCESSOR_RELATIONSHIP
         }
 
+        [DllImport("kernel32.dll")]
+        private static extern uint GetActiveProcessorCount(ushort groupNumber);
+
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool GetLogicalProcessorInformationEx(
             int relationship, IntPtr buffer, ref uint returnedLength);
@@ -83,37 +87,52 @@ namespace TuneUpEngine
             }
         }
 
+        // A mask with the lowest `count` bits set. (1L << 64) wraps around to (1L << 0) in C#, so the
+        // old "(1L << ProcessorCount) - 1" produced 0 on a 64-thread CPU — an empty affinity mask.
+        internal static long MaskFor(int count) =>
+            count >= 64 ? -1L : count <= 0 ? 0L : (1L << count) - 1;
+
+        // Process affinity masks only cover the process's processor group (64 logical processors at
+        // most), so masks are built for group 0 — not Environment.ProcessorCount, which counts every
+        // group on CPUs with more than 64 threads.
+        internal static int Group0ProcessorCount()
+        {
+            try
+            {
+                uint count = GetActiveProcessorCount(0);
+                if (count > 0) return (int)Math.Min(count, 64u);
+            }
+            catch { }
+            return Math.Min(Environment.ProcessorCount, 64);
+        }
+
+        // "All cores except core 0" (core 0 handles most interrupts), but never an empty mask.
+        internal static long AllButFirst(long mask) => (mask & ~1L) != 0 ? mask & ~1L : mask;
+
         private static CoreTopology BuildTopology()
         {
             var topology = new CoreTopology();
             topology.CpuModel = GetCpuModelString();
             topology.Architecture = DetectArchitecture(topology.CpuModel);
 
-            long allCoresMask = (1L << Environment.ProcessorCount) - 1;
+            long allCoresMask = MaskFor(Group0ProcessorCount());
             topology.AllCoresMask = new IntPtr(allCoresMask);
 
-            // Only attempt P/E core enumeration on known hybrid architectures
-            if (topology.Architecture == CpuArchitecture.IntelHybrid)
+            // Windows reports each core's efficiency class directly, so ask it on every CPU rather
+            // than only for model names we recognise (which missed new or renamed hybrid parts).
+            if (!TryParseHybridCores(topology))
             {
-                bool parsed = TryParseHybridCores(topology);
-                if (!parsed)
-                {
-                    // API call failed — fall back to standard behavior
-                    topology.HasHybridCores = false;
-                    topology.PCoresMask = new IntPtr(allCoresMask & ~1L);
-                    topology.ECoresMask = IntPtr.Zero;
-                    topology.DetectionMethod = "Fallback (API unavailable)";
-                }
-            }
-            else
-            {
-                // Standard topology: no E-cores, all cores except 0 for games
                 topology.HasHybridCores = false;
-                topology.PCoreCount = Environment.ProcessorCount;
+                topology.PCoreCount = Group0ProcessorCount();
                 topology.ECoreCount = 0;
-                topology.PCoresMask = new IntPtr(allCoresMask & ~1L);
+                topology.PCoresMask = new IntPtr(AllButFirst(allCoresMask));
                 topology.ECoresMask = IntPtr.Zero;
                 topology.DetectionMethod = $"Standard ({topology.Architecture})";
+            }
+            else if (topology.HasHybridCores && topology.Architecture == CpuArchitecture.IntelStandard)
+            {
+                // The name didn't look hybrid, but Windows says it is.
+                topology.Architecture = CpuArchitecture.IntelHybrid;
             }
 
             Console.WriteLine($"[CoreDirector] CPU: {topology.CpuModel}");
@@ -130,7 +149,6 @@ namespace TuneUpEngine
             {
                 uint returnedLength = 0;
                 GetLogicalProcessorInformationEx(RelationProcessorCore, IntPtr.Zero, ref returnedLength);
-
                 if (returnedLength == 0) return false;
 
                 IntPtr buffer = Marshal.AllocHGlobal((int)returnedLength);
@@ -139,71 +157,36 @@ namespace TuneUpEngine
                     if (!GetLogicalProcessorInformationEx(RelationProcessorCore, buffer, ref returnedLength))
                         return false;
 
-                    long pMask = 0;
-                    long eMask = 0;
-                    int pCount = 0;
-                    int eCount = 0;
-
+                    var cores = new List<(byte EfficiencyClass, ushort Group, long Mask)>();
                     IntPtr ptr = buffer;
                     IntPtr end = IntPtr.Add(buffer, (int)returnedLength);
 
                     while (ptr.ToInt64() < end.ToInt64())
                     {
-                        // Read the header: Relationship (int) + Size (uint)
+                        // Header: Relationship (int) + Size (uint); PROCESSOR_RELATIONSHIP at offset 8:
+                        // Flags (byte), EfficiencyClass (byte), Reserved[20], GroupCount (ushort at 30),
+                        // then GROUP_AFFINITY[] at 32, 16 bytes each: Mask (8), Group (ushort at +8).
                         int relationship = Marshal.ReadInt32(ptr, 0);
                         uint size = (uint)Marshal.ReadInt32(ptr, 4);
+                        if (size == 0) break;
 
                         if (relationship == RelationProcessorCore)
                         {
-                            // PROCESSOR_RELATIONSHIP starts at offset 8
-                            // EfficiencyClass is byte at offset 9
                             byte efficiencyClass = Marshal.ReadByte(ptr, 9);
-
-                            // GroupCount is at offset 28 (after Flags[1] + EfficiencyClass[1] + Reserved[20] + pad)
-                            // GROUP_AFFINITY starts at offset 32
-                            // Each GROUP_AFFINITY is 16 bytes (UIntPtr[8] + ushort + ushort[3])
                             ushort groupCount = (ushort)Marshal.ReadInt16(ptr, 30);
-
                             for (int g = 0; g < groupCount; g++)
                             {
                                 IntPtr affinityPtr = IntPtr.Add(ptr, 32 + g * 16);
                                 long mask = Marshal.ReadInt64(affinityPtr, 0);
-
-                                if (efficiencyClass == 0)
-                                {
-                                    pMask |= mask;
-                                    pCount += CountBits(mask);
-                                }
-                                else
-                                {
-                                    eMask |= mask;
-                                    eCount += CountBits(mask);
-                                }
+                                ushort group = (ushort)Marshal.ReadInt16(affinityPtr, 8);
+                                cores.Add((efficiencyClass, group, mask));
                             }
                         }
 
                         ptr = IntPtr.Add(ptr, (int)size);
                     }
 
-                    if (eCount > 0)
-                    {
-                        topology.HasHybridCores = true;
-                        topology.PCoreCount = pCount;
-                        topology.ECoreCount = eCount;
-                        topology.PCoresMask = new IntPtr(pMask);
-                        topology.ECoresMask = new IntPtr(eMask);
-                        topology.DetectionMethod = "GetLogicalProcessorInformationEx";
-                        return true;
-                    }
-
-                    // API succeeded but reported no E-cores (e.g., i9-12900KS with all P-cores)
-                    topology.HasHybridCores = false;
-                    topology.PCoreCount = pCount > 0 ? pCount : Environment.ProcessorCount;
-                    topology.ECoreCount = 0;
-                    topology.PCoresMask = new IntPtr(pMask != 0 ? pMask & ~1L : ((1L << Environment.ProcessorCount) - 1) & ~1L);
-                    topology.ECoresMask = IntPtr.Zero;
-                    topology.DetectionMethod = "GetLogicalProcessorInformationEx (no E-cores found)";
-                    return true;
+                    return ApplyCoreClasses(topology, cores);
                 }
                 finally
                 {
@@ -212,9 +195,45 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CoreDirector] Failed to parse hybrid cores: {ex.Message}");
+                Console.WriteLine($"[CoreDirector] Failed to read core topology: {ex.Message}");
                 return false;
             }
+        }
+
+        // Splits group-0 cores into performance (the highest efficiency class) and efficiency
+        // (lower classes). On a hybrid CPU Windows gives P-cores the HIGHER class (e.g. P = 1,
+        // E = 0); the old code assumed 0 meant P-core, which is backwards. A CPU where every core
+        // reports the same class isn't hybrid.
+        internal static bool ApplyCoreClasses(CoreTopology topology, IReadOnlyList<(byte EfficiencyClass, ushort Group, long Mask)> cores)
+        {
+            var group0 = cores.Where(c => c.Group == 0).ToList();
+            if (group0.Count == 0) return false;
+
+            byte maxClass = group0.Max(c => c.EfficiencyClass);
+            byte minClass = group0.Min(c => c.EfficiencyClass);
+            long all = group0.Aggregate(0L, (m, c) => m | c.Mask);
+
+            if (maxClass == minClass)
+            {
+                topology.HasHybridCores = false;
+                topology.PCoreCount = CountBits(all);
+                topology.ECoreCount = 0;
+                topology.PCoresMask = new IntPtr(AllButFirst(all));
+                topology.ECoresMask = IntPtr.Zero;
+                topology.DetectionMethod = "GetLogicalProcessorInformationEx (no E-cores)";
+                return true;
+            }
+
+            long pMask = group0.Where(c => c.EfficiencyClass == maxClass).Aggregate(0L, (m, c) => m | c.Mask);
+            long eMask = group0.Where(c => c.EfficiencyClass != maxClass).Aggregate(0L, (m, c) => m | c.Mask);
+
+            topology.HasHybridCores = true;
+            topology.PCoreCount = CountBits(pMask);
+            topology.ECoreCount = CountBits(eMask);
+            topology.PCoresMask = new IntPtr(pMask);
+            topology.ECoresMask = new IntPtr(eMask);
+            topology.DetectionMethod = "GetLogicalProcessorInformationEx";
+            return true;
         }
 
         private static string GetCpuModelString()
@@ -274,11 +293,8 @@ namespace TuneUpEngine
             return CpuArchitecture.Other;
         }
 
-        private static int CountBits(long value)
-        {
-            int count = 0;
-            while (value != 0) { count += (int)(value & 1); value >>= 1; }
-            return count;
-        }
+        // (The old loop shifted a signed value right, which never reaches 0 for a mask with the top
+        // bit set — an infinite loop on a 64-thread CPU.)
+        private static int CountBits(long value) => System.Numerics.BitOperations.PopCount(unchecked((ulong)value));
     }
 }

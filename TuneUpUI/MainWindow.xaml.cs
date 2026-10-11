@@ -872,6 +872,15 @@ namespace TuneUpUI
                 (hasDuplicates
                     ? "\n\nFor each duplicate set, the first copy listed is kept and only the extra copies are deleted."
                     : "");
+
+            // Rule authors flag cleaners with side effects (e.g. "This will also delete all
+            // app-specific settings"); show those before anything is deleted.
+            var warnings = selectedItems
+                .Where(i => !string.IsNullOrWhiteSpace(i.Warning))
+                .Select(i => $"• {i.RuleName}: {i.Warning}")
+                .ToList();
+            if (warnings.Count > 0)
+                confirmText += "\n\nPlease note:\n" + string.Join("\n", warnings);
             if (MessageBox.Show(confirmText, "Confirm Clean", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
 
@@ -1075,8 +1084,9 @@ namespace TuneUpUI
                     BtnRepairComponent.IsEnabled = true;
                     if (completed.Status == "Success")
                     {
-                        MessageBox.Show("Baseline SFC/DISM Repair Complete!\nSystem components verified and bad binaries replaced.", "Integrity Restored", MessageBoxButton.OK, MessageBoxImage.Information);
-                        TxtComponentStatus.Text = "Baseline repair complete. System files verified.";
+                        // The engine now reports what DISM and SFC actually found and did.
+                        MessageBox.Show(completed.Message ?? "System repair finished.", "System Repair", MessageBoxButton.OK, MessageBoxImage.Information);
+                        TxtComponentStatus.Text = completed.Message ?? "Repair complete.";
                         // Re-scan CBS to refresh the log view
                         Task.Run(() =>
                         {
@@ -1097,7 +1107,8 @@ namespace TuneUpUI
                     }
                     else
                     {
-                        TxtComponentStatus.Text = $"Baseline repair failed: {completed.Message}";
+                        TxtComponentStatus.Text = $"Repair finished with problems: {completed.Message}";
+                        MessageBox.Show(completed.Message ?? "The repair did not complete.", "System Repair", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }
             );
@@ -1950,6 +1961,40 @@ namespace TuneUpUI
         }
 
         private void BtnMigRefreshHistory_Click(object sender, RoutedEventArgs e) => RefreshMigrationHistory();
+
+        private void BtnUndoMigration_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button btn || btn.Tag is not string originalPath) return;
+
+            if (MessageBox.Show(
+                    $"Move this folder back to its original location?\n\n{originalPath}\n\n" +
+                    "The files are copied back and checked before the link is removed, and the migrated copy is deleted afterwards.",
+                    "Undo Migration", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
+            btn.IsEnabled = false;
+            ProgMigrate.Visibility = Visibility.Visible;
+            TxtMigProgress.Visibility = Visibility.Visible;
+            ProgMigrate.Value = 0;
+
+            Task.Run(() =>
+            {
+                var resp = SendIpcRequestStreaming("UndoMigration", originalPath,
+                    progress => Dispatcher.Invoke(() =>
+                    {
+                        ProgMigrate.Value = progress.ProgressPercent;
+                        TxtMigProgress.Text = progress.Message;
+                    }));
+                Dispatcher.Invoke(() =>
+                {
+                    btn.IsEnabled = true;
+                    ProgMigrate.Visibility = Visibility.Collapsed;
+                    TxtMigProgress.Visibility = Visibility.Collapsed;
+                    AppendMonitorEvent($"[StorageMigrator] {(resp?.Status == "Success" ? "" : "\u26A0\uFE0F ")}{resp?.Message ?? "Undo failed"}");
+                    RefreshMigrationHistory();
+                });
+            });
+        }
 
         private static string FormatBytes(long bytes)
         {

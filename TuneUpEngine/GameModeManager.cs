@@ -262,22 +262,20 @@ namespace TuneUpEngine
                                 proc.PriorityClass = ProcessPriorityClass.High;
                             }
 
-                            // Use CoreDirector to get P-core mask (or all-minus-Core-0 on standard CPUs)
+                            // Core placement follows Microsoft's guidance for games
+                            // (learn.microsoft.com, "Game Performance in Hybrid CPU Environments"):
+                            //  * Ordinary CPUs (one core type): don't hard-pin — a pinned thread can be
+                            //    starved by other work on its core. Only the priority is raised.
+                            //  * Hybrid CPUs with at least 3 performance cores: keep the game on the
+                            //    performance cores, free to float across all of them.
+                            // (Previously every CPU was pinned to "all cores but core 0", and on hybrid
+                            // CPUs the core classes were read backwards, pinning games to E-cores.)
                             var topology = CoreDirector.GetTopology();
-                            IntPtr gameMask;
-                            if (topology.HasHybridCores)
+                            if (topology.HasHybridCores && topology.PCoreCount >= 3 && topology.PCoresMask != IntPtr.Zero)
                             {
-                                // Hybrid CPU: restrict game to P-cores only for maximum single-thread perf
-                                gameMask = topology.PCoresMask;
-                                Console.WriteLine($"[GameMode] Pinning {procName} to {topology.PCoreCount} P-cores (mask: 0x{gameMask.ToInt64():X})");
+                                proc.ProcessorAffinity = topology.PCoresMask;
+                                Console.WriteLine($"[GameMode] Keeping {procName} on {topology.PCoreCount} P-cores (mask: 0x{topology.PCoresMask.ToInt64():X})");
                             }
-                            else
-                            {
-                                // Standard CPU: all cores except Core 0 (reserved for OS interrupts)
-                                gameMask = topology.PCoresMask; // PCoresMask = allCores & ~1 on standard
-                                Console.WriteLine($"[GameMode] Pinning {procName} to all cores minus Core 0 (mask: 0x{gameMask.ToInt64():X})");
-                            }
-                            proc.ProcessorAffinity = gameMask;
 
                             _lastBoostedPid = proc.Id;
                             _lastBoostedName = procName;

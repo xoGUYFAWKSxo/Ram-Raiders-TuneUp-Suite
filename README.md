@@ -35,20 +35,20 @@ A professional-grade, high-performance Windows system optimization and maintenan
 
 ### 🧠 2. CPU ProBalance & Game Booster
 * **ProBalance Governor**: Automatically throttles abusive background applications consuming excessive CPU time by temporarily lowering their scheduling priority class, giving the active foreground application 100% responsiveness.
-* **Game Mode Booster**: Detects active game processes, elevates their scheduling priority to High, and pins them to all available CPU cores except Core 0 (which is reserved for OS/driver interrupt handling) to prevent frame-time micro-stuttering.
+* **Game Mode Booster**: Detects the active game and raises its priority to High. Following Microsoft's guidance for games, it does not hard-pin games on ordinary CPUs; on hybrid CPUs with at least three performance cores it keeps the game on the performance cores (detected from Windows' own core efficiency classes).
 
 ### 🔌 3. Hardware Interrupt Tuning (MSI Mode)
 * **MSI Compliance Scanner**: Queries all PCI/PCIe hardware devices in the registry to evaluate Message Signaled Interrupts (MSI) compatibility.
 * **Force MSI Provisioner**: Writes MSI mode override entries for compliant hardware, resolving legacy line-based IRQ conflicts and significantly reducing DPC (Deferred Procedure Call) latencies.
 
 ### 🧼 4. Rule-Based System Cleaner & Advanced Hasher
-* **Winapp2.ini Scanner**: Parses standard and community-sourced Winapp2 cleaner rule files to wipe cache, log, and temp paths for hundreds of third-party applications.
+* **Winapp2.ini Scanner**: Full support for community winapp2 rules — wildcard folders, registry `Detect` keys, numbered `DetectFile` keys, `REMOVESELF`, wildcard exclusions, all common path tokens, categories and rule warnings. Event logs, the CBS log, registry hives and the component store are never cleaned, whatever a rule says.
 * **Advanced Duplicate Hasher**: Scans your Documents, Pictures, Videos, Music, Desktop, Downloads and OneDrive folders, groups candidates by file size, pre-filters on a SHA-256 of the first 1 MB, then confirms true byte-for-byte duplicates with a full-file SHA-256. Cloud-only (online) files are skipped, and cleaning a duplicate set always keeps the first copy.
 * **Empty Folder Finder**: Recursively scans and cleans empty subdirectories within user folders without touching root structures.
 
 ### 🛠️ 5. Component Repair & Log Analyzer
 * **CBS Log Analyzer**: Reads the Windows CBS log (`C:\Windows\Logs\CBS\CBS.log`) to parse corruption signatures and repair failures.
-* **Automatic SFC / DISM Repair**: Triggers a clean DISM restore-health sequence backed by SFC (System File Checker) online repair.
+* **Automatic SFC / DISM Repair**: Runs DISM RestoreHealth then SFC, and reports what actually happened (DISM exit codes and SFC's verdict) instead of always reporting success.
 
 ### ⚙️ 6. 30+ Core Registry Tweaks
 * **Gaming & Network**: Disables artificial network packet throttling and optimizes system responsiveness.

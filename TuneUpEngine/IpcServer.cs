@@ -86,7 +86,7 @@ namespace TuneUpEngine
             "SetGovernorState", "SetAutoPurgeState", "SetGameModeState", "PurgeStandbyList",
             "ProvisionMSIInterrupts", "RevertMSIInterrupts", "UpdateCleanerDefinitions",
             "RunSystemRepair", "SetServiceState", "RemoveAppxPackage",
-            "ApplyNetworkOptimizations", "RevertNetworkOptimizations", "MigrateDirectory",
+            "ApplyNetworkOptimizations", "RevertNetworkOptimizations", "MigrateDirectory", "UndoMigration",
             "StartLatencyAudit", "StopLatencyAudit", "ShutdownEngine",
         };
         private readonly IReadOnlyList<string> _trustedClientPaths;
@@ -729,7 +729,7 @@ namespace TuneUpEngine
                     break;
 
                 case "RunSystemRepair":
-                    _integrityAgent.RunIntegrityRepair((step, percent) =>
+                    var repair = _integrityAgent.RunIntegrityRepair((step, percent) =>
                     {
                         SendResponse(writer, new IpcResponse
                         {
@@ -739,9 +739,11 @@ namespace TuneUpEngine
                         });
                     });
 
+                    LogEvent($"[Repair] {repair.Message}");
                     SendResponse(writer, new IpcResponse
                     {
-                        Status = "Success"
+                        Status = repair.Success ? "Success" : "Error",
+                        Message = repair.Message
                     });
                     break;
 
@@ -889,6 +891,20 @@ namespace TuneUpEngine
                         else
                             SendResponse(writer, new IpcResponse { Status = "Error", Message = "Invalid payload. Expected 'source|destination'" });
                     }
+                    break;
+
+                case "UndoMigration":
+                    RunInBackground(writer, "Undo migration", () =>
+                    {
+                        string undoResult = StorageMigrator.UndoMigration(request.Payload ?? "",
+                            (msg, pct) => SendResponse(writer, new IpcResponse { Status = "Progress", ProgressPercent = pct, Message = msg }));
+                        LogEvent($"[StorageMigrator] {undoResult}");
+                        SendResponse(writer, new IpcResponse
+                        {
+                            Status = undoResult.StartsWith("Success") ? "Success" : "Error",
+                            Message = undoResult
+                        });
+                    });
                     break;
 
                 case "GetMigrationHistory":

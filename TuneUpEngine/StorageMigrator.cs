@@ -28,14 +28,9 @@ namespace TuneUpEngine
 
     public static class StorageMigrator
     {
-        private const uint SYMBOLIC_LINK_FLAG_DIRECTORY = 0x1;
-        private const uint SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE = 0x2;
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CreateSymbolicLinkW(
-            string lpSymlinkFileName,
-            string lpTargetFileName,
-            uint dwFlags);
+        // (The CreateSymbolicLinkW P/Invoke was removed. Windows declares it as returning a 1-byte
+        // BOOLEAN, but it was marshalled as a 4-byte BOOL, so the garbage upper bytes made a FAILED
+        // link read as success — and the original folder was then deleted with no link left.)
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern uint GetFileAttributesW(string lpFileName);
@@ -304,19 +299,35 @@ namespace TuneUpEngine
                     return $"Error: Verification failed ({detail}). Destination cleaned up; original left untouched.";
                 }
 
-                // Phase 3: Delete source
-                progressCallback?.Invoke("Removing original directory...", 93);
-                Directory.Delete(sourcePath, recursive: true);
+                // Phase 3: Swap the original for a link — without ever leaving a half-deleted folder.
+                // The old order deleted the source first and created the link after; a locked file
+                // stopped the delete halfway, leaving a partial folder and no link. Now the original
+                // is RENAMED aside (instant and atomic on the same drive), the link is created in its
+                // place, and only then is the renamed original deleted. If the link can't be made,
+                // the rename is reversed and nothing has changed.
+                progressCallback?.Invoke("Switching to the new location...", 93);
+                string parked = ParkedPath(sourcePath);
+                Directory.Move(sourcePath, parked);
 
-                // Phase 4: Create symlink
-                progressCallback?.Invoke("Creating NTFS symbolic link...", 97);
-                bool symlinkCreated = CreateSymbolicLinkW(sourcePath, destinationPath,
-                    SYMBOLIC_LINK_FLAG_DIRECTORY);
-
-                if (!symlinkCreated)
+                string? linkError = TryCreateDirectoryLink(sourcePath, destinationPath);
+                if (linkError != null)
                 {
-                    int err = Marshal.GetLastWin32Error();
-                    return $"Error: Symlink creation failed (Win32 error {err}). Files are safe at: {destinationPath}";
+                    Directory.Move(parked, sourcePath);
+                    try { Directory.Delete(destinationPath, recursive: true); } catch { }
+                    return $"Error: Could not create the link ({linkError}). Nothing was changed.";
+                }
+
+                // Phase 4: Remove the original. The link already works; a file that can't be deleted
+                // (e.g. in use) is reported, and the rest of the space is still freed.
+                progressCallback?.Invoke("Removing the original copy...", 97);
+                string? leftover = null;
+                try
+                {
+                    Directory.Delete(parked, recursive: true);
+                }
+                catch (Exception ex)
+                {
+                    leftover = $" Some original files couldn't be removed ({ex.Message}); they are in '{parked}' and can be deleted later.";
                 }
 
                 // Phase 5: Record history
@@ -331,7 +342,7 @@ namespace TuneUpEngine
                 });
 
                 progressCallback?.Invoke("Migration complete!", 100);
-                return $"Success: Migrated {FormatBytes(sourceSize)} to {destinationPath}. Symlink active at original path.";
+                return $"Success: Migrated {FormatBytes(sourceSize)} to {destinationPath}. Symlink active at original path.{leftover}";
             }
             catch (OperationCanceledException)
             {
@@ -340,8 +351,135 @@ namespace TuneUpEngine
             }
             catch (Exception ex)
             {
+                // Failed before the swap (e.g. a file couldn't be copied): the original is untouched,
+                // so remove the partial copy rather than leaving it behind.
+                if (Directory.Exists(sourcePath) && (File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) == 0)
+                {
+                    try { Directory.Delete(destinationPath, recursive: true); } catch { }
+                }
                 return $"Error during migration: {ex.Message}";
             }
+        }
+
+        // Creates a directory symbolic link and then CHECKS it really exists and points at the target
+        // before anything is deleted. Returns null on success, otherwise the reason.
+        // Creating links needs administrator rights (the engine has them) or Developer Mode.
+        internal static string? TryCreateDirectoryLink(string linkPath, string targetPath)
+        {
+            try
+            {
+                Directory.CreateSymbolicLink(linkPath, targetPath);
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+
+            var link = new DirectoryInfo(linkPath);
+            bool ok = link.Exists &&
+                      (link.Attributes & FileAttributes.ReparsePoint) != 0 &&
+                      link.LinkTarget != null &&
+                      Path.GetFullPath(link.LinkTarget).TrimEnd('\\').Equals(
+                          Path.GetFullPath(targetPath).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+            if (ok) return null;
+
+            try { if (link.Exists) Directory.Delete(linkPath); } catch { }
+            return "the link could not be verified";
+        }
+
+        // Where the original is parked during the swap: a sibling on the same drive.
+        private static string ParkedPath(string sourcePath)
+        {
+            string trimmed = Path.TrimEndingDirectorySeparator(sourcePath);
+            return $"{trimmed}.rrtu-original-{DateTime.Now:yyyyMMddHHmmss}";
+        }
+
+        // ── Undo ────────────────────────────────────────────────────────────────
+
+        // Moves a migrated folder back to its original location and removes the link. Same safety
+        // rules as migrating: the files are copied back and verified BEFORE the link is replaced,
+        // and the moved copy is only deleted once the folder is back in place.
+        public static string UndoMigration(string originalPath, Action<string, double> progressCallback)
+        {
+            var record = GetHistory().FirstOrDefault(r =>
+                r.OriginalPath.Equals(originalPath, StringComparison.OrdinalIgnoreCase));
+            if (record == null)
+                return "Error: That folder isn't in the migration history.";
+
+            string? pathError = ValidateSource(record.OriginalPath);
+            if (pathError != null)
+                return $"Error: {pathError}";
+
+            var link = new DirectoryInfo(record.OriginalPath);
+            if (!link.Exists || (link.Attributes & FileAttributes.ReparsePoint) == 0)
+                return "Error: The original location is no longer a link — it may already have been restored.";
+
+            string? target = link.LinkTarget;
+            if (target == null || !Path.GetFullPath(target).TrimEnd('\\').Equals(
+                    Path.GetFullPath(record.DestinationPath).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                return "Error: The link no longer points to the migrated folder, so it was left alone.";
+
+            if (!Directory.Exists(record.DestinationPath))
+                return $"Error: The migrated folder '{record.DestinationPath}' no longer exists.";
+
+            long size = CalculateDirectorySize(record.DestinationPath);
+            string? root = Path.GetPathRoot(record.OriginalPath);
+            if (root != null && new DriveInfo(root).AvailableFreeSpace < size)
+                return $"Error: Not enough space on {root} to move {FormatBytes(size)} back.";
+
+            string restoring = $"{Path.TrimEndingDirectorySeparator(record.OriginalPath)}.rrtu-restoring";
+            try
+            {
+                if (Directory.Exists(restoring)) Directory.Delete(restoring, recursive: true);
+
+                progressCallback?.Invoke("Copying files back...", 0);
+                long copied = 0;
+                CopyDirectory(record.DestinationPath, restoring, ref copied, size, progressCallback, CancellationToken.None);
+
+                progressCallback?.Invoke("Verifying the copy...", 90);
+                var (verified, detail) = VerifyCopy(record.DestinationPath, restoring);
+                if (!verified)
+                {
+                    try { Directory.Delete(restoring, recursive: true); } catch { }
+                    return $"Error: Verification failed ({detail}). Nothing was changed.";
+                }
+
+                // Replace the link with the restored folder. Deleting a directory link removes only
+                // the link, never the folder it points to.
+                progressCallback?.Invoke("Putting the folder back...", 94);
+                Directory.Delete(record.OriginalPath);
+                Directory.Move(restoring, record.OriginalPath);
+
+                progressCallback?.Invoke("Removing the migrated copy...", 97);
+                string? leftover = null;
+                try { Directory.Delete(record.DestinationPath, recursive: true); }
+                catch (Exception ex) { leftover = $" The copy at '{record.DestinationPath}' couldn't be fully removed ({ex.Message})."; }
+
+                RemoveMigrationRecord(record.OriginalPath);
+                progressCallback?.Invoke("Restore complete!", 100);
+                return $"Success: Restored {FormatBytes(size)} to {record.OriginalPath}.{leftover}";
+            }
+            catch (Exception ex)
+            {
+                // If the link is still in place the folder is still usable at its old path.
+                if (Directory.Exists(restoring) && Directory.Exists(record.OriginalPath))
+                {
+                    try { Directory.Delete(restoring, recursive: true); } catch { }
+                }
+                return $"Error during restore: {ex.Message}";
+            }
+        }
+
+        private static void RemoveMigrationRecord(string originalPath)
+        {
+            try
+            {
+                var records = GetHistory();
+                records.RemoveAll(r => r.OriginalPath.Equals(originalPath, StringComparison.OrdinalIgnoreCase));
+                File.WriteAllText(HistoryFile, JsonSerializer.Serialize(records,
+                    new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch { }
         }
 
         // ── History ─────────────────────────────────────────────────────────────

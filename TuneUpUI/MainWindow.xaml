@@ -1189,15 +1189,16 @@
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="*"/>
                                                                 <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
                                                             </Grid.ColumnDefinitions>
                                                             <StackPanel>
                                                                 <TextBlock Text="{Binding OriginalPath}" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
                                                                 <TextBlock Foreground="{StaticResource BrushTextMuted}" FontSize="11">
-                                                                    <Run Text="Ã¢â€ â€™ "/>
+                                                                    <Run Text="&#x2192; "/>
                                                                     <Run Text="{Binding DestinationPath}"/>
-                                                                    <Run Text="  Ã¢â‚¬Â¢  "/>
+                                                                    <Run Text="  &#x2022;  "/>
                                                                     <Run Text="{Binding SizeBytes, Converter={x:Static local:BytesConverter.Instance}}"/>
-                                                                    <Run Text="  Ã¢â‚¬Â¢  "/>
+                                                                    <Run Text="  &#x2022;  "/>
                                                                     <Run Text="{Binding MigratedAt, StringFormat='{}{0:MMM dd, yyyy}'}"/>
                                                                 </TextBlock>
                                                             </StackPanel>
@@ -1206,6 +1207,10 @@
                                                                 <TextBlock Foreground="White" FontSize="10" FontWeight="Bold"
                                                                            Text="{Binding SymlinkActive, Converter={x:Static local:BoolToSymlinkLabelConverter.Instance}}"/>
                                                             </Border>
+                                                            <Button Grid.Column="2" Content="Undo" Style="{StaticResource OutlineButton}" Padding="10,3" FontSize="11"
+                                                                    Margin="10,0,0,0" VerticalAlignment="Center" Tag="{Binding OriginalPath}"
+                                                                    ToolTip="Move the folder back to its original location and remove the link"
+                                                                    Click="BtnUndoMigration_Click"/>
                                                         </Grid>
                                                     </Border>
                                                 </DataTemplate>
