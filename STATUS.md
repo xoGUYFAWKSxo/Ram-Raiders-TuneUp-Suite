@@ -2,6 +2,9 @@
 
 _Last updated: 2026-10-12, main at 8380398 (PR #22)._
 
+## Repository history
+- 2026-10-12: the repo went public as a fresh repository with commit emails rewritten to the GitHub noreply address, under GPL-3.0. The original private repo, with PRs #1 to #23 and their discussions, is `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite-archive`. PR numbers and commit hashes below refer to that archive; the file contents are identical.
+
 ## Current state
 - The phased rework plan is complete (PRs #1 to #16).
 - End-to-end review (PR #17) and testing of the destructive features against a real engine (PR #18) are done and merged.

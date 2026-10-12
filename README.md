@@ -119,3 +119,6 @@ Simply double-click **`Start-TuneUp.bat`** in the root of the workspace folder. 
 1. Auto-compile the solution (`dotnet build`).
 2. Start the WPF Client GUI (`TuneUpUI.exe`).
 3. The GUI will automatically discover the background service, prompt for Administrator elevation (UAC prompt), and start `TuneUpEngine.exe` completely silently in the background.
+## License
+
+Ram Raiders TuneUp Suite is free software, licensed under the [GNU General Public License v3.0](LICENSE). You may use, study, share and modify it; if you distribute a modified version, it must also be released under GPL-3.0 with its source code.
