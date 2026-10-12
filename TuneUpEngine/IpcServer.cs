@@ -170,7 +170,7 @@ namespace TuneUpEngine
             };
             _latencyAuditor.OnSpikeDetected += (record) =>
             {
-                LogEvent($"[LatencyAuditor] ⚠️ {record.Name} spent {record.CurrentDpcPercent + record.CurrentInterruptPercent:F1}% of its time on driver DPCs/interrupts");
+                LogEvent($"[LatencyAuditor] ⚠️ {record.Name} spent {record.WindowDpcPercent + record.WindowInterruptPercent:F1}% of its time on driver work over the last {LatencyAuditor.WindowSamples} seconds (DPC {record.WindowDpcPercent:F1}%, interrupt {record.WindowInterruptPercent:F1}%)");
             };
         }
 
