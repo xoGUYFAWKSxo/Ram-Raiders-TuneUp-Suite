@@ -40,4 +40,12 @@ $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
 if (-not $iscc) { throw 'Inno Setup 6 not found (winget install JRSoftware.InnoSetup)' }
 & $iscc /Q installer.iss
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
-Get-Item 'publish\Installer\RamRaidersTuneUpSuite_Setup.exe'
+
+# The installer is not code-signed, so publish its SHA-256 next to it: anyone can check the file
+# they downloaded is the one that was built. Same format as sha256sum ("<hash> *<file>").
+$setup = Get-Item 'publish\Installer\RamRaidersTuneUpSuite_Setup.exe'
+$hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+"$hash *$($setup.Name)" | Set-Content "$($setup.FullName).sha256" -Encoding ascii
+Write-Host "SHA-256: $hash"
+$setup
+Get-Item "$($setup.FullName).sha256"
