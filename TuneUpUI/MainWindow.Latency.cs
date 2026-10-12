@@ -46,7 +46,7 @@ namespace TuneUpUI
                 {
                     BtnStartLatency.IsEnabled = false;
                     BtnStopLatency.IsEnabled = true;
-                    TxtLatencyStatus.Text = "Auditing in progress — results update every 2 seconds.";
+                    TxtLatencyStatus.Text = "Measuring… results appear after 5 seconds and update every 2 seconds.";
 
                     _latencyRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
                     _latencyRefreshTimer.Tick += LatencyRefreshTimer_Tick;
@@ -69,6 +69,13 @@ namespace TuneUpUI
                     TxtLatencyStatus.Text = "Audit stopped. Results are the last sampled values.";
                 });
             });
+        }
+
+        private void BtnLatencyHelp_Click(object sender, RoutedEventArgs e)
+        {
+            PnlLatencyHelp.Visibility = PnlLatencyHelp.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         }
 
         private void LatencyRefreshTimer_Tick(object? sender, EventArgs e)

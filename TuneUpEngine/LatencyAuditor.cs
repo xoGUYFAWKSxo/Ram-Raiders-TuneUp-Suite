@@ -15,8 +15,14 @@ namespace TuneUpEngine
         public string Name { get; set; } = "";
         public double CurrentDpcPercent { get; set; }
         public double CurrentInterruptPercent { get; set; }
+        // Highest DPC + interrupt load averaged over WindowSamples readings, and its two parts
+        // from that same window, so the columns always add up to the total.
+        public double PeakTotalPercent { get; set; }
         public double PeakDpcPercent { get; set; }
         public double PeakInterruptPercent { get; set; }
+        // The latest window average; what a spike event reports.
+        public double WindowDpcPercent { get; set; }
+        public double WindowInterruptPercent { get; set; }
         public double AvgDpcPercent { get; set; }
         public double AvgInterruptPercent { get; set; }
         public int HighSamples { get; set; }
@@ -26,6 +32,7 @@ namespace TuneUpEngine
         internal double DpcSum;
         internal double InterruptSum;
         internal int SampleCount;
+        internal readonly Queue<(double Dpc, double Isr)> Window = new();
     }
 
     public class LatencyReport
@@ -71,6 +78,11 @@ namespace TuneUpEngine
         internal const double ElevatedPercent = 3.0;
         internal const double HighPercent = 10.0;
         private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(1);
+
+        // Windows charges DPC/interrupt time a whole clock tick (15.6 ms) at a time, so a single
+        // 1-second reading moves in 1.56% steps: one unlucky tick reads as 1.6%, two as 3.1%.
+        // Peaks and status use a 5-second average (0.3% steps) so one tick can't flag a core.
+        internal const int WindowSamples = 5;
 
         private readonly Func<ILatencyCounterSource> _sourceFactory;
         private ILatencyCounterSource? _source;
@@ -147,7 +159,7 @@ namespace TuneUpEngine
                     DpcsQueuedPerSec = _lastSample?.DpcsQueuedPerSec ?? 0,
                     InterruptsPerSec = _lastSample?.InterruptsPerSec ?? 0,
                     Cores = _cores
-                        .OrderByDescending(c => c.PeakDpcPercent + c.PeakInterruptPercent)
+                        .OrderByDescending(c => c.PeakTotalPercent)
                         .Take(16)
                         .Select(Copy)
                         .ToList(),
@@ -201,19 +213,32 @@ namespace TuneUpEngine
 
                     core.CurrentDpcPercent = dpc;
                     core.CurrentInterruptPercent = isr;
-                    core.PeakDpcPercent = Math.Max(core.PeakDpcPercent, dpc);
-                    core.PeakInterruptPercent = Math.Max(core.PeakInterruptPercent, isr);
                     core.DpcSum += dpc;
                     core.InterruptSum += isr;
                     core.SampleCount++;
                     core.AvgDpcPercent = core.DpcSum / core.SampleCount;
                     core.AvgInterruptPercent = core.InterruptSum / core.SampleCount;
 
-                    double peak = core.PeakDpcPercent + core.PeakInterruptPercent;
+                    core.Window.Enqueue((dpc, isr));
+                    if (core.Window.Count > WindowSamples) core.Window.Dequeue();
+                    if (core.Window.Count < WindowSamples) continue;
+
+                    double windowDpc = core.Window.Average(w => w.Dpc);
+                    double windowIsr = core.Window.Average(w => w.Isr);
+                    core.WindowDpcPercent = windowDpc;
+                    core.WindowInterruptPercent = windowIsr;
+                    if (windowDpc + windowIsr > core.PeakTotalPercent)
+                    {
+                        core.PeakTotalPercent = windowDpc + windowIsr;
+                        core.PeakDpcPercent = windowDpc;
+                        core.PeakInterruptPercent = windowIsr;
+                    }
+
+                    double peak = core.PeakTotalPercent;
                     core.Status = peak >= HighPercent ? "HIGH" : peak >= ElevatedPercent ? "ELEVATED" : "OK";
                     core.IsSpike = peak >= HighPercent;
 
-                    if (dpc + isr >= HighPercent)
+                    if (windowDpc + windowIsr >= HighPercent)
                     {
                         core.HighSamples++;
                         // First occurrence, then every 30 high readings, so the log isn't flooded.
@@ -233,23 +258,29 @@ namespace TuneUpEngine
         {
             if (!report.CountersAvailable)
                 return "Windows performance counters are unavailable on this PC, so driver load can't be measured.";
-            if (report.SampleCount == 0)
-                return "Measuring… results appear after the first second.";
+            if (report.SampleCount < WindowSamples)
+                return $"Measuring… results appear after {WindowSamples} seconds.";
 
             var high = allCores.Where(c => c.Status == "HIGH").Select(c => c.Name).ToList();
             var elevated = allCores.Where(c => c.Status == "ELEVATED").Select(c => c.Name).ToList();
-            const string attribution = " Performance counters can't name the driver — use LatencyMon or Windows Performance Analyzer to find which one.";
+            const string attribution = " This tool can't tell which driver it is yet — open \"What is this?\" for how to find and fix it.";
 
             if (high.Count > 0)
-                return $"{string.Join(", ", high)} spent {HighPercent:F0}% or more of their time servicing driver DPCs/interrupts at peak — enough to cause stutter or audio dropouts.{attribution}";
+                return $"{JoinNames(high)} spent {HighPercent:F0}% or more of {(high.Count == 1 ? "its" : "their")} time on driver work over a 5-second stretch — enough to cause stutter or audio crackles.{attribution}";
             if (elevated.Count > 0)
-                return $"{string.Join(", ", elevated)} peaked above {ElevatedPercent:F0}% driver DPC/interrupt time. Usually harmless; worth watching if you hear crackles or see stutter.";
+                return $"{JoinNames(elevated)} peaked above {ElevatedPercent:F0}% driver time. Usually harmless; worth a look only if you hear crackles or see stutter.";
             return $"Driver DPC/interrupt load stayed below {ElevatedPercent:F0}% on every core — healthy.";
         }
+
+        private static string JoinNames(List<string> names) =>
+            names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1];
 
         private static CoreLatencyRecord Copy(CoreLatencyRecord c) => new()
         {
             Name = c.Name,
+            PeakTotalPercent = c.PeakTotalPercent,
+            WindowDpcPercent = c.WindowDpcPercent,
+            WindowInterruptPercent = c.WindowInterruptPercent,
             CurrentDpcPercent = c.CurrentDpcPercent,
             CurrentInterruptPercent = c.CurrentInterruptPercent,
             PeakDpcPercent = c.PeakDpcPercent,
