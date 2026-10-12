@@ -49,7 +49,7 @@ namespace TuneUpEngine
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath));
+                Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
                 File.WriteAllText(SettingsPath,
                     JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
             }

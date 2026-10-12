@@ -37,7 +37,7 @@ namespace TuneUpUI
         // POLLED SUBSYSTEM UPDATES
         // ==========================================
 
-        private void StatsTimer_Tick(object sender, EventArgs e)
+        private void StatsTimer_Tick(object? sender, EventArgs e)
         {
             if (_isConnecting) return;
             _isConnecting = true;
@@ -55,7 +55,7 @@ namespace TuneUpUI
 
         private bool _shownOtherCopyWarning;
 
-        private void UpdateStatsUI(IpcResponse resp)
+        private void UpdateStatsUI(IpcResponse? resp)
         {
             if (resp == null || resp.Status != IpcStatus.Success)
             {
@@ -146,7 +146,7 @@ namespace TuneUpUI
                                     proBalanceToasts: _settings.ProBalanceToast,
                                     memoryToasts: _settings.MemoryPurgeToast))
                             {
-                                _trayIcon.ShowNotification("Ram Raiders TuneUp Engine", latestLog, false);
+                                _trayIcon?.ShowNotification("Ram Raiders TuneUp Engine", latestLog, false);
                             }
                             _lastLogLine = latestLog;
                         }
@@ -165,7 +165,7 @@ namespace TuneUpUI
 
         private void BtnPurgeMemory_Click(object sender, RoutedEventArgs e)
         {
-            var btn = sender as Button;
+            if (sender is not Button btn) return;
             btn.IsEnabled = false;
 
             Task.Run(() =>
@@ -176,9 +176,9 @@ namespace TuneUpUI
                     btn.IsEnabled = true;
                     if (resp != null && resp.Status == IpcStatus.Success)
                     {
-                        long freedBytes = long.Parse(resp.Payload);
+                        long freedBytes = long.Parse(resp.Payload ?? "0");
                         MessageBox.Show($"Standby list emptied.\nThe standby cache shrank by {freedBytes / (1024.0 * 1024.0):F1} MB, which is now free memory. Windows refills this cache over time as files are used.", "Standby Purge", MessageBoxButton.OK, MessageBoxImage.Information);
-                        StatsTimer_Tick(null, null); // Refresh
+                        StatsTimer_Tick(null, EventArgs.Empty); // Refresh
                     }
                     else
                     {

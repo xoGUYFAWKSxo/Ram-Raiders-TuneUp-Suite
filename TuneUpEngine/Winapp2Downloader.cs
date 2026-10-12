@@ -11,7 +11,7 @@ namespace TuneUpEngine
         private const string Winapp2Url = "https://raw.githubusercontent.com/MoscaDotTo/Winapp2/master/Winapp2.ini";
         private readonly HttpClient _httpClient;
 
-        public event Action<string> OnDownloadLog;
+        public event Action<string>? OnDownloadLog;
 
         public Winapp2Downloader()
         {
@@ -42,7 +42,7 @@ namespace TuneUpEngine
                 }
 
                 // Ensure directory exists
-                string dir = Path.GetDirectoryName(destinationPath);
+                string? dir = Path.GetDirectoryName(destinationPath);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 {
                     Directory.CreateDirectory(dir);

@@ -34,11 +34,11 @@ namespace TuneUpUI
     {
         // Window shell: startup, engine connection, foreground reporting, navigation and closing.
         // Each tab's code lives in its own MainWindow.<Tab>.cs partial file.
-        private DispatcherTimer _statsTimer;
+        private DispatcherTimer? _statsTimer;
         private bool _isConnecting = false;
         
         // System Tray variables
-        private TrayIconHelper _trayIcon;
+        private TrayIconHelper? _trayIcon;
         private string _lastLogLine = "";
         private bool _isExplicitExit = false;
 
@@ -122,7 +122,7 @@ namespace TuneUpUI
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
-        private DispatcherTimer _foregroundTimer;
+        private DispatcherTimer? _foregroundTimer;
         private bool _reportingForeground;
 
         // When the engine runs as a Windows service it can't see this desktop, so Game Mode and
@@ -196,7 +196,7 @@ namespace TuneUpUI
             var button = sender as RadioButton;
             if (button != null && button.Tag != null)
             {
-                int index = int.Parse(button.Tag.ToString());
+                int index = Convert.ToInt32(button.Tag);
                 ContentTabControl.SelectedIndex = index;
 
                 // Lazy-load data for new tabs when first navigated to
@@ -255,7 +255,7 @@ namespace TuneUpUI
             }
             string timestamped = $"[{DateTime.Now:HH:mm:ss}] {message}";
             var monitorList = LstMonitorEvents.ItemsSource as List<string>;
-            var dashList = LstDashboardEvents?.ItemsSource as List<string>;
+            var dashList = LstDashboardEvents.ItemsSource as List<string>;
 
             // Both lists are normally bound to the same List instance — insert only once, or the
             // event would appear twice.
@@ -315,7 +315,7 @@ namespace TuneUpUI
                     @"TuneUpEngine\bin\Debug\net11.0-windows\TuneUpEngine.exe"
                 };
 
-                string foundPath = null;
+                string? foundPath = null;
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 foreach (var path in searchPaths)
                 {
@@ -372,7 +372,7 @@ namespace TuneUpUI
                 this.Hide();
                 if (_settings.EnableTrayNotifications)
                 {
-                    _trayIcon.ShowNotification("Ram Raiders TuneUp Suite Active", "Ram Raiders TuneUp Suite continues guarding your system from the tray.", false);
+                    _trayIcon?.ShowNotification("Ram Raiders TuneUp Suite Active", "Ram Raiders TuneUp Suite continues guarding your system from the tray.", false);
                 }
             }
         }

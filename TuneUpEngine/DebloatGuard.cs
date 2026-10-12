@@ -11,9 +11,9 @@ namespace TuneUpEngine
 {
     public class ServiceStatus
     {
-        public string ServiceName { get; set; }
-        public string DisplayName { get; set; }
-        public string Description { get; set; }
+        public string ServiceName { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string Description { get; set; } = "";
         public bool IsRunning { get; set; }
         public bool IsDisabled { get; set; }
         public bool IsAvailable { get; set; } // Service exists on this machine
@@ -21,11 +21,11 @@ namespace TuneUpEngine
 
     public class AppxPackageInfo
     {
-        public string Name { get; set; }
-        public string FriendlyName { get; set; }
-        public string Publisher { get; set; }
-        public string PackageFullName { get; set; }
-        public string Category { get; set; } // "Telemetry", "OEM", "Microsoft Bloat", etc.
+        public string Name { get; set; } = "";
+        public string FriendlyName { get; set; } = "";
+        public string Publisher { get; set; } = "";
+        public string PackageFullName { get; set; } = "";
+        public string Category { get; set; } = ""; // "Telemetry", "OEM", "Microsoft Bloat", etc.
         public bool IsOem { get; set; }
     }
 
@@ -264,7 +264,7 @@ namespace TuneUpEngine
                 try
                 {
                     // Open from HKCU if it's the Local Settings hive, otherwise HKLM
-                    RegistryKey root = hive.StartsWith("SOFTWARE\\Classes", StringComparison.OrdinalIgnoreCase)
+                    RegistryKey? root = hive.StartsWith("SOFTWARE\\Classes", StringComparison.OrdinalIgnoreCase)
                         ? userHive.Key?.OpenSubKey(hive)
                         : Registry.LocalMachine.OpenSubKey(hive);
 

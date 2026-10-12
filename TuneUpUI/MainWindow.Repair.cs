@@ -39,7 +39,7 @@ namespace TuneUpUI
 
         private void BtnScanComponent_Click(object sender, RoutedEventArgs e)
         {
-            var btn = sender as Button;
+            if (sender is not Button btn) return;
             btn.IsEnabled = false;
             TxtComponentStatus.Text = "Analyzing CBS.log file structures...";
 
@@ -51,11 +51,11 @@ namespace TuneUpUI
                     btn.IsEnabled = true;
                     if (resp != null && resp.Status == IpcStatus.Success)
                     {
-                        var report = JsonSerializer.Deserialize<Dictionary<string, object>>(resp.Payload);
+                        var report = JsonSerializer.Deserialize<Dictionary<string, object>>(resp.Payload ?? "null");
                         if (report == null) return;
 
-                        bool hasCorruption = bool.Parse(report["HasCorruption"].ToString());
-                        var logsJson = report["CorruptionLogs"].ToString();
+                        bool hasCorruption = string.Equals(report["HasCorruption"]?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+                        var logsJson = report["CorruptionLogs"]?.ToString() ?? "null";
                         var logs = JsonSerializer.Deserialize<List<string>>(logsJson);
 
                         LstCbsCorruptions.ItemsSource = logs;
@@ -106,10 +106,10 @@ namespace TuneUpUI
                             {
                                 if (r != null && r.Status == IpcStatus.Success)
                                 {
-                                    var report = JsonSerializer.Deserialize<Dictionary<string, object>>(r.Payload);
+                                    var report = JsonSerializer.Deserialize<Dictionary<string, object>>(r.Payload ?? "null");
                                     if (report != null)
                                     {
-                                        var logsJson = report["CorruptionLogs"].ToString();
+                                        var logsJson = report["CorruptionLogs"]?.ToString() ?? "null";
                                         LstCbsCorruptions.ItemsSource = JsonSerializer.Deserialize<List<string>>(logsJson);
                                     }
                                 }

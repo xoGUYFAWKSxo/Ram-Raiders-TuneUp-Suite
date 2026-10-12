@@ -46,7 +46,7 @@ namespace TuneUpUI
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        var tweaks = JsonSerializer.Deserialize<Dictionary<string, bool>>(resp.Payload);
+                        var tweaks = JsonSerializer.Deserialize<Dictionary<string, bool>>(resp.Payload ?? "null");
                         if (tweaks == null) return;
 
                         // Dynamically update checkboxes without hardcoding each one
@@ -100,7 +100,7 @@ namespace TuneUpUI
         {
             if (sender is Button btn && btn.Tag is string category)
             {
-                string[] tweaksToApply = null;
+                string[]? tweaksToApply = null;
                 switch (category)
                 {
                     case "SystemTweaks":
@@ -132,7 +132,7 @@ namespace TuneUpUI
                         if (FindName("Tgl" + twk) is CheckBox chk && chk.IsChecked != true)
                         {
                             chk.IsChecked = true;
-                            TweakToggle_Click(chk, null);
+                            TweakToggle_Click(chk, new RoutedEventArgs());
                         }
                     }
                 }

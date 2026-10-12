@@ -59,10 +59,10 @@ namespace TuneUpEngine
         private DateTime _lastAutoPurge = DateTime.MinValue;
 
         private bool _isAutoPurging = false;
-        private Thread _monitorThread;
+        private Thread? _monitorThread;
         private readonly object _lock = new object();
 
-        public event Action<long> OnAutoPurgeTriggered;
+        public event Action<long>? OnAutoPurgeTriggered;
 
         public bool IsAutoPurging
         {

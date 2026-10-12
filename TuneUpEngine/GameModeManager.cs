@@ -14,7 +14,7 @@ namespace TuneUpEngine
         private static extern int NtSetTimerResolution(uint DesiredResolution, bool SetResolution, out uint CurrentResolution);
 
         private bool _isEnabled = false;
-        private Thread _boosterThread;
+        private Thread? _boosterThread;
         private readonly object _lock = new object();
         
         private volatile int _lastBoostedPid = 0;
@@ -62,8 +62,8 @@ namespace TuneUpEngine
             "witcher3", "minecraft.launcher", "javaw", "fortniteclient-win64-shipping", "fifa", "cod"
         };
 
-        public event Action<string, int> OnGameBoosted;
-        public event Action<string, int> OnGameBoostRestored;
+        public event Action<string, int>? OnGameBoosted;
+        public event Action<string, int>? OnGameBoostRestored;
 
         // journal == null keeps an in-memory journal (tests); the engine passes the persisted one.
         public GameModeManager(ChangeJournal? journal = null)
@@ -316,7 +316,7 @@ namespace TuneUpEngine
             // 2. Check File Path Heuristics
             try
             {
-                string exePath = proc.MainModule?.FileName;
+                string? exePath = proc.MainModule?.FileName;
                 if (!string.IsNullOrEmpty(exePath))
                 {
                     exePath = exePath.ToLower();
@@ -373,7 +373,7 @@ namespace TuneUpEngine
         // be found or created, in which case Game Mode simply leaves the power plan alone.
         private string EnsureUltimatePlan()
         {
-            string list = ListPowerPlans();
+            string? list = ListPowerPlans();
             if (list == null) return ""; // Can't tell what exists — don't create anything.
 
             string existing = FindUltimatePlanGuid(list);
@@ -411,7 +411,7 @@ namespace TuneUpEngine
             return "";
         }
 
-        private static string ListPowerPlans()
+        private static string? ListPowerPlans()
         {
             try
             {

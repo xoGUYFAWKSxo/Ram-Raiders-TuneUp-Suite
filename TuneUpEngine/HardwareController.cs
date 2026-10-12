@@ -11,8 +11,8 @@ namespace TuneUpEngine
     public class MsiBackupEntry
     {
         // Full registry path (under HKLM) to the device's MessageSignaledInterruptProperties key.
-        public string MsiPropertiesKeyPath { get; set; }
-        public string DeviceDesc { get; set; }
+        public string MsiPropertiesKeyPath { get; set; } = "";
+        public string DeviceDesc { get; set; } = "";
         public bool HadValue { get; set; }      // whether MSISupported already existed before our change
         public int PreviousValue { get; set; }  // its prior value, when HadValue is true
     }

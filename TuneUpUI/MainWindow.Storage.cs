@@ -35,8 +35,8 @@ namespace TuneUpUI
     {
         // ── StorageMigrator Handlers ────────────────────────────────────────────────
 
-        private string _migSource = null;
-        private string _migDest = null;
+        private string? _migSource = null;
+        private string? _migDest = null;
 
         private void BtnMigBrowseSource_Click(object sender, RoutedEventArgs e)
         {

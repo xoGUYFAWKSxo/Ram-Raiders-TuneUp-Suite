@@ -27,12 +27,12 @@ namespace TuneUpEngine
 
         public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
-        public string Id { get; set; }
-        public string Title { get; set; }
-        public string KeyPath { get; set; }
-        public string ValueName { get; set; }
-        public string TargetPath { get; set; }
-        public string IssueType { get; set; } // "Startup", "ShellExtension", "COM"
+        public string Id { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string KeyPath { get; set; } = "";
+        public string ValueName { get; set; } = "";
+        public string TargetPath { get; set; } = "";
+        public string IssueType { get; set; } = ""; // "Startup", "ShellExtension", "COM"
     }
 
     public class RegistryVerifier
@@ -176,7 +176,7 @@ namespace TuneUpEngine
                     {
                         if (clsidKey == null) continue;
 
-                        string serverPath = null;
+                        string? serverPath = null;
                         string valueName = "";
                         string serverKeyName = "";
 

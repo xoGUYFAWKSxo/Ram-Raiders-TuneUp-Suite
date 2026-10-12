@@ -12,7 +12,7 @@ namespace TuneUpEngine
         private class ProcessState
         {
             public int Id { get; set; }
-            public string Name { get; set; }
+            public string Name { get; set; } = "";
             public TimeSpan LastCpuTime { get; set; }
             public DateTime LastSampleTime { get; set; }
             public ProcessPriorityClass OriginalPriority { get; set; }
@@ -22,12 +22,12 @@ namespace TuneUpEngine
         }
 
         private bool _isEnabled = false;
-        private Thread _governorThread;
+        private Thread? _governorThread;
         private readonly object _lock = new object();
         private readonly Dictionary<int, ProcessState> _trackedProcesses = new Dictionary<int, ProcessState>();
         
-        private ManagementEventWatcher _startWatcher;
-        private ManagementEventWatcher _stopWatcher;
+        private ManagementEventWatcher? _startWatcher;
+        private ManagementEventWatcher? _stopWatcher;
         
         // Critical system processes that should never be throttled
         private readonly HashSet<string> _whitelist = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -43,8 +43,8 @@ namespace TuneUpEngine
         // Spike threshold is 95% of a single core's capacity.
         private readonly double _singleCoreSpikeThreshold;
 
-        public event Action<string, int, string> OnProcessThrottled; // Name, ID, Reason
-        public event Action<string, int> OnProcessRestored; // Name, ID
+        public event Action<string, int, string>? OnProcessThrottled; // Name, ID, Reason
+        public event Action<string, int>? OnProcessRestored; // Name, ID
 
         // Extra processes that must never be throttled, supplied by the host. Program wires this to
         // the Game Mode booster so ProBalance can't demote the game Game Mode just elevated (games
@@ -295,7 +295,7 @@ namespace TuneUpEngine
                     int pid = kvp.Key;
                     var state = kvp.Value;
 
-                    Process proc = null;
+                    Process? proc = null;
                     try
                     {
                         proc = Process.GetProcessById(pid);

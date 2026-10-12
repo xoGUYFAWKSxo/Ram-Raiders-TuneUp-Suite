@@ -35,7 +35,7 @@ namespace TuneUpUI
     {
         // ── LatencyAuditor Handlers ─────────────────────────────────────────────────
 
-        private DispatcherTimer _latencyRefreshTimer;
+        private DispatcherTimer? _latencyRefreshTimer;
 
         private void BtnStartLatency_Click(object sender, RoutedEventArgs e)
         {
@@ -71,7 +71,7 @@ namespace TuneUpUI
             });
         }
 
-        private void LatencyRefreshTimer_Tick(object sender, EventArgs e)
+        private void LatencyRefreshTimer_Tick(object? sender, EventArgs e)
         {
             Task.Run(() =>
             {

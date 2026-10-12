@@ -9,8 +9,8 @@ namespace TuneUpEngine
 {
     public class CleanRule
     {
-        public string Name { get; set; }
-        public string Category { get; set; }
+        public string Name { get; set; } = "";
+        public string Category { get; set; } = "";
         public List<string> DetectPaths { get; set; } = new List<string>(); // DetectFile: file/folder paths (wildcards allowed)
         public List<string> DetectKeys { get; set; } = new List<string>();  // Detect: registry keys (HKCU\..., HKLM\...)
         public List<string> FileKeys { get; set; } = new List<string>(); // "Path|Pattern|Flags"
@@ -49,7 +49,7 @@ namespace TuneUpEngine
             }
         }
 
-        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
         public string SizeDisplay
         {
@@ -204,7 +204,7 @@ namespace TuneUpEngine
             {
                 string[] lines = File.ReadAllLines(filePath);
                 var loadedRules = new List<CleanRule>();
-                CleanRule currentRule = null;
+                CleanRule? currentRule = null;
 
                 foreach (var line in lines)
                 {
