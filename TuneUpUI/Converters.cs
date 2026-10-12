@@ -38,6 +38,24 @@ namespace TuneUpUI
     // ─── BoolToBadgeConverter ─────────────────────────────────────────────────
     // Used for status badges: true → red/spike, false → green/OK
     // Also used for SymlinkActive: true → indigo/Active, false → gray/Broken
+    // Latency audit status ("OK" / "ELEVATED" / "HIGH") to its badge colour. The column used
+    // BoolToBadgeConverter on IsSpike, which is green for true: healthy cores showed a red OK.
+    public class LatencyStatusBadgeConverter : IValueConverter
+    {
+        public static readonly LatencyStatusBadgeConverter Instance = new();
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+            new SolidColorBrush((value as string) switch
+            {
+                "HIGH" => WpfColor.FromRgb(0x9B, 0x1C, 0x1C),     // red
+                "ELEVATED" => WpfColor.FromRgb(0xB4, 0x6A, 0x0C), // amber
+                _ => WpfColor.FromRgb(0x10, 0x61, 0x40),          // green
+            });
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotImplementedException();
+    }
+
     public class BoolToBadgeConverter : IValueConverter
     {
         public static readonly BoolToBadgeConverter Instance = new();

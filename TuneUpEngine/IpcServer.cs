@@ -802,7 +802,9 @@ namespace TuneUpEngine
                             break;
                         }
                         bool ok = RegistryTweaker.SetTweakStatus(tweakRequest.Name, tweakRequest.Enable, _journal, ctx);
-                        Send(new IpcResponse { Status = ok ? IpcStatus.Success : IpcStatus.Error });
+                        Send(ok
+                            ? new IpcResponse { Status = IpcStatus.Success }
+                            : new IpcResponse { Status = IpcStatus.Error, Message = $"Could not {(tweakRequest.Enable ? "apply" : "revert")} '{tweakRequest.Name}' (unknown tweak, or the registry write failed; see the engine log)." });
                         break;
                     }
                     Send(new IpcResponse { Status = IpcStatus.Error, Message = "Invalid payload for SetRegistryTweak" });

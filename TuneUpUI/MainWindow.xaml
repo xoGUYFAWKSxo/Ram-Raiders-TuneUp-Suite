@@ -439,7 +439,7 @@
 
                                 <!-- WrapPanel: on a narrow window the buttons move to a second line instead of being cut off. -->
                                 <WrapPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                    <Button x:Name="BtnToggleSelectJunk" Content="&#xE73A; Deselect All" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False"/>
+                                    <Button x:Name="BtnToggleSelectJunk" Content="&#x2713; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False"/>
                                     <Button x:Name="BtnCancelCleaner" Content="Cancel" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Visibility="Collapsed" Click="BtnCancelCleaner_Click"/>
                                     <Button Content="Scan for Junk Files" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" MinWidth="160" Click="BtnScanJunk_Click"/>
                                     <Button x:Name="BtnCleanJunk" Content="Empty Junk Files" Style="{StaticResource PremiumButton}" Margin="0,0,0,6" MinWidth="160" IsEnabled="False" Click="BtnCleanJunk_Click"/>
@@ -532,7 +532,7 @@
                                 <!-- Buttons size to their text (fixed widths cut off "Repair Defective Entries")
                                      and wrap to a second line on a narrow window. -->
                                 <WrapPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                    <Button x:Name="BtnToggleSelectRegistry" Content="&#xE73A; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Click="BtnToggleSelectRegistry_Click" IsEnabled="False"/>
+                                    <Button x:Name="BtnToggleSelectRegistry" Content="&#x2713; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Click="BtnToggleSelectRegistry_Click" IsEnabled="False"/>
                                     <Button Content="Scan Registry Integrity" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" MinWidth="180" Click="BtnScanRegistry_Click"/>
                                     <Button x:Name="BtnRepairRegistry" Content="Repair Defective Entries" Style="{StaticResource PremiumButton}" Margin="0,0,0,6" MinWidth="180" IsEnabled="False" Click="BtnRepairRegistry_Click"/>
                                 </WrapPanel>
@@ -573,7 +573,7 @@
                                     <ListBox Grid.Row="1" x:Name="LstCbsCorruptions" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Foreground="{StaticResource BrushTextMain}" FontSize="11">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
-                                                <TextBlock Text="{Binding}" Foreground="#EF4444" TextWrapping="Wrap" Margin="0,2"/>
+                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2"/>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
@@ -634,9 +634,9 @@
                                                    Text="Measures how much of each CPU core's time goes to driver DPCs and interrupts (Windows performance counters). Sustained high values point to a misbehaving driver; LatencyMon can show which one."/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Button x:Name="BtnStartLatency" Content="&#xE768; Start Audit" Style="{StaticResource PremiumButton}"
+                                        <Button x:Name="BtnStartLatency" Content="&#xE768; Start Audit" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource PremiumButton}"
                                                 Padding="12,5" FontSize="12" Margin="0,0,8,0" Click="BtnStartLatency_Click"/>
-                                        <Button x:Name="BtnStopLatency" Content="&#xE71A; Stop" Style="{StaticResource OutlineButton}"
+                                        <Button x:Name="BtnStopLatency" Content="&#xE71A; Stop" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource OutlineButton}"
                                                 Padding="12,5" FontSize="12" IsEnabled="False" Click="BtnStopLatency_Click"/>
                                     </StackPanel>
                                 </Grid>
@@ -674,7 +674,7 @@
                                                     <TextBlock Grid.Column="2" Text="{Binding PeakInterruptPercent, StringFormat='{}{0:F1}'}" 
                                                                Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextAlignment="Right"/>
                                                     <Border Grid.Column="3" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
-                                                            Background="{Binding IsSpike, Converter={x:Static local:BoolToBadgeConverter.Instance}}">
+                                                            Background="{Binding Status, Converter={x:Static local:LatencyStatusBadgeConverter.Instance}}">
                                                         <TextBlock Text="{Binding Status}" Foreground="White" FontSize="10" FontWeight="Bold"/>
                                                     </Border>
                                                 </Grid>
@@ -1139,7 +1139,7 @@
                         <!-- Header -->
                         <StackPanel Grid.Row="0" Margin="0,0,0,15">
                             <TextBlock Text="Storage Tools" Foreground="White" FontSize="28" FontWeight="Bold"/>
-                            <TextBlock Text="Move game directories to secondary drives using NTFS symbolic links â€” launchers never know the files moved." 
+                            <TextBlock Text="Move game directories to secondary drives using NTFS symbolic links &#x2014; launchers never know the files moved." 
                                        Foreground="{StaticResource BrushTextMuted}" FontSize="14" Margin="0,4,0,0"/>
                         </StackPanel>
 
@@ -1188,9 +1188,9 @@
                                                    Margin="0,0,0,12" Visibility="Collapsed"/>
 
                                         <StackPanel Orientation="Horizontal">
-                                            <Button x:Name="BtnMigAnalyze" Content="&#xE8B0; Analyze" Style="{StaticResource OutlineButton}"
+                                            <Button x:Name="BtnMigAnalyze" Content="&#xE8B0; Analyze" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource OutlineButton}"
                                                     Padding="14,8" Margin="0,0,10,0" IsEnabled="False" Click="BtnMigAnalyze_Click"/>
-                                            <Button x:Name="BtnMigrate" Content="&#xE8DE; Migrate &amp; Symlink" Style="{StaticResource PremiumButton}"
+                                            <Button x:Name="BtnMigrate" Content="&#xE8DE; Migrate &amp; Symlink" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource PremiumButton}"
                                                     Padding="14,8" IsEnabled="False" Click="BtnMigrate_Click"/>
                                             <Button x:Name="BtnCancelMigration" Content="Cancel" Style="{StaticResource OutlineButton}"
                                                     Padding="14,8" Margin="10,0,0,0" Visibility="Collapsed" Click="BtnCancelMigration_Click"
@@ -1208,7 +1208,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Text="Previous Migrations" Foreground="White" FontSize="16" FontWeight="Bold"/>
-                                            <Button Grid.Column="1" Content="&#xE72C; Refresh" Style="{StaticResource OutlineButton}"
+                                            <Button Grid.Column="1" Content="&#xE72C; Refresh" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource OutlineButton}"
                                                     Padding="10,4" FontSize="12" Click="BtnMigRefreshHistory_Click"/>
                                         </Grid>
 

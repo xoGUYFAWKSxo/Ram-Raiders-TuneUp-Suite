@@ -85,7 +85,8 @@ namespace TuneUpUI
                     {
                         // The toggle flipped optimistically; re-read the real state so it doesn't
                         // claim a change that never happened.
-                        Dispatcher.Invoke(() => AppendMonitorEvent($"[Tweaks] Could not {(enable ? "apply" : "revert")} '{tweakName}'. Is the engine running as Administrator?"));
+                        string reason = resp?.Message ?? _engine.LastConnectionProblem ?? "The engine did not reply.";
+                        Dispatcher.Invoke(() => AppendMonitorEvent($"[Tweaks] Could not {(enable ? "apply" : "revert")} '{tweakName}': {reason}"));
                     }
 
                     // Always re-read the real state. Besides failures, a setting shared with another
