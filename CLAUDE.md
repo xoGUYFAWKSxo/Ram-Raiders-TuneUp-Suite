@@ -34,4 +34,5 @@ dotnet test TuneUpApp.slnx -c Release --no-build
 
 ## Style
 - Keep comments sparse: explain why, not what. Match the surrounding code.
+- User-facing text must be plain English (see DECISIONS.md, 2026-10-12).
 - Add a test for every bug fix (see `EndToEndFixTests.cs` for the pattern).

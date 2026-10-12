@@ -2,6 +2,8 @@
 
 These are settled. Don't reopen them unless the user asks. Newest first.
 
+- **2026-10-12: UI text is plain English for non-technical users.** Explain what a result means (e.g. "Windows checked its backup copy of system files and fixed all 876 problems"), not raw log lines or tool jargon. Tool names (DISM, SFC) appear only in brackets or error details. Raise an alarm only for something still unfixed.
+
 - **2026-10-12: Registry repair never deletes without a backup.** If the `.reg` export fails, the entry is left in place and reported. Backups and the manifest go in `%APPDATA%\RamRaidersTuneUpSuite\RegistryBackups`. Registry repair isn't journaled; the `.reg` files are its undo.
 - **2026-10-12: Re-enabling a service restores its previous start type.** The service is started only if that type is Automatic.
 - **2026-10-11: No code signing.** There is no paid certificate. Instead, the installer ships with a SHA-256 file, and the README explains SmartScreen's "Run anyway".
