@@ -6,6 +6,10 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- The UI's presentation logic (TuneUpUI.Presentation) is tested too, so the UI project is
+         referenced, which needs the same WPF / WinForms framework references. -->
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TuneUpEngine\TuneUpEngine.csproj" />
+    <ProjectReference Include="..\TuneUpUI\TuneUpUI.csproj" />
   </ItemGroup>
 
 </Project>
