@@ -41,7 +41,7 @@ namespace TuneUpUI
         {
             if (sender is not Button btn) return;
             btn.IsEnabled = false;
-            TxtComponentStatus.Text = "Analyzing CBS.log file structures...";
+            TxtComponentStatus.Text = "Reading Windows' repair results...";
 
             Task.Run(() =>
             {
@@ -58,23 +58,23 @@ namespace TuneUpUI
 
                         if (hasCorruption)
                         {
-                            TxtComponentStatus.Text = "System corruption detected! Baseline Repair recommended.";
+                            TxtComponentStatus.Text = "Some Windows files need fixing. Click Repair Windows Files.";
                         }
                         else
                         {
-                            TxtComponentStatus.Text = "No structural system file errors found in recent CBS logs.";
+                            TxtComponentStatus.Text = "Your Windows files look healthy. No repair needed.";
                         }
                     }
                     else
                     {
-                        TxtComponentStatus.Text = "Failed to fetch integrity status. Make sure the background engine is elevated.";
+                        TxtComponentStatus.Text = "Couldn't read the results. Make sure the Ram Raiders engine is running.";
                     }
                 });
             });
         }
 
-        // Lists the CBS findings: red only when there is corruption (the "nothing found" line was
-        // shown in red too). Returns whether corruption was found.
+        // Lists the plain-English findings: red only when something still needs fixing. Returns
+        // whether it does.
         private bool ShowCbsLogs(Dictionary<string, object> report)
         {
             bool hasCorruption = string.Equals(report["HasCorruption"]?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
@@ -123,7 +123,7 @@ namespace TuneUpUI
                     }
                     else
                     {
-                        TxtComponentStatus.Text = $"Repair finished with problems: {completed.Message}";
+                        TxtComponentStatus.Text = $"Repair finished, but some problems are left: {completed.Message}";
                         MessageBox.Show(completed.Message ?? "The repair did not complete.", "System Repair", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }

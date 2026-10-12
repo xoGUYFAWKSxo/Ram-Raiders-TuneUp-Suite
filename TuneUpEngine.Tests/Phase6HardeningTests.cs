@@ -338,7 +338,7 @@ namespace TuneUpEngine.Tests
         {
             var r = SystemIntegrityAgent.Summarize(0, 0, "Windows Resource Protection did not find any integrity violations.");
             Assert.True(r.Success);
-            Assert.Contains("no integrity violations", r.Message);
+            Assert.Contains("No damaged Windows files", r.Message);
         }
 
         [Fact]
@@ -346,7 +346,7 @@ namespace TuneUpEngine.Tests
         {
             var r = SystemIntegrityAgent.Summarize(87, 0, "did not find any integrity violations");
             Assert.False(r.Success);
-            Assert.Contains("DISM failed (exit code 87)", r.Message);
+            Assert.Contains("DISM error code 87", r.Message);
         }
 
         [Fact]
@@ -360,7 +360,7 @@ namespace TuneUpEngine.Tests
         {
             var r = SystemIntegrityAgent.Summarize(0, 0, "Windows Resource Protection found corrupt files but was unable to fix some of them.");
             Assert.False(r.Success);
-            Assert.Contains("could NOT fully repair", r.Message);
+            Assert.Contains("could NOT be fixed", r.Message);
         }
     }
 
