@@ -75,6 +75,11 @@ namespace TuneUpUI
         {
             bool show = PnlLatencyHelp.Visibility != Visibility.Visible;
             PnlLatencyHelp.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            // The core and driver tables fill the card, which left the help panel no height at all,
+            // so the help takes their place while it's open.
+            var tables = show ? Visibility.Collapsed : Visibility.Visible;
+            GrdLatencyCoreHeader.Visibility = SepLatencyCores.Visibility = SvLatencyCores.Visibility = PnlDriverSection.Visibility = tables;
+            BtnLatencyHelp.Content = show ? " Back to the results" : " What is this, and how do I fix it?";
             // While open, the card shares the leftover height with the event log so the help text
             // scrolls inside the window instead of running off the bottom.
             RowLatencyCard.Height = show ? new GridLength(2, GridUnitType.Star) : GridLength.Auto;
@@ -95,11 +100,32 @@ namespace TuneUpUI
                             IcLatencyDrivers.ItemsSource = report?.Cores;
                             if (report?.Summary != null)
                                 TxtLatencyStatus.Text = report.Summary;
+                            if (report != null) ShowDriverTrace(report);
                         });
                     }
                     catch { }
                 }
             });
+        }
+
+        private void ShowDriverTrace(LatencyReport report)
+        {
+            IcLatencyDriverList.ItemsSource = report.Drivers;
+
+            if (!report.DriverTraceAvailable)
+                TxtDriverTraceStatus.Text = string.IsNullOrEmpty(report.DriverTraceMessage)
+                    ? "The driver trace isn't running."
+                    : $"{report.DriverTraceMessage} The core table above still works.";
+            else if (report.Drivers.Count == 0)
+                TxtDriverTraceStatus.Text = "Timing every driver run… waiting for the first results.";
+            else
+                TxtDriverTraceStatus.Text = "Every driver run is timed. Hover over a driver for what to do about it."
+                    + (report.DriverEventsLost > 0 ? $" ({report.DriverEventsLost:N0} runs were missed because the PC was too busy to record them.)" : "");
+
+            var worst = report.Drivers.FirstOrDefault(d => d.Status != "OK");
+            TxtDriverAdvice.Visibility = worst != null ? Visibility.Visible : Visibility.Collapsed;
+            if (worst != null)
+                TxtDriverAdvice.Text = $"What to do about {worst.Driver} ({worst.Description}): {worst.Advice}";
         }
     }
 }

@@ -627,6 +627,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
                                 <Grid Grid.Row="0" Margin="0,0,0,12">
@@ -652,7 +653,7 @@
                                 </Grid>
 
                                 <!-- Driver table header -->
-                                <Grid Grid.Row="1" Margin="0,0,0,4">
+                                <Grid Grid.Row="1" x:Name="GrdLatencyCoreHeader" Margin="0,0,25,4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="100"/>
@@ -669,9 +670,9 @@
                                                ToolTip="Interrupt handling (the first, urgent step when a device signals the CPU) during that peak"/>
                                     <TextBlock Grid.Column="4" Text="Status" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Center"/>
                                 </Grid>
-                                <Separator Grid.Row="2" Background="#333350" Margin="0,0,0,6"/>
+                                <Separator Grid.Row="2" x:Name="SepLatencyCores" Background="#333350" Margin="0,0,0,6"/>
 
-                                <ScrollViewer Grid.Row="3" MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer Grid.Row="3" x:Name="SvLatencyCores" MaxHeight="160" VerticalScrollBarVisibility="Visible">
                                     <ItemsControl x:Name="IcLatencyDrivers">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -701,9 +702,69 @@
                                     </ItemsControl>
                                 </ScrollViewer>
 
+                                <!-- Per-driver results from the kernel trace -->
+                                <StackPanel Grid.Row="4" x:Name="PnlDriverSection" Margin="0,14,0,0">
+                                    <TextBlock Text="Drivers, longest single run first" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                                    <TextBlock x:Name="TxtDriverTraceStatus" Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,8"
+                                               Text="Start the audit to time every driver's interrupt and deferred work."/>
+                                    <Grid Margin="0,0,25,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="95"/>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="78"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Driver" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold"/>
+                                        <TextBlock Grid.Column="1" Text="What it is" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold"/>
+                                        <TextBlock Grid.Column="2" Text="Longest (µs)" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"
+                                                   ToolTip="The longest this driver held a CPU core in one go, in microseconds (1,000 µs = 1 ms)"/>
+                                        <TextBlock Grid.Column="3" Text="Runs" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"
+                                                   ToolTip="How many times the driver ran (deferred and interrupt work) since the audit started"/>
+                                        <TextBlock Grid.Column="4" Text="Total ms" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Right"
+                                                   ToolTip="All of this driver's runs added together, in milliseconds"/>
+                                        <TextBlock Grid.Column="5" Text="Status" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Center"/>
+                                    </Grid>
+                                    <Separator Background="#333350" Margin="0,0,0,6"/>
+                                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Visible">
+                                        <ItemsControl x:Name="IcLatencyDriverList">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,2,8,2" Background="Transparent" ToolTip="{Binding Advice}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="170"/>
+                                                            <ColumnDefinition Width="95"/>
+                                                            <ColumnDefinition Width="70"/>
+                                                            <ColumnDefinition Width="70"/>
+                                                            <ColumnDefinition Width="78"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="{Binding Driver}" Foreground="White" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Description}" Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding HighestMicroseconds, StringFormat='{}{0:N0}'}"
+                                                                   Foreground="{Binding IsSpike, Converter={x:Static local:BoolToColorConverter.Instance}}"
+                                                                   FontSize="12" FontWeight="Bold" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding RunCount, StringFormat='{}{0:N0}'}"
+                                                                   Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding TotalMilliseconds, StringFormat='{}{0:N1}'}"
+                                                                   Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextAlignment="Right"/>
+                                                        <Border Grid.Column="5" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
+                                                                Background="{Binding Status, Converter={x:Static local:LatencyStatusBadgeConverter.Instance}}">
+                                                            <TextBlock Text="{Binding Status}" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                                        </Border>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                    <TextBlock x:Name="TxtDriverAdvice" Foreground="{StaticResource BrushTextMain}" FontSize="12" TextWrapping="Wrap"
+                                               Margin="0,8,0,0" Visibility="Collapsed"/>
+                                </StackPanel>
+
                                 <!-- Plain-English explainer, toggled by BtnLatencyHelp -->
                                 <!-- Fills the space left in the window and scrolls; see BtnLatencyHelp_Click -->
-                                <Border Grid.Row="4" x:Name="PnlLatencyHelp" Visibility="Collapsed" Background="#15151F" CornerRadius="6"
+                                <Border Grid.Row="5" x:Name="PnlLatencyHelp" Visibility="Collapsed" Background="#15151F" CornerRadius="6"
                                         Margin="0,12,0,0" BorderBrush="#333350" BorderThickness="1">
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14,12,6,12">
                                     <StackPanel Margin="0,0,8,0">
@@ -721,14 +782,15 @@
                                         <TextBlock Text="A few percent is normal. If one driver takes too long, the game misses a frame (stutter) or the audio buffer runs dry (crackles and pops). When one core reads much higher than the rest, that usually means one device's driver."/>
 
                                         <TextBlock Text="Reading the results" FontWeight="Bold" Foreground="White" FontSize="13" Margin="0,8,0,6"/>
+                                        <TextBlock Text="CPU core table: the share of each core's time spent on driver work, over 5 seconds."/>
                                         <TextBlock Text="&#x2022;  OK (under 3%): drivers aren't the problem on this core."/>
                                         <TextBlock Text="&#x2022;  ELEVATED (3 to 10%): usually harmless. Only worth chasing if you actually hear crackles or see stutter."/>
                                         <TextBlock Text="&#x2022;  HIGH (10% or more): a driver is very likely causing stutter or audio problems."/>
-                                        <TextBlock Foreground="{StaticResource BrushTextMuted}"
-                                                   Text="Limits: this shows how much time drivers take, not the single longest delay. Rare, very long delays can still cause crackles while everything here reads OK. It also can't name the driver yet. The free tool LatencyMon (resplendence.com) shows both."/>
+                                        <TextBlock Text="Driver table: each driver's longest single run, timed one by one. It catches rare, very long delays that barely move the core numbers." Margin="0,8,0,6"/>
+                                        <TextBlock Text="&#x2022;  OK under 500 µs, ELEVATED from 500 µs, HIGH from 2,000 µs (2 ms, long enough to empty an audio buffer and cause a crackle)."/>
 
                                         <TextBlock Text="How to fix high driver load" FontWeight="Bold" Foreground="White" FontSize="13" Margin="0,8,0,6"/>
-                                        <TextBlock Text="1.  Find the driver. Run LatencyMon for a few minutes while the problem happens, then open its Drivers tab and sort by highest execution time."/>
+                                        <TextBlock Text="1.  Find the driver. Leave the audit running while the problem happens. The driver at the top of the driver table is the one to fix; hover over it for advice."/>
                                         <TextBlock Text="2.  Update or roll back that driver. Get it from your PC, motherboard, or device maker rather than a driver-updater tool. If the problem started after an update, roll back in Device Manager (device, Properties, Driver, Roll Back Driver)."/>
                                         <TextBlock Text="3.  Common culprits. Wi-Fi and network (ndis.sys, tcpip.sys, adapter drivers): update, or test with a cable. Graphics (nvlddmkm.sys, amdkmdag.sys, dxgkrnl.sys): do a clean driver reinstall. Storage (storport.sys, stornvme.sys): update chipset drivers and SSD firmware. ACPI.sys: update the BIOS. Audio and USB: update, or try a different USB port."/>
                                         <TextBlock Text="4.  Update the BIOS and chipset drivers from your motherboard or laptop maker. Many driver timing problems are firmware bugs."/>

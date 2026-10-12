@@ -45,6 +45,11 @@ namespace TuneUpEngine
         public double DpcsQueuedPerSec { get; set; }
         public double InterruptsPerSec { get; set; }
         public List<CoreLatencyRecord> Cores { get; set; } = new();
+        // Per-driver results from the kernel trace; empty when the trace couldn't start.
+        public bool DriverTraceAvailable { get; set; }
+        public string DriverTraceMessage { get; set; } = "";
+        public long DriverEventsLost { get; set; }
+        public List<DriverLatencyRecord> Drivers { get; set; } = new();
         public string Summary { get; set; } = "";
     }
 
@@ -71,7 +76,8 @@ namespace TuneUpEngine
     // on the list "spiked" together. Windows performance counters can't attribute DPC time to a
     // particular driver (that needs a kernel trace, as LatencyMon or Windows Performance Analyzer
     // do), so this reports what they really measure: each core's share of time spent servicing
-    // drivers, with real peaks and averages.
+    // drivers, with real peaks and averages. A kernel trace (DriverLatencyTracer.cs), run
+    // alongside, names the drivers and times each of their runs.
     public class LatencyAuditor
     {
         // Share of one core's time spent in DPC + interrupt work.
@@ -85,7 +91,11 @@ namespace TuneUpEngine
         internal const int WindowSamples = 5;
 
         private readonly Func<ILatencyCounterSource> _sourceFactory;
+        private readonly Func<IDriverTraceSource>? _traceFactory;
         private ILatencyCounterSource? _source;
+        private IDriverTraceSource? _trace;
+        private DriverLatencyStats? _driverStats;
+        private string _driverTraceMessage = "";
         private Thread? _auditThread;
         private volatile bool _isRunning;
         private readonly object _lock = new();
@@ -100,8 +110,15 @@ namespace TuneUpEngine
         public bool IsRunning => _isRunning;
 
         public LatencyAuditor(Func<ILatencyCounterSource>? sourceFactory = null)
+            // Tests that supply counters get no kernel trace unless they ask for one.
+            : this(sourceFactory, sourceFactory == null ? () => new EtwDriverTraceSource() : null)
+        {
+        }
+
+        internal LatencyAuditor(Func<ILatencyCounterSource>? sourceFactory, Func<IDriverTraceSource>? traceFactory)
         {
             _sourceFactory = sourceFactory ?? (() => new PerformanceCounterLatencySource());
+            _traceFactory = traceFactory;
         }
 
         public void Start()
@@ -125,6 +142,7 @@ namespace TuneUpEngine
                 _lastSample = null;
                 _sampleCount = 0;
                 _isRunning = true;
+                StartDriverTrace();
             }
 
             _auditThread = new Thread(AuditLoop) { IsBackground = true, Name = "LatencyAuditor" };
@@ -141,8 +159,34 @@ namespace TuneUpEngine
                 // Disposed under the lock, so the sampling thread can't be mid-read.
                 _source?.Dispose();
                 _source = null;
+                // Results stay readable after Stop; only the session ends.
+                _trace?.Dispose();
+                _trace = null;
             }
             OnLogMessage?.Invoke("[LatencyAuditor] Driver DPC / interrupt monitoring stopped.");
+        }
+
+        // Caller holds _lock. A trace failure leaves the counter results working on their own.
+        private void StartDriverTrace()
+        {
+            _driverStats = null;
+            _driverTraceMessage = "";
+            if (_traceFactory == null) return;
+
+            var stats = new DriverLatencyStats();
+            var trace = _traceFactory();
+            if (trace.TryStart(stats, out string? error))
+            {
+                _trace = trace;
+                _driverStats = stats;
+                OnLogMessage?.Invoke($"[LatencyAuditor] Driver trace started ({stats.ImageCount} drivers already loaded).");
+            }
+            else
+            {
+                trace.Dispose();
+                _driverTraceMessage = $"Couldn't start the driver trace: {error}";
+                OnLogMessage?.Invoke($"[LatencyAuditor] {_driverTraceMessage}");
+            }
         }
 
         public LatencyReport GetReport()
@@ -163,6 +207,10 @@ namespace TuneUpEngine
                         .Take(16)
                         .Select(Copy)
                         .ToList(),
+                    DriverTraceAvailable = _driverStats != null,
+                    DriverTraceMessage = _driverTraceMessage,
+                    DriverEventsLost = _trace?.EventsLost ?? 0,
+                    Drivers = _driverStats?.Snapshot(15) ?? new List<DriverLatencyRecord>(),
                 };
                 report.Summary = BuildSummary(report, _cores);
                 return report;
@@ -267,12 +315,22 @@ namespace TuneUpEngine
 
             var high = allCores.Where(c => c.Status == "HIGH").Select(c => c.Name).ToList();
             var elevated = allCores.Where(c => c.Status == "ELEVATED").Select(c => c.Name).ToList();
-            const string attribution = " This tool can't tell which driver it is yet — open \"What is this?\" for how to find and fix it.";
+            var worst = report.Drivers.FirstOrDefault();
+            string attribution = !report.DriverTraceAvailable
+                ? " This tool couldn't trace which driver it is — open \"What is this?\" for how to find and fix it."
+                : worst != null
+                    ? $" The longest single run was {worst.Driver} ({worst.Description}): {worst.HighestMicroseconds:N0} µs."
+                    : "";
 
             if (high.Count > 0)
                 return $"{JoinNames(high)} spent {HighPercent:F0}% or more of {(high.Count == 1 ? "its" : "their")} time on driver work over a 5-second stretch — enough to cause stutter or audio crackles.{attribution}";
+            // Rare long runs crackle audio even when overall load is low, so they're reported on their own.
+            if (worst != null && worst.Status == "HIGH")
+                return $"Overall driver load is fine, but {worst.Driver} ({worst.Description}) once ran for {worst.HighestMicroseconds:N0} µs in one go — long enough to cause an audio crackle or a dropped frame.";
             if (elevated.Count > 0)
-                return $"{JoinNames(elevated)} peaked above {ElevatedPercent:F0}% driver time. Usually harmless; worth a look only if you hear crackles or see stutter.";
+                return $"{JoinNames(elevated)} peaked above {ElevatedPercent:F0}% driver time. Usually harmless; worth a look only if you hear crackles or see stutter.{attribution}";
+            if (worst != null && worst.Status == "ELEVATED")
+                return $"Driver load stayed below {ElevatedPercent:F0}% on every core. Longest single run: {worst.Driver} ({worst.Description}), {worst.HighestMicroseconds:N0} µs — fine unless you hear crackles.";
             return $"Driver DPC/interrupt load stayed below {ElevatedPercent:F0}% on every core — healthy.";
         }
 
