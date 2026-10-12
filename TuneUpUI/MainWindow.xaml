@@ -552,8 +552,8 @@
 
                         <!-- Header -->
                         <StackPanel Grid.Row="0" Margin="0,0,0,15">
-                            <TextBlock Text="System File Baseline Repair" Foreground="White" FontSize="20" FontWeight="Bold"/>
-                            <TextBlock Text="Instead of blindly deleting system nodes, we interface with Windows CBS (Component Store) logs. If corruption is found, we trigger elevated system tools to verify and repair binaries directly from the Microsoft baseline." 
+                            <TextBlock Text="Windows File Repair" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="Checks whether any of Windows' own files are damaged, using the results of Windows' built-in repair tools. If something is wrong, Repair Windows Files runs those tools (DISM and SFC) to restore good copies from Microsoft. It can take 10 to 20 minutes."
                                        Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
                         </StackPanel>
 
@@ -569,7 +569,7 @@
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
-                                    <TextBlock Grid.Row="0" Text="CBS Log Corruption Diagnostics" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,10"/>
+                                    <TextBlock Grid.Row="0" Text="What Windows found" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,10"/>
                                     <ListBox Grid.Row="1" x:Name="LstCbsCorruptions" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Foreground="{StaticResource BrushTextMain}" FontSize="11">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
@@ -590,13 +590,13 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock x:Name="TxtComponentStatus" Text="Ready to analyze CBS logs" Foreground="{StaticResource BrushTextMain}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtComponentStatus" Text="Click Check for Problems to see the latest results." Foreground="{StaticResource BrushTextMain}" FontSize="12" VerticalAlignment="Center"/>
                                     <ProgressBar x:Name="ProgComponent" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" Visibility="Collapsed"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button Content="Verify CBS Logs" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" MinWidth="180" Click="BtnScanComponent_Click"/>
-                                    <Button x:Name="BtnRepairComponent" Content="Run baseline Repair" Style="{StaticResource PremiumButton}" MinWidth="180" Click="BtnRepairComponent_Click"/>
+                                    <Button Content="Check for Problems" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" MinWidth="180" Click="BtnScanComponent_Click"/>
+                                    <Button x:Name="BtnRepairComponent" Content="Repair Windows Files" Style="{StaticResource PremiumButton}" MinWidth="180" Click="BtnRepairComponent_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>

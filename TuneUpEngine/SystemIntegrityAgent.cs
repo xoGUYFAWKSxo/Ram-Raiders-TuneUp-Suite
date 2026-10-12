@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -35,7 +37,7 @@ namespace TuneUpEngine
 
             if (!File.Exists(CbsLogPath))
             {
-                report.CorruptionLogs.Add("CBS.log was not found. System integrity scan has never been executed.");
+                report.CorruptionLogs.Add("Windows hasn't made a repair log yet, so there is nothing to report. Click Repair Windows Files to run a check.");
                 return report;
             }
 
@@ -64,39 +66,134 @@ namespace TuneUpEngine
                         lastLines.Enqueue(line);
                     }
 
-                    // Parse lines for corruption indicators
-                    foreach (var logLine in lastLines)
-                    {
-                        // Match sfc/dism corruption flags
-                        if (logLine.Contains("[SR] Cannot repair member file") || 
-                            logLine.Contains("[SR] Could not reproject corrupted file") ||
-                            logLine.Contains("Failed to repair") ||
-                            (logLine.Contains("Corrupt") && logLine.Contains("Repair")) ||
-                            logLine.Contains("CSI Payload Corrupt"))
-                        {
-                            report.HasCorruption = true;
-                            // Clean up line to make it human readable in the UI
-                            string cleanLine = CleanLogLine(logLine);
-                            if (!report.CorruptionLogs.Contains(cleanLine))
-                            {
-                                report.CorruptionLogs.Add(cleanLine);
-                            }
-                        }
-                    }
+                    report = Interpret(lastLines);
                 }
             }
             catch (Exception ex)
             {
-                report.CorruptionLogs.Add($"Error reading integrity logs: {ex.Message}");
-            }
-
-            if (!report.HasCorruption && report.CorruptionLogs.Count == 0)
-            {
-                report.CorruptionLogs.Add("No system file corruptions detected in recent CBS logs.");
+                report.CorruptionLogs.Add($"Couldn't read the Windows repair log: {ex.Message}");
             }
 
             return report;
         }
+
+        // Turns the CBS.log tail into plain-English results. Only the latest DISM summary and the
+        // latest SFC run count: matching any line with "Corrupt" and "Repair" in it flagged a
+        // successful repair ("Total Repaired Corruption: 876") as corruption.
+        internal static IntegrityReport Interpret(IEnumerable<string> lines)
+        {
+            var report = new IntegrityReport { ScanTime = DateTime.Now };
+
+            DateTime? dismTime = null, sfcTime = null;
+            bool inSummary = false, dismRepairs = false;
+            int detected = 0, repaired = 0, fileFlags = 0;
+            string dismResult = "0x0";
+            int sfcRepairing = 0, pendingRepairing = 0;
+            var pendingBad = new List<string>();
+            var sfcBad = new List<string>();
+
+            foreach (var line in lines)
+            {
+                if (line.Contains("Checking System Update Readiness."))
+                {
+                    dismTime = TimeOf(line);
+                    inSummary = true;
+                    dismRepairs = false;
+                    detected = repaired = fileFlags = 0;
+                    dismResult = "0x0";
+                }
+                else if (inSummary)
+                {
+                    if (line.Contains("Operation: ")) dismRepairs = line.Contains("Repair");
+                    else if (line.Contains("Operation result:")) dismResult = Regex.Match(line, @"0x[0-9A-Fa-f]+").Value;
+                    else if (line.Contains("Total Detected Corruption:")) detected = CountIn(line);
+                    else if (line.Contains("CSI FileFlags Corrupt:")) fileFlags = CountIn(line);
+                    else if (line.Contains("Total Repaired Corruption:")) repaired = CountIn(line);
+                    else if (line.Contains("Total Operation Time:") || line.Contains("Exec: Processing complete")) inSummary = false;
+                }
+
+                if (line.Contains("[SR] Cannot repair member file") || line.Contains("[SR] Could not reproject corrupted file"))
+                {
+                    pendingBad.Add(FileNameIn(line));
+                }
+                else if (Regex.Match(line, @"\[SR\] Repairing (\d+) components") is { Success: true } m)
+                {
+                    pendingRepairing = int.Parse(m.Groups[1].Value);
+                }
+                else if (line.Contains("[SR] Repair complete"))
+                {
+                    sfcTime = TimeOf(line);
+                    sfcRepairing = pendingRepairing;
+                    sfcBad = pendingBad.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    pendingBad.Clear();
+                    pendingRepairing = 0;
+                }
+            }
+
+            if (dismTime is DateTime d)
+            {
+                string on = $"On {When(d)}, Windows checked its backup copy of system files";
+                if (!IsZero(dismResult))
+                {
+                    report.HasCorruption = true;
+                    report.CorruptionLogs.Add($"{on}, but the check didn't finish (error {dismResult}). Run the repair again.");
+                }
+                else if (detected == 0)
+                    report.CorruptionLogs.Add($"{on}. No problems found.");
+                else if (repaired >= detected)
+                    report.CorruptionLogs.Add($"{on} and fixed all {Plural(detected, "problem")} it found."
+                        + (fileFlags == detected ? " They were minor file-setting mismatches, not damaged files." : "")
+                        + " Nothing is left to fix.");
+                else if (!dismRepairs)
+                {
+                    report.HasCorruption = true;
+                    report.CorruptionLogs.Add($"{on} and found {Plural(detected, "problem")}. They haven't been fixed yet.");
+                }
+                else
+                {
+                    report.HasCorruption = true;
+                    report.CorruptionLogs.Add($"{on} and found {Plural(detected, "problem")}, but could only fix {repaired}. {detected - repaired} still need fixing.");
+                }
+            }
+
+            if (sfcTime is DateTime s)
+            {
+                string on = $"On {When(s)}, Windows checked its own program files";
+                if (sfcBad.Count > 0)
+                {
+                    report.HasCorruption = true;
+                    string names = string.Join(", ", sfcBad.Take(5)) + (sfcBad.Count > 5 ? $" and {sfcBad.Count - 5} more" : "");
+                    report.CorruptionLogs.Add($"{on} and found {Plural(sfcBad.Count, "damaged file")} it couldn't fix: {names}.");
+                }
+                else if (sfcRepairing > 0)
+                    report.CorruptionLogs.Add($"{on}, found some damaged files and fixed them.");
+                else
+                    report.CorruptionLogs.Add($"{on}. No damaged files found.");
+            }
+
+            if (dismTime == null && sfcTime == null)
+                report.CorruptionLogs.Add("Windows hasn't checked its system files recently, so there is nothing to report. Click Repair Windows Files to run a check.");
+
+            return report;
+        }
+
+        private static DateTime? TimeOf(string line) =>
+            DateTime.TryParseExact(line.Length >= 19 ? line[..19] : line, "yyyy-MM-dd HH:mm:ss",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : null;
+
+        private static string When(DateTime t) => t.ToString("d MMM yyyy 'at' HH:mm", CultureInfo.InvariantCulture);
+
+        private static int CountIn(string line) =>
+            Regex.Match(line, @":\s*(\d+)\s*$") is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
+
+        private static bool IsZero(string hr) =>
+            hr.Length > 2 && long.TryParse(hr.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v) && v == 0;
+
+        // SFC names the file in quotes, e.g. [l:34{17}]"Amd64\CNBJ2530.DPB"
+        private static string FileNameIn(string line) =>
+            Regex.Match(line, "\"([^\"]+)\"") is { Success: true } m ? Path.GetFileName(m.Groups[1].Value) : "an unnamed file";
+
+        private static string Plural(int n, string word) => n == 1 ? $"1 {word}" : $"{n} {word}s";
 
         // Runs DISM RestoreHealth then SFC, and reports what actually happened. It used to report
         // "complete" regardless of exit codes, so a failed repair looked like a successful one.
@@ -105,20 +202,20 @@ namespace TuneUpEngine
             try
             {
                 // Stage 1: DISM RestoreHealth (repairs the component store SFC restores files from)
-                progressCallback?.Invoke("Running DISM System Repair...", 0.0);
+                progressCallback?.Invoke("Step 1 of 2: repairing Windows' backup copy of system files...", 0.0);
                 int dismExit = ExecuteCommand("dism.exe", "/Online /Cleanup-Image /RestoreHealth", (line) =>
                 {
                     // Parse DISM progress, e.g. "[=================== 30.5% ===================]"
                     var match = Regex.Match(line, @"(\d+\.\d+)%");
                     if (match.Success && double.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double percent))
                     {
-                        progressCallback?.Invoke($"DISM Repair in Progress: {percent:F1}%", percent * 0.5); // Map to 0-50%
+                        progressCallback?.Invoke($"Step 1 of 2: repairing Windows' backup copy of system files ({percent:F0}%)", percent * 0.5); // Map to 0-50%
                     }
                 });
 
                 // Stage 2: SFC. sfc.exe writes UTF-16; without the matching encoding the text comes
                 // back full of NUL bytes and neither progress nor the verdict can be read.
-                progressCallback?.Invoke("Running System File Checker (SFC)...", 50.0);
+                progressCallback?.Invoke("Step 2 of 2: checking Windows' own program files...", 50.0);
                 var sfcOutput = new StringBuilder();
                 int sfcExit = ExecuteCommand("sfc.exe", "/scannow", (line) =>
                 {
@@ -126,12 +223,12 @@ namespace TuneUpEngine
                     var match = Regex.Match(line, @"Verification\s+(\d+)%\s+complete", RegexOptions.IgnoreCase);
                     if (match.Success && double.TryParse(match.Groups[1].Value, out double percent))
                     {
-                        progressCallback?.Invoke($"SFC Verification in Progress: {percent:F0}%", 50.0 + (percent * 0.5)); // Map to 50-100%
+                        progressCallback?.Invoke($"Step 2 of 2: checking Windows' own program files ({percent:F0}%)", 50.0 + (percent * 0.5)); // Map to 50-100%
                     }
                 }, System.Text.Encoding.Unicode);
 
                 var result = Summarize(dismExit, sfcExit, sfcOutput.ToString());
-                progressCallback?.Invoke(result.Success ? "System Integrity Repair Complete" : "System Integrity Repair Finished With Problems", 100.0);
+                progressCallback?.Invoke(result.Success ? "Repair finished." : "Repair finished, but some problems are left.", 100.0);
                 return result;
             }
             catch (Exception ex)
@@ -148,23 +245,23 @@ namespace TuneUpEngine
             var parts = new List<string>();
             bool ok = true;
 
-            if (dismExit == 0) parts.Add("DISM: component store is healthy or was repaired.");
-            else if (dismExit == 3010) parts.Add("DISM: repaired — restart required.");
-            else { ok = false; parts.Add($"DISM failed (exit code {dismExit}). Check C:\\Windows\\Logs\\DISM\\dism.log."); }
+            if (dismExit == 0) parts.Add("Windows' backup copy of its system files is healthy.");
+            else if (dismExit == 3010) parts.Add("Windows repaired its backup copy of system files. Restart your PC to finish.");
+            else { ok = false; parts.Add($"Windows couldn't repair its backup copy of system files (DISM error code {dismExit}). Details are in C:\\Windows\\Logs\\DISM\\dism.log."); }
 
             string sfc = sfcOutput.ToLowerInvariant();
             if (sfc.Contains("did not find any integrity violations"))
-                parts.Add("SFC: no integrity violations found.");
+                parts.Add("No damaged Windows files were found.");
             else if (sfc.Contains("successfully repaired"))
-                parts.Add("SFC: found corrupt files and repaired them.");
+                parts.Add("Some damaged Windows files were found and fixed.");
             else if (sfc.Contains("unable to fix some of them"))
-            { ok = false; parts.Add("SFC: found corrupt files it could NOT fully repair. Details are in CBS.log."); }
+            { ok = false; parts.Add("Some damaged Windows files were found that could NOT be fixed. Details are in C:\\Windows\\Logs\\CBS\\CBS.log."); }
             else if (sfc.Contains("could not perform the requested operation") || sfc.Contains("pending system repair"))
-            { ok = false; parts.Add("SFC could not run (a repair may be pending — restart and try again)."); }
+            { ok = false; parts.Add("The file check couldn't run, probably because an earlier repair is waiting for a restart. Restart your PC and try again."); }
             else if (sfcExit != 0)
-            { ok = false; parts.Add($"SFC failed (exit code {sfcExit})."); }
+            { ok = false; parts.Add($"The file check failed (SFC error code {sfcExit})."); }
             else
-                parts.Add("SFC: completed.");
+                parts.Add("The file check finished.");
 
             return new RepairResult(ok, string.Join(" ", parts));
         }
@@ -221,20 +318,6 @@ namespace TuneUpEngine
             // buffered output is delivered before this method returns.
             process.WaitForExit();
             return process.ExitCode;
-        }
-
-        private string CleanLogLine(string rawLine)
-        {
-            // Extract the timestamp and actual message, stripping out internal CSI IDs
-            var match = Regex.Match(rawLine, @"^([\d\-:\s]+),\s+Info\s+[\s\w]+\[SR\]\s+(.*)$");
-            if (match.Success)
-            {
-                return $"[{match.Groups[1].Value}] {match.Groups[2].Value}";
-            }
-
-            // Fallback: Strip common prefix clutter
-            string pattern = @"(?:\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\sInfo\s+CSI\s+\d+\s+)";
-            return Regex.Replace(rawLine, pattern, "").Trim();
         }
     }
 }
