@@ -93,9 +93,14 @@ Filename: "{sys}\net.exe"; Parameters: "start {#ServiceName}"; Flags: runhidden 
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]
-; Stop the engine (net.exe waits until it has stopped), undo every system change
-; the app recorded in its change journal, then remove the service.
+; Close every open TuneUp window first: a running TuneUpUI.exe keeps its files
+; locked, so the program folder was left behind. Then stop the engine (net.exe
+; waits until it has stopped) and end any engine process still running, so none
+; outlives its deleted service holding the pipe (found in installer testing).
+; Only then undo every system change in the change journal and remove the service.
+Filename: "{sys}\taskkill.exe"; Parameters: "/f /im {#MyAppExeName}"; Flags: runhidden waituntilterminated; RunOnceId: "CloseUI"
 Filename: "{sys}\net.exe"; Parameters: "stop {#ServiceName}"; Flags: runhidden waituntilterminated; RunOnceId: "StopEngine"
+Filename: "{sys}\taskkill.exe"; Parameters: "/f /im {#EngineExeName}"; Flags: runhidden waituntilterminated; RunOnceId: "EndEngine"
 Filename: "{app}\{#EngineExeName}"; Parameters: "--revert-all"; Flags: runhidden waituntilterminated; RunOnceId: "RevertAll"
 Filename: "{sys}\sc.exe"; Parameters: "delete {#ServiceName}"; Flags: runhidden waituntilterminated; RunOnceId: "DeleteService"
 

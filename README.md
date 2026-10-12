@@ -83,6 +83,8 @@ Ram Raiders TuneUp Suite/
 ├── Start-TuneUp.bat                  # Developer launcher batch script
 ├── TuneUpApp.slnx                    # Solution manifest
 ├── TuneUp_Documentation.md           # Deep application technical documentation
+├── build-installer.ps1               # Publishes both projects and compiles the installer
+├── test-installer.ps1                # Install / upgrade / uninstall test (run as administrator)
 └── installer.iss                     # Inno Setup installer script
 ```
 
