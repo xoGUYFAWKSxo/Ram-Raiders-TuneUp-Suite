@@ -1,0 +1,40 @@
+# Status
+
+_Last updated: 2026-10-12, main at f7b4a90 (PR #18)._
+
+## Current state
+- The phased rework plan is complete (PRs #1 to #16).
+- End-to-end review (PR #17) and testing of the destructive features against a real engine (PR #18) are done and merged.
+- Build: 0 warnings, 271 tests pass. CI is green.
+- The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs the PR #18 build as a service.
+
+## Verified on a real engine
+- All read-only commands.
+- Registry repair, backup and restore.
+- Duplicate clean.
+- Tweaks in HKCU and HKLM, with exact restore.
+- Service toggle.
+- Network apply and revert.
+- MSI scan.
+- Migration and undo, checked with SHA-256.
+- winapp2 download.
+- ProBalance.
+- Game Mode.
+- DISM and SFC.
+- Refusals of unsafe appx removals.
+
+## Not verified live
+- Cleaning with junk rules, and cleaning empty folders. Both share their code path with the duplicate clean, which was tested.
+- Running as a real SYSTEM service on a clean PC that isn't the dev machine.
+
+## Open items / ideas
+- A full MVVM conversion of the UI was not done (it is split into per-tab partials instead).
+- The UI's appearance has not been checked by screenshot after the UI polish PR (#10).
+
+## Recent PRs
+| PR | Merge | What |
+|----|-------|------|
+| #18 | f7b4a90 | Registry repair reports failures and won't delete without a backup; re-enabled Manual services aren't started; appx refusals return Error |
+| #17 | d00ebc9 | Standby purge enum fix, legacy settings migration, tweak error messages, latency badge colours, glyph/mojibake fixes |
+| #16 | b216b4c | Installer SHA-256 file, README install notes |
+| #15 | 76f139d | test-installer.ps1; uninstall cleanup |

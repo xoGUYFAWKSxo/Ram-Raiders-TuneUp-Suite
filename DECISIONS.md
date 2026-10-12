@@ -1,0 +1,16 @@
+# Decisions
+
+These are settled. Don't reopen them unless the user asks. Newest first.
+
+- **2026-10-12: Registry repair never deletes without a backup.** If the `.reg` export fails, the entry is left in place and reported. Backups and the manifest go in `%APPDATA%\RamRaidersTuneUpSuite\RegistryBackups`. Registry repair isn't journaled; the `.reg` files are its undo.
+- **2026-10-12: Re-enabling a service restores its previous start type.** The service is started only if that type is Automatic.
+- **2026-10-11: No code signing.** There is no paid certificate. Instead, the installer ships with a SHA-256 file, and the README explains SmartScreen's "Run anyway".
+- **2026-10-11: Never auto-disable SysMain.** Show its status with a one-click toggle instead.
+- **2026-10-11: First-run defaults are all off**: ProBalance, Game Mode and auto purge.
+- **2026-10-11: Merge manually.** GitHub auto-merge isn't allowed on this repo. Merge with `gh pr merge N --merge` after CI passes and the user says so.
+- **2026-10-11: CI runs on GitHub Actions** (windows-latest, .NET 11 preview). The repo is private, so Windows minutes count double; keep the workflow lean.
+- **2026-10-11: The engine runs as a LocalSystem Windows service.** The UI is never elevated.
+- **2026-10-11: No full MVVM rewrite.** MainWindow is split into per-tab partial files, with typed IPC contracts.
+- **2026-10-10: Engine lockdown.** The pipe accepts only `TuneUpUI.exe` from the engine's own folder. The engine acts on IDs from its own scans, not on client-supplied paths. Machine-wide commands require an admin client.
+- **2026-10-10: Every change is reversible through the ChangeJournal** in ProgramData (ACL: SYSTEM and Admins full, Users read). Uninstall reverts everything.
+- **2026-10-10: Show measured telemetry only.** The fabricated per-driver DPC, standby and Recycle Bin numbers were replaced with real measurements.
