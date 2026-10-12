@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-12, main at bc8cff7 (public repo PR #1)._
+_Last updated: 2026-10-12, main at 5d3c749 (public repo PR #9)._
 
 ## Repository history
 - **Active repo:** `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite` (public, GPL-3.0). All work happens here: branches, PRs, CI and releases.
@@ -39,13 +39,16 @@ _Last updated: 2026-10-12, main at bc8cff7 (public repo PR #1)._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #1 | bc8cff7 | Docs: public repo is the only active repo, the archive is frozen; merge PRs once CI passes green |
+| public #10 | (this PR) | Plain-language pass: the project web page drops the fake waitlist (invented seat counter, sign-ups that stayed in the visitor's browser), pricing survey and hype, and says plainly what the app does and doesn't do; README gains a "What It Doesn't Do" section |
+| public #9 | 5d3c749 | README and TuneUp_Documentation describe the driver table and Save Trace; MSI wording matches DECISIONS |
+| public #8 | aeb41a5 | STATUS: record public PRs #6 and #7 |
 | public #7 | e73b133 | Live Monitor "Save Trace": saves the DPC results as a text report or CSV (choose in "Save as type"); no computer or user name in the file (checked in the app) |
 | public #6 | 1363d17 | STATUS/DECISIONS: record public PRs #3 to #5 |
 | public #5 | e63d89b | DPC monitor names drivers: a kernel ETW trace (TraceEvent) times every DPC/ISR run and charges it to its driver; driver table with longest run in µs and advice; help panel replaces the tables while open (checked in the app: 252 drivers named) |
 | public #4 | d19e37d | `update-installed.ps1`: test builds go into the installed app; no DevTest folders |
 | public #3 | a299ab4 | STATUS: record public PRs #1 and #2 |
 | public #2 | 72db7d5 | DPC monitor: first sample no longer reads hundreds of percent (wait one interval after priming; clamp to 0-100%). Found by CI reading 772% |
+| public #1 | bc8cff7 | Docs: public repo is the only active repo, the archive is frozen; merge PRs once CI passes green |
 | #22 | 8380398 | Live Monitor DPC card: 5-second peaks (the counters move in 1.56% clock-tick steps), peak total with matching DPC/ISR parts, consistent log line, scrollable "What is this, and how do I fix it?" panel (checked in the app) |
 | #20 | 996e1fa | Component Repair shows plain-English DISM/SFC results; a successful repair no longer reads as "corruption detected" (not yet checked in the app) |
 | #19 | 303a4bb | CLAUDE.md, STATUS.md, DECISIONS.md |
