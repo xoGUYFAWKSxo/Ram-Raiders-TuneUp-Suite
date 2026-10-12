@@ -75,6 +75,11 @@ namespace TuneUpUI
         {
             bool show = PnlLatencyHelp.Visibility != Visibility.Visible;
             PnlLatencyHelp.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            // The core and driver tables fill the card, which left the help panel no height at all,
+            // so the help takes their place while it's open.
+            var tables = show ? Visibility.Collapsed : Visibility.Visible;
+            GrdLatencyCoreHeader.Visibility = SepLatencyCores.Visibility = SvLatencyCores.Visibility = PnlDriverSection.Visibility = tables;
+            BtnLatencyHelp.Content = show ? " Back to the results" : " What is this, and how do I fix it?";
             // While open, the card shares the leftover height with the event log so the help text
             // scrolls inside the window instead of running off the bottom.
             RowLatencyCard.Height = show ? new GridLength(2, GridUnitType.Star) : GridLength.Auto;

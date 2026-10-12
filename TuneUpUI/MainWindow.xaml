@@ -653,7 +653,7 @@
                                 </Grid>
 
                                 <!-- Driver table header -->
-                                <Grid Grid.Row="1" Margin="0,0,0,4">
+                                <Grid Grid.Row="1" x:Name="GrdLatencyCoreHeader" Margin="0,0,25,4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="100"/>
@@ -670,9 +670,9 @@
                                                ToolTip="Interrupt handling (the first, urgent step when a device signals the CPU) during that peak"/>
                                     <TextBlock Grid.Column="4" Text="Status" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Center"/>
                                 </Grid>
-                                <Separator Grid.Row="2" Background="#333350" Margin="0,0,0,6"/>
+                                <Separator Grid.Row="2" x:Name="SepLatencyCores" Background="#333350" Margin="0,0,0,6"/>
 
-                                <ScrollViewer Grid.Row="3" MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer Grid.Row="3" x:Name="SvLatencyCores" MaxHeight="160" VerticalScrollBarVisibility="Visible">
                                     <ItemsControl x:Name="IcLatencyDrivers">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -703,11 +703,11 @@
                                 </ScrollViewer>
 
                                 <!-- Per-driver results from the kernel trace -->
-                                <StackPanel Grid.Row="4" Margin="0,14,0,0">
+                                <StackPanel Grid.Row="4" x:Name="PnlDriverSection" Margin="0,14,0,0">
                                     <TextBlock Text="Drivers, longest single run first" Foreground="White" FontSize="13" FontWeight="Bold"/>
                                     <TextBlock x:Name="TxtDriverTraceStatus" Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,8"
                                                Text="Start the audit to time every driver's interrupt and deferred work."/>
-                                    <Grid Margin="0,0,8,4">
+                                    <Grid Margin="0,0,25,4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="170"/>
@@ -727,7 +727,7 @@
                                         <TextBlock Grid.Column="5" Text="Status" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Center"/>
                                     </Grid>
                                     <Separator Background="#333350" Margin="0,0,0,6"/>
-                                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Visible">
                                         <ItemsControl x:Name="IcLatencyDriverList">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
@@ -782,12 +782,12 @@
                                         <TextBlock Text="A few percent is normal. If one driver takes too long, the game misses a frame (stutter) or the audio buffer runs dry (crackles and pops). When one core reads much higher than the rest, that usually means one device's driver."/>
 
                                         <TextBlock Text="Reading the results" FontWeight="Bold" Foreground="White" FontSize="13" Margin="0,8,0,6"/>
+                                        <TextBlock Text="CPU core table: the share of each core's time spent on driver work, over 5 seconds."/>
                                         <TextBlock Text="&#x2022;  OK (under 3%): drivers aren't the problem on this core."/>
                                         <TextBlock Text="&#x2022;  ELEVATED (3 to 10%): usually harmless. Only worth chasing if you actually hear crackles or see stutter."/>
                                         <TextBlock Text="&#x2022;  HIGH (10% or more): a driver is very likely causing stutter or audio problems."/>
-                                        <TextBlock Foreground="{StaticResource BrushTextMuted}"
-                                                   Text="The core table shows how much of each core's time drivers take. The driver table times every single run, so it also catches rare, very long delays that barely move the core numbers."/>
-                                        <TextBlock Text="&#x2022;  A driver's status goes by its longest single run: OK under 500 µs, ELEVATED from 500 µs, HIGH from 2,000 µs (2 ms, long enough to empty an audio buffer)."/>
+                                        <TextBlock Text="Driver table: each driver's longest single run, timed one by one. It catches rare, very long delays that barely move the core numbers." Margin="0,8,0,6"/>
+                                        <TextBlock Text="&#x2022;  OK under 500 µs, ELEVATED from 500 µs, HIGH from 2,000 µs (2 ms, long enough to empty an audio buffer and cause a crackle)."/>
 
                                         <TextBlock Text="How to fix high driver load" FontWeight="Bold" Foreground="White" FontSize="13" Margin="0,8,0,6"/>
                                         <TextBlock Text="1.  Find the driver. Leave the audit running while the problem happens. The driver at the top of the driver table is the one to fix; hover over it for advice."/>
