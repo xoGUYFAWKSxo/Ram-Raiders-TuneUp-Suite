@@ -119,3 +119,17 @@ namespace TuneUpEngine.Tests
         }
     }
 }
+
+namespace TuneUpEngine.Tests
+{
+    public class ServiceVerificationTests
+    {
+        [Theory]
+        [InlineData(@"""C:\Program Files\Ram Raiders TuneUp Suite\TuneUpEngine.exe"" --service", @"C:\Program Files\Ram Raiders TuneUp Suite\TuneUpEngine.exe")]
+        [InlineData(@"C:\Apps\TuneUpEngine.exe --service", @"C:\Apps\TuneUpEngine.exe")]
+        [InlineData("", null)]
+        [InlineData("\"", null)]
+        public void ServiceCommandLine_YieldsTheExecutable(string commandLine, string? expected) =>
+            Assert.Equal(expected, ClientVerifier.ExecutableFromCommandLine(commandLine));
+    }
+}

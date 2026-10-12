@@ -2,20 +2,26 @@
 ; Inno Setup Compiler Script for Ram Raiders TuneUp Suite
 ; =====================================================================
 ;
-; BUILD PREREQUISITE — populate publish\ReleaseSuite BEFORE compiling this
+; BUILD PREREQUISITE ??? populate publish\ReleaseSuite BEFORE compiling this
 ; script. Publishing TuneUpUI also brings in the referenced TuneUpEngine.exe,
 ; so both executables land in the same folder (which is what the UI expects
-; at runtime — it looks for TuneUpEngine.exe next to TuneUpUI.exe).
+; at runtime ??? it looks for TuneUpEngine.exe next to TuneUpUI.exe).
 ;
 ;   Framework-dependent (small; target PC needs the .NET 11 Desktop Runtime x64):
+;   Run build-installer.ps1, which publishes BOTH projects into publish\ReleaseSuite,
+;   checks every engine dependency is present, then compiles this script. (Publishing
+;   only TuneUpUI drops DLLs the engine needs, such as PerformanceCounter, because the
+;   UI's Desktop runtime already contains them and the engine's runtime does not.)
+;
 ;     dotnet publish "TuneUpUI\TuneUpUI.csproj" -c Release -o "publish\ReleaseSuite"
+;     dotnet publish "TuneUpEngine\TuneUpEngine.csproj" -c Release -o "publish\ReleaseSuite"
 ;
 ;   Self-contained (larger; no runtime prerequisite on the target PC):
 ;     dotnet publish "TuneUpUI\TuneUpUI.csproj" -c Release -r win-x64 ^
 ;            --self-contained -o "publish\ReleaseSuite"
 ;
 ; The InitializeSetup check below warns if the .NET 11 Desktop Runtime is
-; missing — relevant only for the framework-dependent publish.
+; missing ??? relevant only for the framework-dependent publish.
 ; =====================================================================
 
 #define MyAppName "Ram Raiders TuneUp Suite"
@@ -56,8 +62,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Copy all consolidated portable binaries to destination. Debug symbols (*.pdb)
-; are excluded — they are not needed by an installed release build.
-Source: "publish\ReleaseSuite\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: recursesubdirs createallsubdirs
+; are excluded ??? they are not needed by an installed release build.
+Source: "publish\ReleaseSuite\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -65,7 +71,7 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; ── Engine service ──────────────────────────────────────────────────────
+; ?????? Engine service ??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
 ; The engine runs as an automatically starting Windows service (LocalSystem), so
 ; the app no longer needs a UAC prompt on every launch or sign-in, and keeps
 ; working in the background after the window is closed. "create" fails harmlessly
@@ -76,12 +82,12 @@ Filename: "{sys}\sc.exe"; Parameters: "description {#ServiceName} ""Ram Raiders 
 ; Restart automatically if it ever stops unexpectedly.
 Filename: "{sys}\sc.exe"; Parameters: "failure {#ServiceName} reset= 86400 actions= restart/5000/restart/5000/restart/30000"; Flags: runhidden waituntilterminated
 ; Windows' default service permissions, plus "start" (RP) for interactive users
-; (IU), so the UI can start the engine if it was stopped — without admin rights.
+; (IU), so the UI can start the engine if it was stopped ??? without admin rights.
 ; Stopping or reconfiguring it still requires an administrator.
 Filename: "{sys}\sc.exe"; Parameters: "sdset {#ServiceName} D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWRPLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)"; Flags: runhidden waituntilterminated
 Filename: "{sys}\net.exe"; Parameters: "start {#ServiceName}"; Flags: runhidden waituntilterminated; StatusMsg: "Starting the TuneUp engine..."
 
-; Launch the GUI upon successful installation completion — as the user who ran
+; Launch the GUI upon successful installation completion ??? as the user who ran
 ; setup, NOT elevated. (Setup itself runs as administrator; without
 ; runasoriginaluser the UI inherited that and wrote to the admin's settings.)
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
@@ -98,9 +104,10 @@ Filename: "{sys}\sc.exe"; Parameters: "delete {#ServiceName}"; Flags: runhidden 
 Type: filesandordirs; Name: "{commonappdata}\RamRaidersTuneUpSuite"
 
 [Code]
-{ Returns True if a Microsoft.WindowsDesktop.App 11.x shared framework is present.
-  Because ArchitecturesInstallIn64BitMode=x64 is set, {commonpf} resolves to the
-  64-bit Program Files, where the x64 .NET runtime lives. }
+(* Returns True if a Microsoft.WindowsDesktop.App 11.x shared framework is present.
+   Because ArchitecturesInstallIn64BitMode=x64 is set, {commonpf} resolves to the
+   64-bit Program Files, where the x64 .NET runtime lives. (A brace comment would end
+   at the brace after "commonpf".) *)
 function IsDotNetDesktop11Installed(): Boolean;
 var
   FindRec: TFindRec;

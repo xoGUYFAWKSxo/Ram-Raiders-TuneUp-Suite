@@ -143,10 +143,67 @@ namespace TuneUpEngine
             return paths;
         }
 
+        // Name the installer registers the engine under (installer.iss ServiceName).
+        public const string EngineServiceName = "TuneUpEngineService";
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr OpenSCManagerW(string? machine, string? database, uint access);
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr OpenServiceW(IntPtr scm, string name, uint access);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool QueryServiceStatusEx(IntPtr service, int infoLevel, byte[] buffer, int size, out int needed);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool CloseServiceHandle(IntPtr handle);
+
+        // A normal user can't open the engine's process once it runs as a SYSTEM service, so its path
+        // can't be read directly. Instead: if the service manager says that process IS the TuneUp
+        // Engine service, the service's registered executable is the answer. Only administrators can
+        // create or reconfigure a service, so a fake engine can't pass this.
+        private static string? GetServiceImagePath(uint pid)
+        {
+            IntPtr scm = OpenSCManagerW(null, null, 0x0001 /* SC_MANAGER_CONNECT */);
+            if (scm == IntPtr.Zero) return null;
+            try
+            {
+                IntPtr svc = OpenServiceW(scm, EngineServiceName, 0x0004 /* SERVICE_QUERY_STATUS */);
+                if (svc == IntPtr.Zero) return null;
+                try
+                {
+                    var status = new byte[36]; // SERVICE_STATUS_PROCESS
+                    if (!QueryServiceStatusEx(svc, 0 /* SC_STATUS_PROCESS_INFO */, status, status.Length, out _))
+                        return null;
+                    if (BitConverter.ToUInt32(status, 28) != pid) return null; // dwProcessId
+                }
+                finally { CloseServiceHandle(svc); }
+            }
+            finally { CloseServiceHandle(scm); }
+
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                $@"SYSTEM\CurrentControlSet\Services\{EngineServiceName}");
+            return ExecutableFromCommandLine(key?.GetValue("ImagePath") as string);
+        }
+
+        // "\"C:\Program Files\X\TuneUpEngine.exe\" --service" -> C:\Program Files\X\TuneUpEngine.exe
+        internal static string? ExecutableFromCommandLine(string? commandLine)
+        {
+            if (string.IsNullOrWhiteSpace(commandLine)) return null;
+            string s = Environment.ExpandEnvironmentVariables(commandLine.Trim());
+            if (s.StartsWith('"'))
+            {
+                int end = s.IndexOf('"', 1);
+                return end > 1 ? s.Substring(1, end - 1) : null;
+            }
+            int exe = s.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+            return exe > 0 ? s.Substring(0, exe + 4) : s;
+        }
+
         private static string? GetImagePath(uint pid)
         {
             IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-            if (hProcess == IntPtr.Zero) return null;
+            if (hProcess == IntPtr.Zero) return GetServiceImagePath(pid);
             try
             {
                 var buffer = new StringBuilder(1024);
