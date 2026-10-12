@@ -608,8 +608,8 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
+                            <RowDefinition x:Name="RowLatencyCard" Height="Auto"/>
+                            <RowDefinition x:Name="RowMonitorEvents" Height="*" MinHeight="120"/>
                         </Grid.RowDefinitions>
 
                         <!-- Header -->
@@ -621,8 +621,15 @@
 
                         <!-- DPC Latency Watchdog -->
                         <Border Grid.Row="1" Style="{StaticResource GlassCard}" Margin="0,0,0,15">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,12">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
@@ -645,7 +652,7 @@
                                 </Grid>
 
                                 <!-- Driver table header -->
-                                <Grid Margin="0,0,0,4">
+                                <Grid Grid.Row="1" Margin="0,0,0,4">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="100"/>
@@ -662,9 +669,9 @@
                                                ToolTip="Interrupt handling (the first, urgent step when a device signals the CPU) during that peak"/>
                                     <TextBlock Grid.Column="4" Text="Status" Foreground="{StaticResource BrushTextMuted}" FontSize="11" FontWeight="Bold" TextAlignment="Center"/>
                                 </Grid>
-                                <Separator Background="#333350" Margin="0,0,0,6"/>
+                                <Separator Grid.Row="2" Background="#333350" Margin="0,0,0,6"/>
 
-                                <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer Grid.Row="3" MaxHeight="160" VerticalScrollBarVisibility="Auto">
                                     <ItemsControl x:Name="IcLatencyDrivers">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -695,9 +702,11 @@
                                 </ScrollViewer>
 
                                 <!-- Plain-English explainer, toggled by BtnLatencyHelp -->
-                                <Border x:Name="PnlLatencyHelp" Visibility="Collapsed" Background="#15151F" CornerRadius="6"
-                                        Padding="14,12" Margin="0,12,0,0" BorderBrush="#333350" BorderThickness="1">
-                                    <StackPanel>
+                                <!-- Fills the space left in the window and scrolls; see BtnLatencyHelp_Click -->
+                                <Border Grid.Row="4" x:Name="PnlLatencyHelp" Visibility="Collapsed" Background="#15151F" CornerRadius="6"
+                                        Margin="0,12,0,0" BorderBrush="#333350" BorderThickness="1">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14,12,6,12">
+                                    <StackPanel Margin="0,0,8,0">
                                         <StackPanel.Resources>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="{StaticResource BrushTextMain}"/>
@@ -729,8 +738,9 @@
                                         <TextBlock Foreground="{StaticResource BrushTextMuted}" Margin="0,6,0,0"
                                                    Text="Skip tweaks that promise lower latency, like disabling HPET, changing timer resolution, or forcing every device into MSI mode. On current Windows they rarely help and can make things worse. Fix the driver instead."/>
                                     </StackPanel>
+                                    </ScrollViewer>
                                 </Border>
-                            </StackPanel>
+                            </Grid>
                         </Border>
 
                         <!-- Event Grid -->

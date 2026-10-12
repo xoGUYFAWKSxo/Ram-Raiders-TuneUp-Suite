@@ -73,9 +73,11 @@ namespace TuneUpUI
 
         private void BtnLatencyHelp_Click(object sender, RoutedEventArgs e)
         {
-            PnlLatencyHelp.Visibility = PnlLatencyHelp.Visibility == Visibility.Visible
-                ? Visibility.Collapsed
-                : Visibility.Visible;
+            bool show = PnlLatencyHelp.Visibility != Visibility.Visible;
+            PnlLatencyHelp.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            // While open, the card shares the leftover height with the event log so the help text
+            // scrolls inside the window instead of running off the bottom.
+            RowLatencyCard.Height = show ? new GridLength(2, GridUnitType.Star) : GridLength.Auto;
         }
 
         private void LatencyRefreshTimer_Tick(object? sender, EventArgs e)
