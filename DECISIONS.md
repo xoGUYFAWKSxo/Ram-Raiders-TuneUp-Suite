@@ -2,6 +2,7 @@
 
 These are settled. Don't reopen them unless the user asks. Newest first.
 
+- **2026-10-12: The project is complete for now.** No work is in progress. New work starts only when the user asks; see STATUS.md, "If work resumes".
 - **2026-10-12: Plain language, no marketing.** The README, docs and web page say what the app does and doesn't do. No invented numbers, counters or performance promises. The web page's waitlist was removed: its seat count was made up and sign-ups never left the visitor's browser.
 - **2026-10-12: Test in the installed app, not dev folders.** Every build the user tests is installed with `update-installed.ps1`, and main is reinstalled after each merge. No `publish/DevTest*` folders: the installed service won't talk to a UI outside Program Files.
 - **2026-10-12: Merge on green CI.** Claude may merge its own PRs without asking once the `build-and-test` check passes. A failed or pending check is never merged.

@@ -1,6 +1,6 @@
 # Ram Raiders TuneUp Suite
 
-Windows tune-up app, C# / .NET 11, WPF. Read `STATUS.md` for current state and `DECISIONS.md` before changing anything listed there. Don't re-read the whole codebase; open only the files the task touches.
+Windows tune-up app, C# / .NET 11, WPF. The project is complete for now (paused 2026-10-12). Read `STATUS.md` for current state and `DECISIONS.md` before changing anything listed there. Don't re-read the whole codebase; open only the files the task touches.
 
 ## Layout
 - `TuneUpEngine/`: elevated engine. Runs as the LocalSystem service `TuneUpEngineService`, or in console mode for dev. Does every privileged action.

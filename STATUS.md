@@ -1,6 +1,8 @@
 # Status
 
-_Last updated: 2026-10-12, main at 5d3c749 (public repo PR #9)._
+_Last updated: 2026-10-12, main after public repo PR #11._
+
+**Project status: complete for now (paused 2026-10-12).** Every planned feature is built, tested and merged, and the installed app on the dev PC matches main. Nothing is in progress. If work resumes, start from "If work resumes" below.
 
 ## Repository history
 - **Active repo:** `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite` (public, GPL-3.0). All work happens here: branches, PRs, CI and releases.
@@ -32,6 +34,11 @@ _Last updated: 2026-10-12, main at 5d3c749 (public repo PR #9)._
 - Cleaning with junk rules, and cleaning empty folders. Both share their code path with the duplicate clean, which was tested.
 - Running as a real SYSTEM service on a clean PC that isn't the dev machine.
 
+## If work resumes
+- Publish a first release: build the installer with `build-installer.ps1` and attach it with its `.sha256` file. There is no GitHub release yet.
+- Turn on GitHub Pages for `docs/` if the project web page should go live. It isn't published yet.
+- Test on a clean PC that isn't the dev machine (see "Not verified live").
+
 ## Open items / ideas
 - A full MVVM conversion of the UI was not done (it is split into per-tab partials instead).
 - The UI's appearance has not been checked by screenshot after the UI polish PR (#10).
@@ -39,7 +46,8 @@ _Last updated: 2026-10-12, main at 5d3c749 (public repo PR #9)._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #10 | (this PR) | Plain-language pass: the project web page drops the fake waitlist (invented seat counter, sign-ups that stayed in the visitor's browser), pricing survey and hype, and says plainly what the app does and doesn't do; README gains a "What It Doesn't Do" section |
+| public #11 | (this PR) | Project marked complete for now; unused waitlist styles removed from the web page's stylesheet |
+| public #10 | f4fe335 | Plain-language pass: the project web page drops the fake waitlist (invented seat counter, sign-ups that stayed in the visitor's browser), pricing survey and hype, and says plainly what the app does and doesn't do; README gains a "What It Doesn't Do" section |
 | public #9 | 5d3c749 | README and TuneUp_Documentation describe the driver table and Save Trace; MSI wording matches DECISIONS |
 | public #8 | aeb41a5 | STATUS: record public PRs #6 and #7 |
 | public #7 | e73b133 | Live Monitor "Save Trace": saves the DPC results as a text report or CSV (choose in "Save as type"); no computer or user name in the file (checked in the app) |
