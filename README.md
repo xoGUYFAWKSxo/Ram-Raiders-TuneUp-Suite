@@ -5,7 +5,7 @@
 [![Language](https://img.shields.io/badge/language-C%23-violet.svg)](#)
 [![Framework](https://img.shields.io/badge/framework-.NET%2011%20%7C%20WPF-red.svg)](#)
 
-A professional-grade, high-performance Windows system optimization and maintenance utility. **Ram Raiders TuneUp Suite** is built with a highly responsive WPF desktop frontend that communicates over a secure, custom-serialized Named Pipe IPC channel to a dedicated elevated background engine.
+A free, open-source Windows 10/11 maintenance tool. It frees standby memory, names the drivers behind DPC latency spikes, cleans junk files with community winapp2 rules, repairs broken registry entries after backing them up, and applies Windows tweaks that can be undone. **Ram Raiders TuneUp Suite** is a WPF desktop app that talks over a named pipe to a background Windows service, which does the work needing administrator rights. It is alpha software.
 
 ```
                   ┌──────────────────────────────────────────┐
@@ -20,7 +20,7 @@ A professional-grade, high-performance Windows system optimization and maintenan
                   ┌────────────────────▼─────────────────────┘
                   │          Ram Raiders TuneUp Engine       │
                   │             (Elevated Backend)           │
-                  │           Runs as Administrator          │
+                  │     Windows service (LocalSystem)        │
                   └──────────────────────────────────────────┘
 ```
 
@@ -34,7 +34,7 @@ A professional-grade, high-performance Windows system optimization and maintenan
 * **Driver DPC & Interrupt Load**: Per-core share of CPU time spent in driver DPCs and interrupts (Windows performance counters, 5-second peaks), plus a kernel ETW trace that names each driver and times every one of its runs, so the table shows each driver's longest single run in µs with plain-English advice. **Save Trace** writes the results to a text report or CSV, to share or to compare before and after a driver update.
 
 ### 🧠 2. CPU ProBalance & Game Booster
-* **ProBalance Governor**: Automatically throttles abusive background applications consuming excessive CPU time by temporarily lowering their scheduling priority class, giving the active foreground application 100% responsiveness.
+* **ProBalance Governor**: Automatically throttles abusive background applications consuming excessive CPU time by temporarily lowering their scheduling priority class, so they compete less with the program you're using, then restores it.
 * **Game Mode Booster**: Detects the active game and raises its priority to High. Following Microsoft's guidance for games, it does not hard-pin games on ordinary CPUs; on hybrid CPUs with at least three performance cores it keeps the game on the performance cores (detected from Windows' own core efficiency classes).
 
 ### 🔌 3. Hardware Interrupt Tuning (MSI Mode)
@@ -55,9 +55,19 @@ A professional-grade, high-performance Windows system optimization and maintenan
 * **Security & Stability**: Controls Windows UAC, mitigates smartscreen delays, enables elevated network drive sharing, and displays detailed BSOD parameters.
 * **Desktop & File Explorer**: Disables web-based Bing search suggestions, accelerates hover times, adds "Open Command Prompt as Admin" to context menus, and enables Windows 10/11 classic context menu overrides.
 
-### 🔄 7. Synchronized Cohesive Lifecycle
+### 🔄 7. Install, Service & Safety
 * **Windows Service Engine**: The installer registers the engine as an automatically starting Windows service, so there is no UAC prompt on launch or sign-in and background features keep running after the window is closed. (Development builds without the service fall back to launching the engine with a UAC prompt and stop it on exit.)
 * **Per-User Safety**: Each request is handled for the user who made it — your registry hive, your folders, and file deletion performed as you. Machine-wide changes require an administrator account.
+
+---
+
+## What It Doesn't Do
+
+* **No promised speed-ups.** Freeing standby memory helps only when a PC is actually short on free memory, and priority changes help only when background programs compete for the CPU. The app shows what it measured; it doesn't estimate or score gains.
+* **It doesn't fix drivers.** The DPC monitor names the slow driver; updating, rolling back or removing it is up to you.
+* **No telemetry, accounts or ads.** The only network access is the cleaner-rules update you start yourself, which downloads `winapp2.ini` from GitHub.
+* **Not code-signed**, so Windows SmartScreen warns about an unknown publisher (see [Installing](#installing)).
+* **No published release yet.** Build it from source (see below).
 
 ---
 
@@ -79,7 +89,7 @@ Ram Raiders TuneUp Suite/
 │   └── TrayIconHelper.cs             # System tray wrapper, notifications, & context menus
 │
 ├── TuneUpEngine.Tests/              # xUnit unit tests for engine logic
-├── docs/                            # Static landing/waitlist site (GitHub Pages)
+├── docs/                            # Static project web page (GitHub Pages)
 ├── Start-TuneUp.bat                  # Developer launcher batch script
 ├── TuneUpApp.slnx                    # Solution manifest
 ├── TuneUp_Documentation.md           # Deep application technical documentation

@@ -1,6 +1,6 @@
 # Ram Raiders TuneUp Suite — Application Technical Documentation
 
-> A professional-grade Windows system optimization and maintenance utility built with a WPF desktop frontend and a dedicated, elevated background engine communicating over a secure Named Pipe IPC channel.
+> A Windows maintenance tool: a WPF desktop app that talks over a named pipe to a background Windows service, which does the work needing administrator rights.
 
 ---
 
@@ -303,7 +303,7 @@ A grid of quick-launch buttons that open built-in Windows administrative tools d
 **Navigation label:** Storage Tools  
 **Tab index:** 8
 
-Allows users to analyze their directories and migrate large folders (such as game folders or application data) to a different drive, establishing NTFS symbolic links so Windows and launchers continue reading them seamlessly without needing reinstallation.
+Allows users to analyze their directories and migrate large folders (such as game folders or application data) to a different drive, establishing NTFS symbolic links so Windows and launchers keep finding them without a reinstall.
 
 **How a migration stays safe:** files are copied and verified first; the original is then renamed aside (instant on the same drive), the link is created and checked, and only then is the original deleted. If the link can't be created, the rename is reversed and nothing changes. **Undo** on a history entry copies the folder back, verifies it, replaces the link with the real folder and removes the migrated copy.
 
