@@ -8,6 +8,7 @@ Windows tune-up app, C# / .NET 11, WPF. Read `STATUS.md` for current state and `
 - `TuneUpEngine.Tests/`: xUnit tests; references both projects.
 - IPC: the named pipe `TuneUpEnginePipe`. The engine only trusts `TuneUpUI.exe` from its own folder.
 - `installer.iss`, `build-installer.ps1`, `test-installer.ps1`: Inno Setup installer, build, and elevated install/upgrade/uninstall test.
+- `update-installed.ps1`: builds the installer from the current checkout and installs it over the installed app (UAC prompt), then runs the installer checks.
 - `publish/`: gitignored build output and test reports.
 
 ## Build and test
@@ -25,6 +26,7 @@ dotnet test TuneUpApp.slnx -c Release --no-build
 - Commit as `xoGUYFAWKSxo <206061236+xoGUYFAWKSxo@users.noreply.github.com>` (set in this clone's git config). Never commit with a personal email address; the repo is public.
 - Branch, then open a PR. Once the `build-and-test` check passes green, merge it yourself with `gh pr merge N --merge`; no need to ask first. Never merge a PR whose CI failed or is still running. GitHub auto-merge is disabled on this repo, so wait for the run (`gh run watch <id> --exit-status`), then merge.
 - Commit messages: write them to a file and use `git commit -F`, in UTF-8 without a BOM.
+- Testing builds: the user tests only the installed app (the installed engine service rejects any UI outside Program Files). Don't make `publish/DevTest*` folders. To let the user check a PR before merging, run `update-installed.ps1` on its branch. After every merge, check out main and run `update-installed.ps1` again, so the installed app always matches main. Tell the user to expect the UAC prompt.
 - Update `STATUS.md` when a PR merges. Add to `DECISIONS.md` when the user makes a choice.
 
 ## Rules for engine code
