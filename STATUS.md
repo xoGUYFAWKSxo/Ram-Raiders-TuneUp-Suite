@@ -1,11 +1,11 @@
 # Status
 
-_Last updated: 2026-10-12, main at f7b4a90 (PR #18)._
+_Last updated: 2026-10-12, main at 996e1fa (PR #20)._
 
 ## Current state
 - The phased rework plan is complete (PRs #1 to #16).
 - End-to-end review (PR #17) and testing of the destructive features against a real engine (PR #18) are done and merged.
-- Build: 0 warnings, 271 tests pass. CI is green.
+- Build: 0 warnings, 278 tests pass. CI is green.
 - The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs the PR #18 build as a service.
 
 ## Verified on a real engine
@@ -34,6 +34,8 @@ _Last updated: 2026-10-12, main at f7b4a90 (PR #18)._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
+| #20 | 996e1fa | Component Repair shows plain-English DISM/SFC results; a successful repair no longer reads as "corruption detected" (not yet checked in the app) |
+| #19 | 303a4bb | CLAUDE.md, STATUS.md, DECISIONS.md |
 | #18 | f7b4a90 | Registry repair reports failures and won't delete without a backup; re-enabled Manual services aren't started; appx refusals return Error |
 | #17 | d00ebc9 | Standby purge enum fix, legacy settings migration, tweak error messages, latency badge colours, glyph/mojibake fixes |
 | #16 | b216b4c | Installer SHA-256 file, README install notes |
