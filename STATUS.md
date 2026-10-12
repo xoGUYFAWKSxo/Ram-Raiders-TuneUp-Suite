@@ -10,7 +10,7 @@ _Last updated: 2026-10-12, main at bc8cff7 (public repo PR #1)._
 ## Current state
 - The phased rework plan is complete (PRs #1 to #16).
 - End-to-end review (PR #17) and testing of the destructive features against a real engine (PR #18) are done and merged.
-- Build: 0 warnings, 296 tests pass. CI is green.
+- Build: 0 warnings, 301 tests pass. CI is green.
 - The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs main as a service, installed with `update-installed.ps1` after each merge.
 
 ## Verified on a real engine
@@ -40,6 +40,8 @@ _Last updated: 2026-10-12, main at bc8cff7 (public repo PR #1)._
 | PR | Merge | What |
 |----|-------|------|
 | public #1 | bc8cff7 | Docs: public repo is the only active repo, the archive is frozen; merge PRs once CI passes green |
+| public #7 | e73b133 | Live Monitor "Save Trace": saves the DPC results as a text report or CSV (choose in "Save as type"); no computer or user name in the file (checked in the app) |
+| public #6 | 1363d17 | STATUS/DECISIONS: record public PRs #3 to #5 |
 | public #5 | e63d89b | DPC monitor names drivers: a kernel ETW trace (TraceEvent) times every DPC/ISR run and charges it to its driver; driver table with longest run in µs and advice; help panel replaces the tables while open (checked in the app: 252 drivers named) |
 | public #4 | d19e37d | `update-installed.ps1`: test builds go into the installed app; no DevTest folders |
 | public #3 | a299ab4 | STATUS: record public PRs #1 and #2 |
