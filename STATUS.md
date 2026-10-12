@@ -3,7 +3,9 @@
 _Last updated: 2026-10-12, main at 8380398 (PR #22)._
 
 ## Repository history
-- 2026-10-12: the repo went public as a fresh repository with commit emails rewritten to the GitHub noreply address, under GPL-3.0. The original private repo, with PRs #1 to #23 and their discussions, is `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite-archive`. PR numbers and commit hashes below refer to that archive; the file contents are identical.
+- **Active repo:** `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite` (public, GPL-3.0). All work happens here: branches, PRs, CI and releases.
+- **Archive (frozen):** `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite-archive` (private). It is the pre-2026-10-12 history, with PRs #1 to #23 and their discussions. It is no longer modified: don't push to it, open PRs on it, or make it public (its PRs contain personal email addresses). Read it only to look up old PR discussions.
+- 2026-10-12: the active repo was created fresh from the archive's main, with commit emails rewritten to the GitHub noreply address. The file contents are identical. PR numbers and commit hashes in the table below (up to #23) refer to the archive; PR numbers in the active repo start again at #1.
 
 ## Current state
 - The phased rework plan is complete (PRs #1 to #16).
