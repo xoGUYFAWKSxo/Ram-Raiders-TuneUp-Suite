@@ -19,6 +19,21 @@ namespace TuneUpEngine.Tests
         }
     }
 
+    // Healthy cores showed a red "OK" badge (the colour was keyed on IsSpike the wrong way round).
+    public class LatencyBadgeTests
+    {
+        [Theory]
+        [InlineData("OK", 0x10, 0x61, 0x40)]
+        [InlineData("ELEVATED", 0xB4, 0x6A, 0x0C)]
+        [InlineData("HIGH", 0x9B, 0x1C, 0x1C)]
+        public void StatusColours(string status, byte r, byte g, byte b)
+        {
+            var brush = (System.Windows.Media.SolidColorBrush)TuneUpUI.LatencyStatusBadgeConverter.Instance
+                .Convert(status, typeof(System.Windows.Media.Brush), null!, System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Equal(System.Windows.Media.Color.FromRgb(r, g, b), brush.Color);
+        }
+    }
+
     public class EngineSettingsMigrationTests : IDisposable
     {
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "RRTU_Settings_" + Guid.NewGuid().ToString("N"));

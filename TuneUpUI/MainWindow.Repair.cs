@@ -54,11 +54,7 @@ namespace TuneUpUI
                         var report = JsonSerializer.Deserialize<Dictionary<string, object>>(resp.Payload ?? "null");
                         if (report == null) return;
 
-                        bool hasCorruption = string.Equals(report["HasCorruption"]?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
-                        var logsJson = report["CorruptionLogs"]?.ToString() ?? "null";
-                        var logs = JsonSerializer.Deserialize<List<string>>(logsJson);
-
-                        LstCbsCorruptions.ItemsSource = logs;
+                        bool hasCorruption = ShowCbsLogs(report);
 
                         if (hasCorruption)
                         {
@@ -75,6 +71,19 @@ namespace TuneUpUI
                     }
                 });
             });
+        }
+
+        // Lists the CBS findings: red only when there is corruption (the "nothing found" line was
+        // shown in red too). Returns whether corruption was found.
+        private bool ShowCbsLogs(Dictionary<string, object> report)
+        {
+            bool hasCorruption = string.Equals(report["HasCorruption"]?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+            var logsJson = report["CorruptionLogs"]?.ToString() ?? "null";
+            LstCbsCorruptions.ItemsSource = JsonSerializer.Deserialize<List<string>>(logsJson);
+            LstCbsCorruptions.Foreground = hasCorruption
+                ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44))
+                : (System.Windows.Media.Brush)FindResource("BrushTextMain");
+            return hasCorruption;
         }
 
         private void BtnRepairComponent_Click(object sender, RoutedEventArgs e)
@@ -107,11 +116,7 @@ namespace TuneUpUI
                                 if (r != null && r.Status == IpcStatus.Success)
                                 {
                                     var report = JsonSerializer.Deserialize<Dictionary<string, object>>(r.Payload ?? "null");
-                                    if (report != null)
-                                    {
-                                        var logsJson = report["CorruptionLogs"]?.ToString() ?? "null";
-                                        LstCbsCorruptions.ItemsSource = JsonSerializer.Deserialize<List<string>>(logsJson);
-                                    }
+                                    if (report != null) ShowCbsLogs(report);
                                 }
                             });
                         });
