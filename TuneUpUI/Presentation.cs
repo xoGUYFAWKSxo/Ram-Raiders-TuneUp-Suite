@@ -100,4 +100,83 @@ namespace TuneUpUI.Presentation
             return text;
         }
     }
+
+    // ── Live Monitor: saved DPC traces ──────────────────────────────────────────
+
+    // Writes the DPC monitor's results to a file the user can keep, share, or compare after a
+    // driver update. Only measured numbers; no computer or user name, since these get posted to forums.
+    public static class LatencyTraceFile
+    {
+        public static string DefaultFileName(DateTime savedAt) => $"DPC trace {savedAt:yyyy-MM-dd HHmm}";
+
+        public static string ToText(LatencyReport report, DateTime savedAt, string windowsVersion)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Ram Raiders TuneUp Suite: DPC & interrupt trace");
+            sb.AppendLine($"Saved:          {savedAt.ToString("yyyy-MM-dd HH:mm:ss", inv)}");
+            sb.AppendLine($"Windows:        {windowsVersion}");
+            sb.AppendLine($"Measured for:   {report.SampleCount} seconds{(report.IsRunning ? " (still running when saved)" : "")}");
+            sb.AppendLine();
+            sb.AppendLine(report.Summary);
+            sb.AppendLine();
+
+            sb.AppendLine("DRIVERS, longest single run first");
+            if (!report.DriverTraceAvailable)
+            {
+                sb.AppendLine(string.IsNullOrEmpty(report.DriverTraceMessage) ? "The driver trace wasn't running." : report.DriverTraceMessage);
+            }
+            else
+            {
+                sb.AppendLine(string.Format(inv, "{0,-28} {1,-30} {2,12} {3,10} {4,10} {5,10}",
+                    "Driver", "What it is", "Longest µs", "Runs", "Total ms", "Status"));
+                foreach (var d in report.Drivers)
+                    sb.AppendLine(string.Format(inv, "{0,-28} {1,-30} {2,12:N0} {3,10:N0} {4,10:N1} {5,10}",
+                        d.Driver, d.Description, d.HighestMicroseconds, d.RunCount, d.TotalMilliseconds, d.Status));
+                if (report.DriverEventsLost > 0)
+                    sb.AppendLine($"{report.DriverEventsLost.ToString("N0", inv)} runs were missed because the PC was too busy to record them.");
+            }
+            sb.AppendLine();
+
+            sb.AppendLine("CPU CORES, highest 5-second driver load first");
+            sb.AppendLine(string.Format(inv, "{0,-10} {1,12} {2,8} {3,8} {4,10}", "Core", "Peak load %", "DPC %", "ISR %", "Status"));
+            foreach (var c in report.Cores)
+                sb.AppendLine(string.Format(inv, "{0,-10} {1,12:F1} {2,8:F1} {3,8:F1} {4,10}",
+                    c.Name, c.PeakTotalPercent, c.PeakDpcPercent, c.PeakInterruptPercent, c.Status));
+
+            var advice = report.Drivers.Where(d => d.Status != "OK").ToList();
+            if (advice.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("WHAT TO DO");
+                foreach (var d in advice)
+                    sb.AppendLine($"{d.Driver} ({d.Description}): {d.Advice}");
+            }
+            return sb.ToString();
+        }
+
+        // One table for spreadsheets: driver rows, then core rows, told apart by the Type column.
+        public static string ToCsv(LatencyReport report)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Type,Name,Description,LongestMicroseconds,Runs,DpcRuns,IsrRuns,TotalMilliseconds,PeakLoadPercent,PeakDpcPercent,PeakIsrPercent,Status");
+            foreach (var d in report.Drivers)
+                sb.AppendLine(string.Join(",", "Driver", Csv(d.Driver), Csv(d.Description),
+                    d.HighestMicroseconds.ToString("F1", inv), d.RunCount.ToString(inv), d.DpcCount.ToString(inv),
+                    d.IsrCount.ToString(inv), d.TotalMilliseconds.ToString("F3", inv), "", "", "", d.Status));
+            foreach (var c in report.Cores)
+                sb.AppendLine(string.Join(",", "Core", Csv(c.Name), "", "", "", "", "", "",
+                    c.PeakTotalPercent.ToString("F2", inv), c.PeakDpcPercent.ToString("F2", inv),
+                    c.PeakInterruptPercent.ToString("F2", inv), c.Status));
+            return sb.ToString();
+        }
+
+        private static string Csv(string value)
+        {
+            // Leading = + - @ would run as a formula in Excel.
+            if (value.Length > 0 && "=+-@".IndexOf(value[0]) >= 0) value = "'" + value;
+            return value.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0 ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
+        }
+    }
 }

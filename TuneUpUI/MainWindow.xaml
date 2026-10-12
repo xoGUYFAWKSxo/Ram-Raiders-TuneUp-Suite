@@ -648,7 +648,10 @@
                                         <Button x:Name="BtnStartLatency" Content="&#xE768; Start Audit" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource PremiumButton}"
                                                 Padding="12,5" FontSize="12" Margin="0,0,8,0" Click="BtnStartLatency_Click"/>
                                         <Button x:Name="BtnStopLatency" Content="&#xE71A; Stop" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource OutlineButton}"
-                                                Padding="12,5" FontSize="12" IsEnabled="False" Click="BtnStopLatency_Click"/>
+                                                Padding="12,5" FontSize="12" Margin="0,0,8,0" IsEnabled="False" Click="BtnStopLatency_Click"/>
+                                        <Button x:Name="BtnSaveLatency" Content="&#xE74E; Save Trace" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource OutlineButton}"
+                                                Padding="12,5" FontSize="12" IsEnabled="False" Click="BtnSaveLatency_Click"
+                                                ToolTip="Save these results to a text or CSV file, to keep, share, or compare after a driver update"/>
                                     </StackPanel>
                                 </Grid>
 
