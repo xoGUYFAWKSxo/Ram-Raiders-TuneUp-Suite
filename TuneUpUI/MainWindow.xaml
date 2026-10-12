@@ -8,15 +8,24 @@
         Title="Ram Raiders TuneUp Suite" 
         Icon="/TuneUpIcon.ico"
         Height="680" Width="1040"
+        MinHeight="560" MinWidth="900"
         Background="{StaticResource BrushBgDeep}"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
-        AllowsTransparency="True"
+        ResizeMode="CanResize"
         BorderBrush="#252535"
         BorderThickness="1"
+        SourceInitialized="Window_SourceInitialized"
+        StateChanged="Window_StateChanged"
         Loaded="Window_Loaded">
 
-    <Grid>
+    <!-- Custom frame: edges and corners resize the window, the title bar drags it (double-click
+         maximizes, Aero Snap works). Buttons in the title bar opt back in to clicks. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <!-- Custom Title Bar -->
             <RowDefinition Height="40"/>
@@ -33,7 +42,7 @@
 
         <!-- TITLE BAR (Spans both columns) -->
         <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource BrushBgDark}" 
-                BorderBrush="#252535" BorderThickness="0,0,0,1" MouseDown="TitleBar_MouseDown">
+                BorderBrush="#252535" BorderThickness="0,0,0,1">
             <Grid Margin="15,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -51,13 +60,16 @@
                 </StackPanel>
 
                 <!-- Window Control Buttons -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
                     <Button Content="&#xE713;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource BrushTextMuted}" 
                             Background="Transparent" BorderThickness="0" Width="30" Height="30" Cursor="Hand" 
                             Click="SettingsButton_Click" ToolTip="Settings" Margin="0,0,5,0"/>
                     <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource BrushTextMuted}" 
                             Background="Transparent" BorderThickness="0" Width="30" Height="30" Cursor="Hand" 
                             Click="MinButton_Click" ToolTip="Minimize"/>
+                    <Button x:Name="BtnMaximize" Content="&#xE922;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource BrushTextMuted}" 
+                            Background="Transparent" BorderThickness="0" Width="30" Height="30" Cursor="Hand" 
+                            Click="MaxButton_Click" ToolTip="Maximize"/>
                     <Button Content="&#xE106;" FontFamily="Segoe MDL2 Assets" Foreground="#EF4444" 
                             Background="Transparent" BorderThickness="0" Width="30" Height="30" Cursor="Hand" 
                             Click="CloseButton_Click" ToolTip="Close"/>
@@ -211,8 +223,8 @@
                             </Grid.ColumnDefinitions>
 
                             <!-- Column 1: Core Toggles & Actions (Scrollable for future expansions) -->
-                            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled" Margin="0,0,15,15">
-                                <StackPanel Margin="0,0,10,20">
+                            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,15,0">
+                                <StackPanel Margin="0,0,10,0">
                                     <!-- Standby purge card -->
                                     <Border Style="{StaticResource GlassCard}" Margin="0,0,0,15">
                                         <StackPanel>
@@ -263,7 +275,7 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Text="ENGINE ACTIVITY LOG" Foreground="White" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
-                                    <ListBox Grid.Row="1" x:Name="LstDashboardEvents" Background="Transparent" BorderThickness="0" Foreground="{StaticResource BrushTextMain}" FontSize="11">
+                                    <ListBox Grid.Row="1" x:Name="LstDashboardEvents" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Foreground="{StaticResource BrushTextMain}" FontSize="11">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2"/>
@@ -425,12 +437,13 @@
                                     <ProgressBar Grid.Column="1" x:Name="ProgCleaner" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
                                 </Grid>
 
-                                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                    <Button x:Name="BtnToggleSelectJunk" Content="&#xE73A; Deselect All" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False"/>
-                                    <Button x:Name="BtnCancelCleaner" Content="Cancel" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Visibility="Collapsed" Click="BtnCancelCleaner_Click"/>
-                                    <Button Content="Scan for Junk Files" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="160" Click="BtnScanJunk_Click"/>
-                                    <Button x:Name="BtnCleanJunk" Content="Empty Junk Files" Style="{StaticResource PremiumButton}" Width="160" IsEnabled="False" Click="BtnCleanJunk_Click"/>
-                                </StackPanel>
+                                <!-- WrapPanel: on a narrow window the buttons move to a second line instead of being cut off. -->
+                                <WrapPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                    <Button x:Name="BtnToggleSelectJunk" Content="&#xE73A; Deselect All" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False"/>
+                                    <Button x:Name="BtnCancelCleaner" Content="Cancel" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Visibility="Collapsed" Click="BtnCancelCleaner_Click"/>
+                                    <Button Content="Scan for Junk Files" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" MinWidth="160" Click="BtnScanJunk_Click"/>
+                                    <Button x:Name="BtnCleanJunk" Content="Empty Junk Files" Style="{StaticResource PremiumButton}" Margin="0,0,0,6" MinWidth="160" IsEnabled="False" Click="BtnCleanJunk_Click"/>
+                                </WrapPanel>
                             </Grid>
                         </Border>
                     </Grid>
@@ -458,7 +471,7 @@
                             <Grid>
                                 <ListView x:Name="LvwRegistryIssues" Background="Transparent" BorderThickness="0" Foreground="White" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                     <ListView.ItemContainerStyle>
-                                        <Style TargetType="ListViewItem">
+                                        <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                         </Style>
                                     </ListView.ItemContainerStyle>
@@ -516,11 +529,13 @@
                                     <ProgressBar Grid.Column="1" x:Name="ProgRegistry" Style="{StaticResource PremiumProgressBar}" Width="200" Margin="20,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
                                 </Grid>
 
-                                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                    <Button x:Name="BtnToggleSelectRegistry" Content="&#xE73A; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Padding="15,5" Click="BtnToggleSelectRegistry_Click" IsEnabled="False"/>
-                                    <Button Content="Scan Registry Integrity" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="180" Click="BtnScanRegistry_Click"/>
-                                    <Button x:Name="BtnRepairRegistry" Content="Repair Defective Entries" Style="{StaticResource PremiumButton}" Width="180" IsEnabled="False" Click="BtnRepairRegistry_Click"/>
-                                </StackPanel>
+                                <!-- Buttons size to their text (fixed widths cut off "Repair Defective Entries")
+                                     and wrap to a second line on a narrow window. -->
+                                <WrapPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                    <Button x:Name="BtnToggleSelectRegistry" Content="&#xE73A; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Click="BtnToggleSelectRegistry_Click" IsEnabled="False"/>
+                                    <Button Content="Scan Registry Integrity" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" MinWidth="180" Click="BtnScanRegistry_Click"/>
+                                    <Button x:Name="BtnRepairRegistry" Content="Repair Defective Entries" Style="{StaticResource PremiumButton}" Margin="0,0,0,6" MinWidth="180" IsEnabled="False" Click="BtnRepairRegistry_Click"/>
+                                </WrapPanel>
                             </Grid>
                         </Border>
                     </Grid>
@@ -555,7 +570,7 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Text="CBS Log Corruption Diagnostics" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,10"/>
-                                    <ListBox Grid.Row="1" x:Name="LstCbsCorruptions" Background="Transparent" BorderThickness="0" Foreground="{StaticResource BrushTextMain}" FontSize="11">
+                                    <ListBox Grid.Row="1" x:Name="LstCbsCorruptions" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Foreground="{StaticResource BrushTextMain}" FontSize="11">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding}" Foreground="#EF4444" TextWrapping="Wrap" Margin="0,2"/>
@@ -567,7 +582,7 @@
                         </Grid>
 
                         <!-- Footer Actions -->
-                        <Border Grid.Row="3" Margin="0,15,0,0">
+                        <Border Grid.Row="2" Margin="0,15,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -580,8 +595,8 @@
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button Content="Verify CBS Logs" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" Width="180" Click="BtnScanComponent_Click"/>
-                                    <Button x:Name="BtnRepairComponent" Content="Run baseline Repair" Style="{StaticResource PremiumButton}" Width="180" Click="BtnRepairComponent_Click"/>
+                                    <Button Content="Verify CBS Logs" Style="{StaticResource OutlineButton}" Margin="0,0,10,0" MinWidth="180" Click="BtnScanComponent_Click"/>
+                                    <Button x:Name="BtnRepairComponent" Content="Run baseline Repair" Style="{StaticResource PremiumButton}" MinWidth="180" Click="BtnRepairComponent_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -679,7 +694,7 @@
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Grid.Row="0" Text="Live Engine Output Stream" Foreground="White" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
-                                <ListBox Grid.Row="1" x:Name="LstMonitorEvents" Background="Transparent" BorderThickness="0" Foreground="{StaticResource BrushTextMain}" FontSize="12">
+                                <ListBox Grid.Row="1" x:Name="LstMonitorEvents" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Foreground="{StaticResource BrushTextMain}" FontSize="12">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Border BorderBrush="#1F1F2B" BorderThickness="0,0,0,1" Padding="0,5">
@@ -1014,11 +1029,13 @@
                                 <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
                                     <StackPanel>
                                         <TextBlock Text="Advanced Utilities" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,15"/>
-                                        <TextBlock x:Name="TxtMsiStatus" Text="MSI Interrupt Mode Status" Foreground="{StaticResource BrushTextMuted}" Margin="0,0,0,10"/>
+                                        <TextBlock Text="MSI Interrupt Mode" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                        <TextBlock x:Name="TxtMsiStatus" Text="Scan to see which graphics and network devices use MSI (message-signaled interrupts)." Foreground="{StaticResource BrushTextMuted}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                                         
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                             <Button x:Name="BtnMsiScan" Content="Scan MSI Mode" Style="{StaticResource OutlineButton}" Click="BtnMsiScan_Click" Margin="0,0,10,0"/>
-                                            <Button x:Name="BtnMsiEnable" Content="Enable MSI Mode" Style="{StaticResource OutlineButton}" Click="BtnMsiEnable_Click" Margin="0,0,10,0"/>
+                                            <Button x:Name="BtnMsiEnable" Content="Enable MSI Mode" Style="{StaticResource OutlineButton}" Click="BtnMsiEnable_Click" Margin="0,0,10,0" IsEnabled="False"
+                                                    ToolTip="Scan first; this is only available when a supported device isn't using MSI yet"/>
                                             <Button x:Name="BtnMsiRevert" Content="Revert MSI Mode" Style="{StaticResource OutlineButton}" Click="BtnMsiRevert_Click"/>
                                         </StackPanel>
 
@@ -1043,7 +1060,9 @@
                                         <TextBlock x:Name="TxtNetAutoTune" Text="AutoTune: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
                                         <TextBlock x:Name="TxtNetEcn" Text="ECN: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
                                         <TextBlock x:Name="TxtNetTimestamps" Text="Timestamps: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
-                                        <TextBlock x:Name="TxtNetRss" Text="RSS: Unknown" Foreground="{StaticResource BrushTextMuted}" Margin="0,0,0,10"/>
+                                        <TextBlock x:Name="TxtNetRss" Text="RSS: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
+                                        <TextBlock x:Name="TxtNetNagle" Text="TcpNoDelay / TcpAckFrequency: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
+                                        <TextBlock x:Name="TxtNetSummary" Text="" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,10"/>
                                         
                                         <StackPanel Orientation="Horizontal">
                                             <Button x:Name="BtnNetApply" Content="&#x26A1; Apply Optimizations" Style="{StaticResource OutlineButton}" Click="BtnNetApply_Click" Margin="0,0,10,0"/>

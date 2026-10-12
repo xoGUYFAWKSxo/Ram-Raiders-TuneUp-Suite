@@ -149,17 +149,40 @@ namespace TuneUpUI
             _foregroundTimer.Start();
         }
 
-        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
+        // Open as large as the screen comfortably allows (up to 1280x860), so the tabs show their
+        // content without scrolling on bigger monitors; the window can be resized or maximized from there.
+        private void Window_SourceInitialized(object? sender, EventArgs e)
         {
-            if (e.ChangedButton == MouseButton.Left)
-            {
-                DragMove();
-            }
+            Rect work = SystemParameters.WorkArea;
+            Width = Math.Max(MinWidth, Math.Min(1280, work.Width * 0.9));
+            Height = Math.Max(MinHeight, Math.Min(860, work.Height * 0.9));
+            Left = work.Left + (work.Width - Width) / 2;
+            Top = work.Top + (work.Height - Height) / 2;
+        }
+
+        // A borderless window that is maximized extends past the screen edges by the resize border;
+        // pad the content by that much so nothing is cut off.
+        private void Window_StateChanged(object? sender, EventArgs e)
+        {
+            bool maximized = WindowState == WindowState.Maximized;
+            Thickness frame = SystemParameters.WindowResizeBorderThickness;
+            const double pad = 4; // Windows' padded border, which WindowResizeBorderThickness leaves out
+            RootGrid.Margin = maximized
+                ? new Thickness(frame.Left + pad, frame.Top + pad, frame.Right + pad, frame.Bottom + pad)
+                : new Thickness(0);
+            BorderThickness = new Thickness(maximized ? 0 : 1);
+            BtnMaximize.Content = maximized ? "" : "";
+            BtnMaximize.ToolTip = maximized ? "Restore" : "Maximize";
         }
 
         private void MinButton_Click(object sender, RoutedEventArgs e)
         {
             WindowState = WindowState.Minimized;
+        }
+
+        private void MaxButton_Click(object sender, RoutedEventArgs e)
+        {
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)

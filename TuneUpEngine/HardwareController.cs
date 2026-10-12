@@ -33,59 +33,85 @@ namespace TuneUpEngine
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RamRaidersTuneUpSuite", "RegistryBackups");
 
+        // Device setup classes. Windows records a device's class as ClassGUID; the plain "Class"
+        // name the scan used to look for isn't written on current Windows, so it found nothing.
+        internal const string DisplayClassGuid = "{4d36e968-e325-11ce-bfc1-08002be10318}";
+        internal const string NetClassGuid = "{4d36e972-e325-11ce-bfc1-08002be10318}";
+
+        internal static bool IsDisplayOrNet(string? classGuid, string? className) =>
+            string.Equals(classGuid, DisplayClassGuid, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(classGuid, NetClassGuid, StringComparison.OrdinalIgnoreCase) ||
+            className == "Display" || className == "Net";
+
+        // A graphics or network PCI device that is plugged in and exposes an Interrupt Management
+        // node (the sign its driver handles MSI settings).
+        internal sealed record MsiDevice(string DevId, string InstId, string Name, int? MsiSupported)
+        {
+            public bool MsiOn => MsiSupported == 1;
+            public string KeyPath => $@"{PciRoot}\{DevId}\{InstId}\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties";
+        }
+
+        [System.Runtime.InteropServices.DllImport("cfgmgr32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int CM_Locate_DevNodeW(out uint devInst, string deviceId, uint flags);
+
+        // The PCI registry branch also remembers devices that were removed or moved to another slot.
+        // CM_LOCATE_DEVNODE_NORMAL only finds devices that are present now.
+        private static bool IsPresent(string instanceId)
+        {
+            try { return CM_Locate_DevNodeW(out _, instanceId, 0) == 0; }
+            catch { return true; } // can't tell: keep the device rather than hide it
+        }
+
+        private static List<MsiDevice> FindMsiCapableDevices()
+        {
+            var devices = new List<MsiDevice>();
+            using var pciKey = Registry.LocalMachine.OpenSubKey(PciRoot)
+                ?? throw new InvalidOperationException("Could not read PCI registry.");
+
+            foreach (var devId in pciKey.GetSubKeyNames())
+            {
+                using var devKey = pciKey.OpenSubKey(devId);
+                if (devKey == null) continue;
+                foreach (var instId in devKey.GetSubKeyNames())
+                {
+                    using var instKey = devKey.OpenSubKey(instId);
+                    if (instKey == null) continue;
+                    if (!IsDisplayOrNet(instKey.GetValue("ClassGUID") as string, instKey.GetValue("Class") as string)) continue;
+
+                    using var imKey = instKey.OpenSubKey(@"Device Parameters\Interrupt Management");
+                    if (imKey == null) continue;
+                    if (!IsPresent($@"PCI\{devId}\{instId}")) continue;
+
+                    using var msiKey = imKey.OpenSubKey("MessageSignaledInterruptProperties");
+                    string desc = instKey.GetValue("FriendlyName") as string
+                                  ?? instKey.GetValue("DeviceDesc") as string ?? devId;
+                    devices.Add(new MsiDevice(devId, instId, desc.Split(';')[^1],
+                        msiKey?.GetValue("MSISupported") as int?));
+                }
+            }
+            return devices;
+        }
+
+        // The UI enables "Enable MSI Mode" only when the text starts with "Compliant", i.e. there is
+        // a supported device that isn't using MSI yet.
+        internal static string DescribeScan(IReadOnlyList<MsiDevice> devices)
+        {
+            if (devices.Count == 0)
+                return "No plugged-in graphics or network devices with MSI support were found.";
+
+            int off = devices.Count(d => !d.MsiOn);
+            string header = off > 0
+                ? $"Compliant: {off} of {devices.Count} supported device(s) are not using MSI yet."
+                : $"All {devices.Count} supported device(s) already use MSI — nothing to enable.";
+            return header + "\n" + string.Join("\n",
+                devices.Select(d => $"• {d.Name} — MSI {(d.MsiOn ? "on" : "off")}"));
+        }
+
         public static string CheckMsiCompliance()
         {
-            var compliantDevices = new List<string>();
             try
             {
-                using (var pciKey = Registry.LocalMachine.OpenSubKey(PciRoot))
-                {
-                    if (pciKey == null) return "Error: Could not read PCI registry.";
-
-                    foreach (var devId in pciKey.GetSubKeyNames())
-                    {
-                        using (var devKey = pciKey.OpenSubKey(devId))
-                        {
-                            if (devKey == null) continue;
-                            foreach (var instId in devKey.GetSubKeyNames())
-                            {
-                                using (var instKey = devKey.OpenSubKey(instId))
-                                {
-                                    if (instKey == null) continue;
-
-                                    string className = instKey.GetValue("Class") as string;
-                                    string devDesc = instKey.GetValue("DeviceDesc") as string;
-
-                                    if (className == "Display" || className == "Net")
-                                    {
-                                        // Found a relevant device. Check if it has Interrupt Management
-                                        using (var paramKey = instKey.OpenSubKey("Device Parameters"))
-                                        {
-                                            if (paramKey != null)
-                                            {
-                                                using (var imKey = paramKey.OpenSubKey("Interrupt Management"))
-                                                {
-                                                    if (imKey != null)
-                                                    {
-                                                        // It has Interrupt Management. Likely supports MSI.
-                                                        // Filter out very old known bad drivers here if needed.
-                                                        compliantDevices.Add(devDesc != null ? devDesc.Split(';')[^1] : devId);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (compliantDevices.Count > 0)
-                {
-                    return "Compliant: " + string.Join(", ", compliantDevices);
-                }
-                return "No compliant PCIe Display or Network devices found.";
+                return DescribeScan(FindMsiCapableDevices());
             }
             catch (Exception ex)
             {
@@ -98,80 +124,53 @@ namespace TuneUpEngine
         public static string EnableMSI(ChangeJournal journal)
         {
             int updatedCount = 0;
+            int alreadyOn = 0;
             int skipped = 0;
             var backup = new List<MsiBackupEntry>();
             try
             {
-                using (var pciKey = Registry.LocalMachine.OpenSubKey(PciRoot, true))
+                // Only devices the scan reports: plugged in, graphics/network, and already exposing an
+                // Interrupt Management node. Creating that node for devices without one risks black
+                // screens or unbootable systems on hardware that can't do MSI.
+                foreach (var device in FindMsiCapableDevices())
                 {
-                    if (pciKey == null) return "Error: Could not read PCI registry.";
+                    if (device.MsiOn) { alreadyOn++; continue; }
 
-                    foreach (var devId in pciKey.GetSubKeyNames())
+                    // Record the true original in the change journal BEFORE writing. The journal
+                    // keeps the first original it sees, so running Enable twice doesn't make
+                    // "revert" restore the already-enabled value.
+                    if (!journal.CaptureRegistryValue(JournalOwner, RegistryHive.LocalMachine, device.KeyPath, "MSISupported"))
                     {
-                        using var devKey = pciKey.OpenSubKey(devId, true);
-                        if (devKey == null) continue;
-
-                        foreach (var instId in devKey.GetSubKeyNames())
-                        {
-                            using var instKey = devKey.OpenSubKey(instId, true);
-                            if (instKey == null) continue;
-
-                            string className = instKey.GetValue("Class") as string;
-                            if (className != "Display" && className != "Net") continue;
-
-                            string devDesc = instKey.GetValue("DeviceDesc") as string ?? instId;
-
-                            // GATE: only touch devices that already expose an Interrupt Management node —
-                            // the exact same heuristic CheckMsiCompliance() uses to report a device as
-                            // "compliant". The previous code created this node from scratch for EVERY
-                            // Display/Net device and wrote MSISupported unconditionally, which is what
-                            // risked unbootable systems / black screens on hardware that can't do MSI.
-                            using var paramKey = instKey.OpenSubKey("Device Parameters", writable: true);
-                            if (paramKey == null) { skipped++; continue; }
-
-                            using var imKey = paramKey.OpenSubKey("Interrupt Management", writable: true);
-                            if (imKey == null) { skipped++; continue; }
-
-                            string msiKeyPath =
-                                $@"{PciRoot}\{devId}\{instId}\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties";
-
-                            // Record the true original in the change journal BEFORE writing. The
-                            // journal keeps the first original it sees, so running Enable twice no
-                            // longer makes "revert" restore the already-enabled value.
-                            if (!journal.CaptureRegistryValue(JournalOwner, RegistryHive.LocalMachine, msiKeyPath, "MSISupported"))
-                            {
-                                skipped++;
-                                continue;
-                            }
-
-                            using var msiKey = imKey.CreateSubKey("MessageSignaledInterruptProperties");
-                            if (msiKey == null) { skipped++; continue; }
-
-                            // Also keep the human-readable backup file the user can inspect.
-                            object existing = msiKey.GetValue("MSISupported");
-                            backup.Add(new MsiBackupEntry
-                            {
-                                MsiPropertiesKeyPath = msiKeyPath,
-                                DeviceDesc = devDesc.Contains(';') ? devDesc.Split(';')[^1] : devDesc,
-                                HadValue = existing != null,
-                                PreviousValue = existing is int v ? v : 0
-                            });
-
-                            msiKey.SetValue("MSISupported", 1, RegistryValueKind.DWord);
-                            updatedCount++;
-                        }
+                        skipped++;
+                        continue;
                     }
+
+                    using var msiKey = Registry.LocalMachine.CreateSubKey(device.KeyPath, writable: true);
+                    if (msiKey == null) { skipped++; continue; }
+
+                    // Also keep the human-readable backup file the user can inspect.
+                    backup.Add(new MsiBackupEntry
+                    {
+                        MsiPropertiesKeyPath = device.KeyPath,
+                        DeviceDesc = device.Name,
+                        HadValue = device.MsiSupported != null,
+                        PreviousValue = device.MsiSupported ?? 0
+                    });
+
+                    msiKey.SetValue("MSISupported", 1, RegistryValueKind.DWord);
+                    updatedCount++;
                 }
 
                 if (updatedCount == 0)
                 {
-                    return $"No compliant Display/Network devices required changes " +
-                           $"({skipped} device(s) skipped — no MSI support node present).";
+                    return skipped > 0
+                        ? $"Error: {skipped} device(s) could not be changed ({alreadyOn} already use MSI)."
+                        : $"Nothing to change: all {alreadyOn} supported device(s) already use MSI.";
                 }
 
                 string backupPath = SaveBackup(backup);
-                return $"Success: Enabled MSI for {updatedCount} compliant device(s) " +
-                       $"({skipped} skipped). Backup saved as {Path.GetFileName(backupPath)}. Reboot required.";
+                return $"Success: Enabled MSI for {updatedCount} device(s) " +
+                       $"({alreadyOn} already on, {skipped} skipped). Backup saved as {Path.GetFileName(backupPath)}. Reboot required.";
             }
             catch (Exception ex)
             {

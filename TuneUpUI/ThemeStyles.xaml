@@ -207,6 +207,102 @@
         </Setter>
     </Style>
 
+    <!-- List rows. The stock Windows selection is a near-white highlight, which made the
+         white row text unreadable. These keep rows dark: a subtle lift on hover, and an
+         indigo tint with a cyan edge for the selected row. -->
+    <SolidColorBrush x:Key="BrushRowHover" Color="#1F1F2E"/>
+    <SolidColorBrush x:Key="BrushRowSelected" Color="#272247"/>
+
+    <Style TargetType="ListViewItem">
+        <Setter Property="Foreground" Value="{StaticResource BrushTextMain}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="2,0,0,0"/>
+        <Setter Property="Padding" Value="0,4"/>
+        <Setter Property="Margin" Value="0,1"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                        <GridViewRowPresenter Columns="{TemplateBinding GridView.ColumnCollection}"
+                                              Content="{TemplateBinding Content}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrushRowHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrushRowSelected}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BrushAccentCyan}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource BrushTextMain}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="4,1"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4"
+                            Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrushRowHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrushRowSelected}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Column headers to match the dark theme (the stock ones are a bright white bar). -->
+    <Style TargetType="GridViewColumnHeader">
+        <Setter Property="Foreground" Value="{StaticResource BrushTextMuted}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridViewColumnHeader">
+                    <Grid>
+                        <Border x:Name="Bd" Background="#16161F" BorderBrush="#2A2A38" BorderThickness="0,0,1,1" Padding="8,6">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+                        </Border>
+                        <!-- Keeps column resizing working. -->
+                        <Thumb x:Name="PART_HeaderGripper" HorizontalAlignment="Right" Width="6" Margin="0,0,-3,0" Cursor="SizeWE">
+                            <Thumb.Template>
+                                <ControlTemplate TargetType="Thumb">
+                                    <Border Background="Transparent"/>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#1E1E2C"/>
+                            <Setter Property="Foreground" Value="{StaticResource BrushTextMain}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Modern Sidebar Navigation Item -->
     <Style x:Key="SidebarButton" TargetType="RadioButton">
         <Setter Property="Background" Value="Transparent"/>

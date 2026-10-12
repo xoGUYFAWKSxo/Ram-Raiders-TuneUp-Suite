@@ -51,6 +51,15 @@ namespace TuneUpUI
                             TxtNetEcn.Text = $"ECN: {settings?.EcnCapability ?? "-"}";
                             TxtNetTimestamps.Text = $"Timestamps: {settings?.Timestamps ?? "-"}";
                             TxtNetRss.Text = $"RSS: {settings?.Rss ?? "-"}";
+                            TxtNetNagle.Text = $"TcpNoDelay / TcpAckFrequency (connected adapters): " +
+                                               (settings?.TcpNoDelay == true && settings.TcpAckFrequencyOne ? "on" : "off");
+                            bool optimal = settings?.IsOptimal == true;
+                            TxtNetSummary.Text = optimal
+                                ? "✔ All optimizations are active."
+                                : "Not optimized yet — Apply Optimizations sets the values above (Revert restores your previous ones).";
+                            TxtNetSummary.Foreground = optimal
+                                ? (System.Windows.Media.Brush)FindResource("BrushAccentGreen")
+                                : (System.Windows.Media.Brush)FindResource("BrushTextMuted");
                         });
                     }
                     catch { }
