@@ -101,11 +101,67 @@ namespace TuneUpUI
                             if (report?.Summary != null)
                                 TxtLatencyStatus.Text = report.Summary;
                             if (report != null) ShowDriverTrace(report);
+                            BtnSaveLatency.IsEnabled = report?.SampleCount > 0;
                         });
                     }
                     catch { }
                 }
             });
+        }
+
+        private void BtnSaveLatency_Click(object sender, RoutedEventArgs e)
+        {
+            BtnSaveLatency.IsEnabled = false;
+            Task.Run(() =>
+            {
+                // A fresh report, so the file matches the moment of saving, not the last refresh.
+                var resp = SendIpcRequest(IpcCommands.GetLatencyReport, null);
+                LatencyReport? report = null;
+                if (resp?.Status == IpcStatus.Success && !string.IsNullOrEmpty(resp.Payload))
+                {
+                    try { report = JsonSerializer.Deserialize<LatencyReport>(resp.Payload); } catch { }
+                }
+                Dispatcher.Invoke(() =>
+                {
+                    BtnSaveLatency.IsEnabled = true;
+                    if (report == null || report.SampleCount == 0)
+                    {
+                        MessageBox.Show(this, "There are no results to save yet. Start the audit first.", "Save Trace",
+                            MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+                    SaveLatencyTrace(report);
+                });
+            });
+        }
+
+        private void SaveLatencyTrace(LatencyReport report)
+        {
+            var now = DateTime.Now;
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Save DPC trace",
+                FileName = Presentation.LatencyTraceFile.DefaultFileName(now),
+                Filter = "Text report (*.txt)|*.txt|Spreadsheet (*.csv)|*.csv",
+                DefaultExt = ".txt",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            };
+            if (dialog.ShowDialog(this) != true) return;
+
+            try
+            {
+                bool csv = dialog.FilterIndex == 2 || dialog.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+                string content = csv
+                    ? Presentation.LatencyTraceFile.ToCsv(report)
+                    : Presentation.LatencyTraceFile.ToText(report, now, System.Runtime.InteropServices.RuntimeInformation.OSDescription);
+                // CSV gets a BOM so Excel reads "µ" and other non-ASCII text correctly.
+                File.WriteAllText(dialog.FileName, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: csv));
+                MessageBox.Show(this, $"Trace saved to:\n{dialog.FileName}", "Save Trace", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Couldn't save the trace: {ex.Message}", "Save Trace", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void ShowDriverTrace(LatencyReport report)
