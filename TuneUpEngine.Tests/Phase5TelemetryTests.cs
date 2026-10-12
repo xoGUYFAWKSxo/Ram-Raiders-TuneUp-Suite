@@ -120,6 +120,18 @@ namespace TuneUpEngine.Tests
         }
 
         [Fact]
+        public void ImpossibleReadings_AreClampedToACoresTime()
+        {
+            // A rate read right after the priming read returned 772% on a CI machine.
+            var auditor = NewAuditor();
+            Fill(auditor, S((772.3, -5)));
+
+            var core = auditor.GetReport().Cores.Single();
+            Assert.Equal(100, core.PeakDpcPercent, 6);
+            Assert.Equal(0, core.PeakInterruptPercent, 6);
+        }
+
+        [Fact]
         public void SingleClockTick_DoesNotFlagACore()
         {
             // The counters move one 15.6 ms tick (1.5625% of a second) at a time. In the user's
@@ -261,6 +273,7 @@ namespace TuneUpEngine.Tests
                 return;
             }
 
+            System.Threading.Thread.Sleep(1000); // the auditor's real sampling interval
             var sample = source.Sample();
             Assert.Equal(sample.DpcPercent.Length, sample.InterruptPercent.Length);
             Assert.InRange(sample.DpcPercent.Length, 1, Environment.ProcessorCount);

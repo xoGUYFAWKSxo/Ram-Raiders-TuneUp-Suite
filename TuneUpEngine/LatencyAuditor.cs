@@ -173,6 +173,11 @@ namespace TuneUpEngine
         {
             while (_isRunning)
             {
+                // Sleep first: TryInitialize has just taken the priming reading, and a rate read
+                // microseconds later turns one clock tick into hundreds of percent (772% seen on CI).
+                Thread.Sleep(SampleInterval);
+                if (!_isRunning) break;
+
                 try
                 {
                     LatencySample? sample = null;
@@ -186,8 +191,6 @@ namespace TuneUpEngine
                 {
                     EngineLog.Warn($"[LatencyAuditor] Sampling error: {ex.Message}");
                 }
-
-                Thread.Sleep(SampleInterval);
             }
         }
 
@@ -208,8 +211,9 @@ namespace TuneUpEngine
                 for (int i = 0; i < cores; i++)
                 {
                     var core = _cores[i];
-                    double dpc = Math.Max(0, sample.DpcPercent[i]);
-                    double isr = Math.Max(0, sample.InterruptPercent[i]);
+                    // A share of one core's time can't leave 0-100%; anything else is a bad read.
+                    double dpc = Math.Clamp(sample.DpcPercent[i], 0, 100);
+                    double isr = Math.Clamp(sample.InterruptPercent[i], 0, 100);
 
                     core.CurrentDpcPercent = dpc;
                     core.CurrentInterruptPercent = isr;
