@@ -26,16 +26,27 @@ namespace TuneUpEngine
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "RamRaidersTuneUpSuite", "engine_settings.json");
 
-        public static EngineSettings Load()
+        public static EngineSettings Load() => Load(SettingsPath, LegacySettingsPath);
+
+        // The legacy file is moved to ProgramData the first time it is read. Left in place, it was
+        // read again whenever ProgramData had no settings (after an uninstall, which deletes them),
+        // so a reinstall came back with ProBalance and Game Mode on (found in end-to-end testing).
+        internal static EngineSettings Load(string settingsPath, string legacyPath)
         {
             try
             {
-                string path = File.Exists(SettingsPath) ? SettingsPath : LegacySettingsPath;
-                if (File.Exists(path))
+                if (File.Exists(settingsPath))
                 {
-                    string json = File.ReadAllText(path);
-                    var loaded = JsonSerializer.Deserialize<EngineSettings>(json);
+                    // Already moved by an earlier version that left the old file behind.
+                    if (File.Exists(legacyPath)) File.Delete(legacyPath);
+                    var loaded = JsonSerializer.Deserialize<EngineSettings>(File.ReadAllText(settingsPath));
                     if (loaded != null) return loaded;
+                }
+                else if (File.Exists(legacyPath))
+                {
+                    var legacy = JsonSerializer.Deserialize<EngineSettings>(File.ReadAllText(legacyPath));
+                    if (legacy != null && legacy.Save(settingsPath)) File.Delete(legacyPath);
+                    if (legacy != null) return legacy;
                 }
             }
             catch
@@ -45,17 +56,21 @@ namespace TuneUpEngine
             return new EngineSettings();
         }
 
-        public void Save()
+        public void Save() => Save(SettingsPath);
+
+        internal bool Save(string path)
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-                File.WriteAllText(SettingsPath,
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path,
                     JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+                return true;
             }
             catch
             {
                 // Persisting settings is best-effort; never let it crash the engine.
+                return false;
             }
         }
     }

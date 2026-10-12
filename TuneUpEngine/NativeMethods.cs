@@ -14,12 +14,17 @@ namespace TuneUpEngine
 
         public const int SystemMemoryListInformation = 80;
 
+        // Windows' own numbering. These values were once wrong (purge = 2), so every "standby purge"
+        // actually sent MemoryEmptyWorkingSets: it trimmed every running program, games included,
+        // and the standby list grew instead of shrinking (found in end-to-end testing).
         public enum SYSTEM_MEMORY_LIST_COMMAND
         {
-            MemoryCaptureState = 0,
-            MemoryPurgeActiveAndStandbyList = 1,
-            MemoryPurgeStandbyList = 2,
-            MemoryPurgeLowPriorityStandbyList = 3
+            MemoryCaptureAccessedBits = 0,
+            MemoryCaptureAndResetAccessedBits = 1,
+            MemoryEmptyWorkingSets = 2,
+            MemoryFlushModifiedList = 3,
+            MemoryPurgeStandbyList = 4,
+            MemoryPurgeLowPriorityStandbyList = 5
         }
 
         [DllImport("kernel32.dll", SetLastError = true)]

@@ -221,7 +221,11 @@ namespace TuneUpEngine
             }
 
             var tweak = Definitions.FirstOrDefault(t => t.Id == tweakName);
-            if (tweak == null) return false;
+            if (tweak == null)
+            {
+                EngineLog.Warn($"[RegistryTweaker] Unknown tweak {tweakName}.");
+                return false;
+            }
 
             if (RequiresAdministrator(tweak) && !ctx.IsAdministrator)
             {
