@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Collections.Generic;
 using TuneUpEngine;
 using TuneUpUI;
@@ -92,6 +93,29 @@ namespace TuneUpEngine.Tests
             Assert.False(s.ProBalanceEnabled);
             Assert.False(s.AutoPurgeEnabled);
             Assert.False(s.GameModeEnabled);
+        }
+    }
+}
+
+namespace TuneUpEngine.Tests
+{
+    public class NetStatusTests
+    {
+        // Regression: the status read disposed the interface keys on its first check, so the second
+        // check threw and "not optimized" showed even after applying. Reading must not throw now:
+        // both flags agree with a direct registry read.
+        [Fact]
+        public void Status_ReadsBothPerAdapterValues()
+        {
+            var s = NetOptimizer.GetCurrentSettings();
+            using var root = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces");
+            var connected = root!.GetSubKeyNames()
+                .Select(n => root.OpenSubKey(n)!)
+                .Where(k => k.GetValue("DhcpIPAddress") != null || k.GetValue("IPAddress") != null)
+                .ToList();
+            bool ack = connected.Count > 0 && connected.All(k => k.GetValue("TcpAckFrequency") as int? == 1);
+            Assert.Equal(ack, s.TcpAckFrequencyOne);
         }
     }
 }

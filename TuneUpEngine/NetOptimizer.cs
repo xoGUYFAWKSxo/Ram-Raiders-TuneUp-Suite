@@ -43,9 +43,11 @@ namespace TuneUpEngine
             // every connected interface has them.
             try
             {
-                var interfaces = ConnectedInterfaceKeys();
-                settings.TcpNoDelay = interfaces.Count > 0 && interfaces.All(k => ReadDword(k, "TcpNoDelay") == 1);
-                settings.TcpAckFrequencyOne = interfaces.Count > 0 && interfaces.All(k => ReadDword(k, "TcpAckFrequency") == 1);
+                // Each key is opened per read: reading through one shared list of keys disposed them
+                // on the first pass, so the second check always failed and showed "not optimized".
+                var interfaces = ConnectedInterfacePaths();
+                settings.TcpNoDelay = interfaces.Count > 0 && interfaces.All(p => ReadDword(p, "TcpNoDelay") == 1);
+                settings.TcpAckFrequencyOne = interfaces.Count > 0 && interfaces.All(p => ReadDword(p, "TcpAckFrequency") == 1);
             }
             catch { }
 
@@ -164,19 +166,10 @@ namespace TuneUpEngine
             return paths;
         }
 
-        private static List<RegistryKey> ConnectedInterfaceKeys() =>
-            ConnectedInterfacePaths()
-                .Select(p => Registry.LocalMachine.OpenSubKey(p))
-                .Where(k => k != null)
-                .Cast<RegistryKey>()
-                .ToList();
-
-        private static int? ReadDword(RegistryKey key, string name)
+        private static int? ReadDword(string keyPath, string name)
         {
-            using (key)
-            {
-                return key.GetValue(name) as int?;
-            }
+            using var key = Registry.LocalMachine.OpenSubKey(keyPath);
+            return key?.GetValue(name) as int?;
         }
 
         // Only for state left by versions without the change journal.
