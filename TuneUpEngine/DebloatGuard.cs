@@ -185,6 +185,9 @@ namespace TuneUpEngine
 
         internal static string JournalOwnerFor(string serviceName) => $"service:{serviceName}";
 
+        // Start types 0-2 (boot, system, automatic) run without being asked; 3 (manual) doesn't.
+        internal static bool ShouldStartAfterReEnable(int startType) => startType <= 2;
+
         public static string SetServiceState(string serviceName, bool disable, ChangeJournal journal)
         {
             if (!IsManagedService(serviceName))
@@ -236,6 +239,12 @@ namespace TuneUpEngine
 
                 if (startType == 4)
                     return $"Service '{serviceName}' restored to its previous start type (Disabled).";
+
+                // Only an Automatic service is started now. A Manual one is started by Windows when
+                // something needs it; starting it here left e.g. WAP Push running after a
+                // disable/re-enable when it had been stopped before (found in end-to-end testing).
+                if (!ShouldStartAfterReEnable(startType))
+                    return $"Service '{serviceName}' re-enabled with its previous start type (Manual); Windows starts it when needed.";
 
                 sc.Refresh();
                 if (sc.Status == ServiceControllerStatus.Stopped)

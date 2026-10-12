@@ -131,9 +131,13 @@ namespace TuneUpUI
                     }
                     else
                     {
-                        TxtRegistryStatus.Text = $"Repair Failed: {completed.Message}";
-                        BtnRepairRegistry.IsEnabled = true;
-                        BtnToggleSelectRegistry.IsEnabled = true;
+                        // Scan results are single-use, so the list is cleared and a rescan shows
+                        // what is really left.
+                        MessageBox.Show($"Not everything was repaired.\n\n{completed.Message}\n\nScan again to see what is left.", "Registry Repair", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        TxtRegistryStatus.Text = "Repair incomplete. Scan again to see what is left.";
+                        LvwRegistryIssues.ItemsSource = null;
+                        _scannedRegistryIssues.Clear();
+                        BtnToggleSelectRegistry.IsEnabled = false;
                     }
                 }
             );
