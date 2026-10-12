@@ -54,7 +54,7 @@ namespace TuneUpEngine
 
                     // Keep the last 5000 lines of that tail
                     var lastLines = new Queue<string>(5000);
-                    string line;
+                    string? line;
                     while ((line = reader.ReadLine()) != null)
                     {
                         if (lastLines.Count >= 5000)

@@ -55,7 +55,7 @@ namespace TuneUpUI
                     ProgRegistry.Visibility = Visibility.Collapsed;
                     if (completed.Status == IpcStatus.Success)
                     {
-                        _scannedRegistryIssues = JsonSerializer.Deserialize<List<RegistryIssue>>(completed.Payload) ?? new List<RegistryIssue>();
+                        _scannedRegistryIssues = JsonSerializer.Deserialize<List<RegistryIssue>>(completed.Payload ?? "null") ?? new List<RegistryIssue>();
                         LvwRegistryIssues.ItemsSource = _scannedRegistryIssues;
                         TxtRegistryStatus.Text = $"Scan complete. Found {_scannedRegistryIssues.Count} broken entries. Check the ones you want to remove, then click Repair.";
                         BtnRepairRegistry.IsEnabled = _scannedRegistryIssues.Count > 0;

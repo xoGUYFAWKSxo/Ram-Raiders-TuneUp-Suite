@@ -107,12 +107,12 @@ namespace TuneUpEngine
             {
                 string dir = stack.Pop();
 
-                string[] files = null;
+                string[]? files = null;
                 try { files = Directory.GetFiles(dir); } catch { }
                 if (files != null)
                     foreach (var f in files) yield return f;
 
-                string[] subdirs = null;
+                string[]? subdirs = null;
                 try { subdirs = Directory.GetDirectories(dir); } catch { }
                 if (subdirs != null)
                     foreach (var d in subdirs)
@@ -232,7 +232,7 @@ namespace TuneUpEngine
                 var partialGroups = new Dictionary<string, List<string>>();
                 foreach (var file in group.Value)
                 {
-                    string ph = GetPartialHash(file);
+                    string? ph = GetPartialHash(file);
                     if (ph == null) continue;
                     if (!partialGroups.TryGetValue(ph, out var list))
                         partialGroups[ph] = list = new List<string>();
@@ -256,7 +256,7 @@ namespace TuneUpEngine
                     var fullGroups = new Dictionary<string, List<string>>();
                     foreach (var file in partialGroup.Value)
                     {
-                        string fh = GetFullHash(file);
+                        string? fh = GetFullHash(file);
                         if (fh == null) continue;
                         if (!fullGroups.TryGetValue(fh, out var list))
                             fullGroups[fh] = list = new List<string>();
@@ -273,7 +273,7 @@ namespace TuneUpEngine
 
         // Pre-filter hash: SHA-256 of the first 1 MB. A cheap way to separate files that merely
         // share a size before committing to a full read. Files that differ here cannot be duplicates.
-        internal string GetPartialHash(string path)
+        internal string? GetPartialHash(string path)
         {
             try
             {
@@ -292,7 +292,7 @@ namespace TuneUpEngine
         // Confirmation hash: SHA-256 over the entire file. Two files of identical size whose full-file
         // hashes match are treated as byte-for-byte duplicates. SHA-256 (vs. the old first-1MB MD5)
         // removes both the header-collision false positives and the weak-hash concern.
-        internal string GetFullHash(string path)
+        internal string? GetFullHash(string path)
         {
             try
             {

@@ -26,7 +26,7 @@ namespace TuneUpEngine
         public long StandbyBytes { get; set; } = -1;
         public long UnusedBytes { get; set; } = -1;   // free + zeroed pages
         public long ModifiedBytes { get; set; } = -1;
-        public List<string> EventLogs { get; set; }
+        public List<string> EventLogs { get; set; } = new();
     }
 
     public class IpcServer
@@ -49,7 +49,7 @@ namespace TuneUpEngine
         // Raised just before the engine exits on a ShutdownEngine request, so the host can hand
         // back anything temporary (boosted game priority, power plan, throttled processes).
         public event Action? ShuttingDown;
-        private Thread _serverThread;
+        private Thread? _serverThread;
         private volatile bool _isRunning = false;
 
         // ── Connection security ────────────────────────────────────────────────
@@ -853,7 +853,7 @@ namespace TuneUpEngine
                 case IpcCommands.RemoveAppxPackage:
                     RunInBackground(request, writer, jobs, "AppX removal", ct =>
                     {
-                        string r = DebloatGuard.RemoveAppxPackage(request.Payload,
+                        string r = DebloatGuard.RemoveAppxPackage(request.Payload ?? "",
                             msg => Send(new IpcResponse { Status = IpcStatus.Progress, Message = msg }), ctx);
                         LogEvent($"[DebloatGuard] {r}");
                         Send(new IpcResponse { Status = IpcStatus.Success, Message = r });
@@ -892,7 +892,7 @@ namespace TuneUpEngine
 
                 // ── StorageMigrator ─────────────────────────────────────────────────
                 case IpcCommands.AnalyzeMigration:
-                    var analysis = StorageMigrator.Analyze(request.Payload);
+                    var analysis = StorageMigrator.Analyze(request.Payload ?? "");
                     Send(new IpcResponse
                     {
                         Status = IpcStatus.Success,

@@ -62,7 +62,7 @@ namespace TuneUpUI
                 {
                     if (completed.Status == IpcStatus.Success)
                     {
-                        var items = JsonSerializer.Deserialize<List<ScanItem>>(completed.Payload);
+                        var items = JsonSerializer.Deserialize<List<ScanItem>>(completed.Payload ?? "null");
                         if (items != null) _scannedJunkItems.AddRange(items);
                     }
                     else
@@ -112,7 +112,7 @@ namespace TuneUpUI
                 {
                     if (completed.Status == IpcStatus.Success)
                     {
-                        var items = JsonSerializer.Deserialize<List<ScanItem>>(completed.Payload);
+                        var items = JsonSerializer.Deserialize<List<ScanItem>>(completed.Payload ?? "null");
                         if (items != null) _scannedJunkItems.AddRange(items);
                     }
 
@@ -158,7 +158,7 @@ namespace TuneUpUI
 
 
 
-        private GridViewColumnHeader _lastHeaderClicked = null;
+        private GridViewColumnHeader? _lastHeaderClicked = null;
         private ListSortDirection _lastDirection = ListSortDirection.Ascending;
 
         private void LvwJunkItems_ColumnHeaderClick(object sender, RoutedEventArgs e)
@@ -166,11 +166,11 @@ namespace TuneUpUI
             if (!(e.OriginalSource is GridViewColumnHeader headerClicked) || headerClicked.Column == null)
                 return;
 
-            string header = headerClicked.Column.Header as string;
+            string? header = headerClicked.Column.Header as string;
             if (string.IsNullOrEmpty(header) || header == "Select")
                 return;
 
-            string sortBy = header switch
+            string? sortBy = header switch
             {
                 "Category" => "Category",
                 "Cleaner Target" => "RuleName",
@@ -260,7 +260,7 @@ namespace TuneUpUI
                     else
                     {
                         // Path doesn't exist yet (already deleted or pattern-based) — open parent
-                        string parent = Path.GetDirectoryName(target);
+                        string? parent = Path.GetDirectoryName(target);
                         if (!string.IsNullOrEmpty(parent) && Directory.Exists(parent))
                         {
                             Process.Start(new ProcessStartInfo
@@ -317,7 +317,7 @@ namespace TuneUpUI
                         TxtCleanerStatus.Text = "System fully optimized.";
                         LvwJunkItems.ItemsSource = null;
                         _scannedJunkItems.Clear();
-                        StatsTimer_Tick(null, null); // Refresh stats
+                        StatsTimer_Tick(null, EventArgs.Empty); // Refresh stats
                     }
                     else
                     {

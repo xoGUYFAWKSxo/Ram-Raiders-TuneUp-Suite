@@ -74,7 +74,7 @@ namespace TuneUpEngine
 
         #endregion
 
-        private static CoreTopology _cachedTopology;
+        private static CoreTopology? _cachedTopology;
         private static readonly object _lock = new object();
 
         public static CoreTopology GetTopology()

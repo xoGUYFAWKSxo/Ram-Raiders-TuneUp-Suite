@@ -10,8 +10,8 @@ namespace TuneUpEngine
 {
     public class MigrationRecord
     {
-        public string OriginalPath { get; set; }
-        public string DestinationPath { get; set; }
+        public string OriginalPath { get; set; } = "";
+        public string DestinationPath { get; set; } = "";
         public DateTime MigratedAt { get; set; }
         public long SizeBytes { get; set; }
         public bool SymlinkActive { get; set; }
@@ -19,11 +19,11 @@ namespace TuneUpEngine
 
     public class MigrationAnalysis
     {
-        public string SourcePath { get; set; }
+        public string SourcePath { get; set; } = "";
         public long SourceSizeBytes { get; set; }
         public bool SourceExists { get; set; }
         public bool IsAlreadySymlink { get; set; }
-        public string Error { get; set; }
+        public string? Error { get; set; }
     }
 
     public static class StorageMigrator
@@ -256,7 +256,7 @@ namespace TuneUpEngine
             if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0)
                 return "Error: Source is already a symbolic link — it was previously migrated.";
 
-            string destParent = Path.GetDirectoryName(destinationPath);
+            string? destParent = Path.GetDirectoryName(destinationPath);
             if (!Directory.Exists(destParent))
                 return $"Error: Destination parent '{destParent}' does not exist.";
 
@@ -266,7 +266,7 @@ namespace TuneUpEngine
             long sourceSize = CalculateDirectorySize(sourcePath);
 
             // Check destination free space
-            string destDrive = Path.GetPathRoot(destinationPath);
+            string destDrive = Path.GetPathRoot(destinationPath) ?? destinationPath;
             var driveInfo = new DriveInfo(destDrive);
             if (driveInfo.AvailableFreeSpace < sourceSize)
                 return $"Error: Insufficient space on {destDrive}. Need {FormatBytes(sourceSize)}, have {FormatBytes(driveInfo.AvailableFreeSpace)}.";
@@ -508,7 +508,7 @@ namespace TuneUpEngine
         // ── Helpers ─────────────────────────────────────────────────────────────
 
         private static void CopyDirectory(string src, string dst, ref long bytesCopied,
-            long totalBytes, Action<string, double> progress, CancellationToken ct)
+            long totalBytes, Action<string, double>? progress, CancellationToken ct)
         {
             Directory.CreateDirectory(dst);
 
@@ -586,7 +586,7 @@ namespace TuneUpEngine
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(HistoryFile));
+                Directory.CreateDirectory(Path.GetDirectoryName(HistoryFile)!);
                 var records = GetHistory();
                 records.RemoveAll(r => r.OriginalPath.Equals(record.OriginalPath,
                     StringComparison.OrdinalIgnoreCase));

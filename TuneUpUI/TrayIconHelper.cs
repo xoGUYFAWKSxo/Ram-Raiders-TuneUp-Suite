@@ -59,7 +59,7 @@ namespace TuneUpUI
         private bool _isRegistered = false;
         private NOTIFYICONDATA _nid;
 
-        public event Action OnExitClicked;
+        public event Action? OnExitClicked;
 
         public TrayIconHelper(Window window)
         {

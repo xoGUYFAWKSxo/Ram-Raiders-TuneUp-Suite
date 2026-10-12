@@ -208,6 +208,7 @@ namespace TuneUpEngine
                     CreateNoWindow = true
                 };
                 using var proc = Process.Start(psi);
+                if (proc == null) return "";
                 string output = proc.StandardOutput.ReadToEnd();
                 proc.WaitForExit(10000);
                 return output;
@@ -218,7 +219,7 @@ namespace TuneUpEngine
             }
         }
 
-        private static string ExtractValue(string output, string key)
+        private static string? ExtractValue(string output, string key)
         {
             var match = Regex.Match(output, $@"{Regex.Escape(key)}\s*[:\.]?\s*(.+)", RegexOptions.IgnoreCase);
             return match.Success ? match.Groups[1].Value.Trim() : null;
