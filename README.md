@@ -90,6 +90,24 @@ Ram Raiders TuneUp Suite/
 
 ---
 
+## Installing
+
+Run **`RamRaidersTuneUpSuite_Setup.exe`**. It needs the [.NET 11 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/11.0) and asks for administrator rights, because it installs the engine as a Windows service.
+
+**"Windows protected your PC"**: the installer isn't code-signed (a signing certificate costs money every year), so Windows SmartScreen shows this warning and lists the publisher as unknown. Click **More info → Run anyway** to continue.
+
+**Checking your download**: every installer comes with a `RamRaidersTuneUpSuite_Setup.exe.sha256` file holding its SHA-256 checksum. To confirm your copy is the one that was built and hasn't been altered, run this in PowerShell in the download folder and compare the result with the hash in that file (case doesn't matter):
+
+```powershell
+(Get-FileHash .\RamRaidersTuneUpSuite_Setup.exe -Algorithm SHA256).Hash
+```
+
+If they differ, don't run it.
+
+Uninstalling (Settings → Apps) removes the service and the program, and undoes every system change the app recorded.
+
+---
+
 ## How to Build and Run
 
 ### Prerequisites
