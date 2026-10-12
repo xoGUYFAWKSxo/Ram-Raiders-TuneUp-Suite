@@ -316,8 +316,12 @@ namespace TuneUpEngine
 
         // Machine-wide (HKLM) entries are only repaired for administrators; HKCU entries are the
         // requesting user's own. Backups go to that user's AppData and are written AS that user.
-        public bool Repair(List<RegistryIssue> issues, ClientContext ctx, Action<string, int>? progressCallback = null)
+        // Returns one line per issue that was NOT repaired (empty = all repaired). Previously
+        // failures only went into the backup manifest and the UI always said the repair worked,
+        // so an entry that was never deleted looked as if it had "come back".
+        public List<string> Repair(List<RegistryIssue> issues, ClientContext ctx, Action<string, int>? progressCallback = null)
         {
+            var problems = new List<string>();
             int count = 0;
             string backupDir = Path.Combine(ctx.Folders.RoamingAppData, "RamRaidersTuneUpSuite", "RegistryBackups");
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -353,6 +357,7 @@ namespace TuneUpEngine
                         if (!ctx.IsAdministrator)
                         {
                             manifest.AppendLine($@"; SKIPPED (administrator account required): {issue.KeyPath}\{issue.ValueName}");
+                            problems.Add($"{issue.Title}: needs an administrator account.");
                             continue;
                         }
                         rootKey = Registry.LocalMachine;
@@ -367,27 +372,37 @@ namespace TuneUpEngine
                         // InprocServer32/LocalServer32 child), so export the CLSID key itself.
                         string clsidKeyPath = subkey.Substring(0, subkey.LastIndexOf('\\'));
                         string fileName = $"{stamp}_{count}_COM.reg";
-                        exports.Add((fileName, ExportKeyToReg($@"{exportRoot}\{clsidKeyPath}")));
+                        byte[] backup = ExportKeyToReg($@"{exportRoot}\{clsidKeyPath}");
+                        if (!BackupOk(backup, issue, manifest, problems)) continue;
+                        exports.Add((fileName, backup));
                         manifest.AppendLine($@"[DELETE TREE] {hive}\{clsidKeyPath}  ->  {fileName}");
 
                         rootKey.DeleteSubKeyTree(clsidKeyPath, false);
+
+                        using (var check = rootKey.OpenSubKey(clsidKeyPath))
+                            if (check != null) Failed(issue, "the key is still there after deleting it", manifest, problems);
                     }
                     else
                     {
                         // Export the containing key before removing the offending value.
                         string fileName = $"{stamp}_{count}_{issue.IssueType}.reg";
-                        exports.Add((fileName, ExportKeyToReg($@"{exportRoot}\{subkey}")));
+                        byte[] backup = ExportKeyToReg($@"{exportRoot}\{subkey}");
+                        if (!BackupOk(backup, issue, manifest, problems)) continue;
+                        exports.Add((fileName, backup));
                         manifest.AppendLine($@"[DELETE VALUE] {issue.KeyPath}\{issue.ValueName}  ->  {fileName}");
 
+                        string valueName = string.IsNullOrEmpty(issue.ValueName) ? "" : issue.ValueName;
                         using (var key = rootKey.OpenSubKey(subkey, true))
                         {
-                            key?.DeleteValue(string.IsNullOrEmpty(issue.ValueName) ? "" : issue.ValueName, false);
+                            key?.DeleteValue(valueName, false);
                         }
+                        using (var check = rootKey.OpenSubKey(subkey))
+                            if (check?.GetValue(valueName) != null) Failed(issue, "the value is still there after deleting it", manifest, problems);
                     }
                 }
                 catch (Exception ex)
                 {
-                    manifest.AppendLine($"; ERROR: Failed to repair '{issue.Title}' - {ex.Message}");
+                    Failed(issue, ex.Message, manifest, problems);
                 }
             }
 
@@ -411,7 +426,22 @@ namespace TuneUpEngine
             }
 
             progressCallback?.Invoke("Repair Complete", 100);
-            return true;
+            return problems;
+        }
+
+        private static void Failed(RegistryIssue issue, string reason, System.Text.StringBuilder manifest, List<string> problems)
+        {
+            manifest.AppendLine($"; ERROR: Failed to repair '{issue.Title}' - {reason}");
+            problems.Add($"{issue.Title}: {reason}");
+        }
+
+        // Nothing is deleted without a backup to restore it from (a failed export used to be
+        // ignored, so the entry was deleted with no way back).
+        private static bool BackupOk(byte[] backup, RegistryIssue issue, System.Text.StringBuilder manifest, List<string> problems)
+        {
+            if (backup.Length > 0) return true;
+            Failed(issue, "its backup couldn't be made, so it was left in place", manifest, problems);
+            return false;
         }
 
         // Exports a registry key with reg.exe and returns the .reg file's bytes, so the caller can
@@ -446,8 +476,7 @@ namespace TuneUpEngine
             }
             catch
             {
-                // Export is best-effort; a failed export must not block the repair, but the manifest
-                // line still records what was removed.
+                // Empty = no backup; Repair then leaves the entry in place (see BackupOk).
                 return Array.Empty<byte>();
             }
             finally

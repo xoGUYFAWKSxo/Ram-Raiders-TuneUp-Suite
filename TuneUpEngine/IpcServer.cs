@@ -738,7 +738,7 @@ namespace TuneUpEngine
                         Send(new IpcResponse { Status = IpcStatus.Error, Message = "Nothing to repair. The results may be out of date — please scan again." });
                         break;
                     }
-                    _registryVerifier.Repair(repairIssues, ctx, (step, percent) =>
+                    var repairProblems = _registryVerifier.Repair(repairIssues, ctx, (step, percent) =>
                     {
                         Send(new IpcResponse
                         {
@@ -748,10 +748,14 @@ namespace TuneUpEngine
                         });
                     });
 
-                    Send(new IpcResponse
-                    {
-                        Status = IpcStatus.Success
-                    });
+                    foreach (var problem in repairProblems) LogEvent($"[RegistryVerifier] Not repaired: {problem}");
+                    Send(repairProblems.Count == 0
+                        ? new IpcResponse { Status = IpcStatus.Success }
+                        : new IpcResponse
+                        {
+                            Status = IpcStatus.Error,
+                            Message = $"{repairIssues.Count - repairProblems.Count} of {repairIssues.Count} repaired. Not repaired: {string.Join("; ", repairProblems)}"
+                        });
                     break;
 
                 case IpcCommands.GetSystemIntegrityStatus:
@@ -858,7 +862,8 @@ namespace TuneUpEngine
                         string r = DebloatGuard.RemoveAppxPackage(request.Payload ?? "",
                             msg => Send(new IpcResponse { Status = IpcStatus.Progress, Message = msg }), ctx);
                         LogEvent($"[DebloatGuard] {r}");
-                        Send(new IpcResponse { Status = IpcStatus.Success, Message = r });
+                        // Refusals and failures used to come back as Success with an "Error..." message.
+                        Send(new IpcResponse { Status = r.StartsWith("Error", StringComparison.Ordinal) ? IpcStatus.Error : IpcStatus.Success, Message = r });
                     });
                     break;
 

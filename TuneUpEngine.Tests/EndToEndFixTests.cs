@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using TuneUpEngine;
 using Xunit;
@@ -32,6 +33,81 @@ namespace TuneUpEngine.Tests
                 .Convert(status, typeof(System.Windows.Media.Brush), null!, System.Globalization.CultureInfo.InvariantCulture);
             Assert.Equal(System.Windows.Media.Color.FromRgb(r, g, b), brush.Color);
         }
+    }
+
+    // Found testing the destructive features against a real engine.
+    public class DestructiveFeatureTests : IDisposable
+    {
+        private readonly string _dir = Path.Combine(Path.GetTempPath(), "RRTU_Repair_" + Guid.NewGuid().ToString("N"));
+        private readonly string _key = @"Software\RRTU_Test_" + Guid.NewGuid().ToString("N");
+
+        public void Dispose()
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(_key, false);
+            try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
+        }
+
+        private ClientContext Me(bool admin)
+        {
+            var me = ClientContext.ForCurrentProcess();
+            return new ClientContext { Sid = me.Sid, IsAdministrator = admin, Folders = new UserFolders { RoamingAppData = _dir } };
+        }
+
+        private RegistryIssue Issue(string hive, string valueName) => new RegistryIssue
+        {
+            Id = Guid.NewGuid().ToString(), Title = "Test " + valueName, KeyPath = $@"{hive}\{_key}",
+            ValueName = valueName, IssueType = "Startup",
+        };
+
+        // The backup is staged in ProgramData, which only administrators can write, so run without
+        // elevation the export fails; either way, an entry is deleted only together with a backup.
+        [Fact]
+        public void Repair_DeletesTheValueOnlyWithABackup()
+        {
+            using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(_key)) k.SetValue("dead", @"C:\RRTU_missing\x.exe");
+
+            var problems = new RegistryVerifier().Repair(new List<RegistryIssue> { Issue("HKCU", "dead") }, Me(admin: false));
+
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(_key)!;
+            if (problems.Count == 0)
+            {
+                Assert.Null(key.GetValue("dead"));
+                Assert.Single(Directory.GetFiles(Path.Combine(_dir, "RamRaidersTuneUpSuite", "RegistryBackups"), "*.reg"));
+            }
+            else
+            {
+                Assert.Contains("backup", Assert.Single(problems));
+                Assert.NotNull(key.GetValue("dead"));
+            }
+        }
+
+        // Skipped or failed entries were only written to the backup manifest while the UI said
+        // the repair worked.
+        [Fact]
+        public void Repair_ReportsWhatItCouldNotRepair()
+        {
+            var problems = new RegistryVerifier().Repair(new List<RegistryIssue> { Issue("HKLM", "anything") }, Me(admin: false));
+
+            Assert.Single(problems);
+            Assert.Contains("administrator", problems[0]);
+        }
+
+        // Nothing is deleted without a backup: a key reg.exe can't export stays in place.
+        [Fact]
+        public void Repair_LeavesAnEntryItCannotBackUp()
+        {
+            var problems = new RegistryVerifier().Repair(new List<RegistryIssue> { Issue("HKCU", "missing-key-so-no-export") }, Me(admin: false));
+
+            Assert.Single(problems);
+            Assert.Contains("backup", problems[0]);
+        }
+
+        // Re-enabling restores the start type; only an Automatic service is started straight away.
+        [Theory]
+        [InlineData(2, true)]
+        [InlineData(3, false)]
+        public void ReEnabledServiceIsStartedOnlyIfAutomatic(int startType, bool start) =>
+            Assert.Equal(start, DebloatGuard.ShouldStartAfterReEnable(startType));
     }
 
     public class EngineSettingsMigrationTests : IDisposable
