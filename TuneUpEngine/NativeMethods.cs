@@ -14,6 +14,12 @@ namespace TuneUpEngine
 
         public const int SystemMemoryListInformation = 80;
 
+        [DllImport("psapi.dll", SetLastError = true)]
+        public static extern bool EnumDeviceDrivers([Out] IntPtr[] lpImageBase, uint cb, out uint lpcbNeeded);
+
+        [DllImport("psapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern uint GetDeviceDriverBaseNameW(IntPtr ImageBase, [Out] char[] lpBaseName, uint nSize);
+
         // Windows' own numbering. These values were once wrong (purge = 2), so every "standby purge"
         // actually sent MemoryEmptyWorkingSets: it trimmed every running program, games included,
         // and the standby list grew instead of shrinking (found in end-to-end testing).

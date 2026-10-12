@@ -226,7 +226,7 @@ namespace TuneUpEngine.Tests
                 Fill(auditor, S((15, 0), (0, 0)));
                 string summary = auditor.GetReport().Summary;
                 Assert.Contains("CPU 0", summary);
-                Assert.Contains("can't tell which driver", summary);
+                Assert.Contains("couldn't trace which driver", summary);
             }
             finally
             {
