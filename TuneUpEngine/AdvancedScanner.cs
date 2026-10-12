@@ -97,9 +97,28 @@ namespace TuneUpEngine
             catch { return false; }
         }
 
+        private static readonly string[] _vcsMarkers = { ".git", ".svn", ".hg" };
+
+        // Source trees are left alone: a repository (any folder holding .git/.svn/.hg) or a
+        // node_modules folder. Their "duplicates" (build outputs, vendored packages) are expected,
+        // and deleting copies or empty folders there breaks builds and repositories.
+        internal static bool IsDeveloperFolder(string dir)
+        {
+            string name = Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (name.Equals("node_modules", StringComparison.OrdinalIgnoreCase) ||
+                _vcsMarkers.Any(m => name.Equals(m, StringComparison.OrdinalIgnoreCase)))
+                return true;
+            try
+            {
+                return _vcsMarkers.Any(m =>
+                    Directory.Exists(Path.Combine(dir, m)) || File.Exists(Path.Combine(dir, m))); // a worktree's .git is a file
+            }
+            catch { return false; }
+        }
+
         // Manual recursive file walk that skips reparse-point directories (Directory.EnumerateFiles
-        // with AllDirectories follows them, which is what we must avoid).
-        private static IEnumerable<string> EnumerateFilesSafe(string root)
+        // with AllDirectories follows them, which is what we must avoid) and developer folders.
+        internal static IEnumerable<string> EnumerateFilesSafe(string root)
         {
             var stack = new Stack<string>();
             stack.Push(root);
@@ -116,7 +135,7 @@ namespace TuneUpEngine
                 try { subdirs = Directory.GetDirectories(dir); } catch { }
                 if (subdirs != null)
                     foreach (var d in subdirs)
-                        if (!IsReparsePoint(d)) stack.Push(d);
+                        if (!IsReparsePoint(d) && !IsDeveloperFolder(d)) stack.Push(d);
             }
         }
 
@@ -131,6 +150,8 @@ namespace TuneUpEngine
                 {
                     // A symlinked/junctioned folder is not "empty" and must not be recursed into.
                     if (IsReparsePoint(dir)) { isEmpty = false; continue; }
+                    // Nor is a repository or node_modules: never searched, never removed.
+                    if (IsDeveloperFolder(dir)) { isEmpty = false; continue; }
 
                     bool subIsEmpty = FindEmptyFolders(dir, emptyFolders, userFolders, ct);
                     if (!subIsEmpty) isEmpty = false;

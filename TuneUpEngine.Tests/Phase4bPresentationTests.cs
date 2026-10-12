@@ -82,6 +82,21 @@ namespace TuneUpEngine.Tests
         }
     }
 
+    public class ServiceStatusTextTests
+    {
+        [Theory]
+        [InlineData(2, false, true, "Startup: Automatic  ·  Running")]
+        [InlineData(2, true, true, "Startup: Automatic (delayed start)  ·  Running")]
+        [InlineData(3, false, false, "Startup: Manual  ·  Stopped")]
+        [InlineData(4, false, false, "Startup: Disabled  ·  Stopped")]
+        [InlineData(-1, false, false, "Startup: Unknown  ·  Stopped")]
+        public void ShowsStartTypeAndRunningState(int start, bool delayed, bool running, string expected)
+        {
+            var svc = new ServiceStatus { StartType = start, IsDelayedStart = delayed, IsRunning = running };
+            Assert.Equal(expected, ServiceStatusText.Describe(svc));
+        }
+    }
+
     public class CleanConfirmationTests
     {
         [Fact]

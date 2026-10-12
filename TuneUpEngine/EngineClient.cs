@@ -21,6 +21,19 @@ namespace TuneUpEngine
         // running and must be closed first.
         public string? LastConnectionProblem { get; private set; }
 
+        // True when the last failure was a different TuneUp engine holding the connection. That
+        // engine also refuses this copy's UI, and this copy can't start its own engine until it
+        // is gone, so the UI must say so instead of a bare "Engine Offline".
+        public bool OtherEngineRunning { get; private set; }
+
+        // What to tell the user when the engine on the pipe isn't this copy's. Its location is
+        // unknown when it runs as SYSTEM and isn't (or is no longer) the registered service,
+        // e.g. one left running by an earlier install.
+        internal static string DescribeOtherEngine(string? serverPath) => serverPath != null
+            ? $"A different copy of the TuneUp engine is running ({serverPath}). Close that copy of TuneUp (right-click its tray icon → Exit) and open this one again."
+            : "A different TuneUp engine is already running, possibly one left behind by an earlier install or another build, so this copy can't start its own. " +
+              "Restart the PC, or end TuneUpEngine.exe from an administrator command prompt (taskkill /im TuneUpEngine.exe /f), then open TuneUp again.";
+
         public EngineClient(IReadOnlyList<string> trustedEnginePaths, string pipeName = IpcServer.DefaultPipeName)
         {
             _trustedEnginePaths = trustedEnginePaths;
@@ -46,17 +59,18 @@ namespace TuneUpEngine
                 string? server = ClientVerifier.GetServerImagePath(client);
                 if (!ClientVerifier.IsTrustedClient(server, _trustedEnginePaths))
                 {
-                    LastConnectionProblem = server != null
-                        ? $"A different copy of the TuneUp engine is running ({server}). Close that copy of TuneUp (right-click its tray icon → Exit) and open this one again."
-                        : "Another program is using the TuneUp engine's connection, so this copy can't start its engine.";
+                    LastConnectionProblem = DescribeOtherEngine(server);
+                    OtherEngineRunning = true;
                     throw new UnauthorizedAccessException(LastConnectionProblem);
                 }
                 LastConnectionProblem = null;
+                OtherEngineRunning = false;
                 return client;
             }
             catch (TimeoutException)
             {
                 LastConnectionProblem = "The TuneUp engine isn't running.";
+                OtherEngineRunning = false;
                 client.Dispose();
                 throw;
             }

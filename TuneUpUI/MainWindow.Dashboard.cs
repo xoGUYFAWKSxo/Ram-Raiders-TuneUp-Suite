@@ -61,7 +61,7 @@ namespace TuneUpUI
             {
                 StatusDot.Fill = System.Windows.Media.Brushes.Red;
                 string? problem = _engine.LastConnectionProblem;
-                bool otherCopy = problem != null && problem.StartsWith("A different copy", StringComparison.Ordinal);
+                bool otherCopy = _engine.OtherEngineRunning;
                 TxtStatus.Text = otherCopy ? "Another copy is running" : "Engine Offline";
                 TxtStatus.ToolTip = problem;
 

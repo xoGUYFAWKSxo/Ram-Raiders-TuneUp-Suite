@@ -56,6 +56,26 @@ namespace TuneUpUI.Presentation
         }
     }
 
+    // ── DebloatGuard services ───────────────────────────────────────────────────
+
+    public static class ServiceStatusText
+    {
+        // One line under each service: how Windows starts it and whether it is running now.
+        public static string Describe(ServiceStatus svc)
+        {
+            string start = svc.StartType switch
+            {
+                2 when svc.IsDelayedStart => "Automatic (delayed start)",
+                2 => "Automatic",
+                3 => "Manual",
+                4 => "Disabled",
+                0 or 1 => "Boot / System",
+                _ => "Unknown",
+            };
+            return $"Startup: {start}  ·  {(svc.IsRunning ? "Running" : "Stopped")}";
+        }
+    }
+
     // ── Cleaner ─────────────────────────────────────────────────────────────────
 
     public static class CleanConfirmation
