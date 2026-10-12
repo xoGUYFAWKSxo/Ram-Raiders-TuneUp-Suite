@@ -215,6 +215,22 @@ The result shown afterwards is the real outcome: DISM's exit code (0 = healthy/r
 **Navigation label:** Live Monitor  
 **Tab index:** 4
 
+### Driver DPC & Interrupt Load
+
+Checks whether drivers are holding CPU cores long enough to cause game stutter or audio crackles.
+
+| Control | What it does |
+|---|---|
+| **Start Audit** | Starts two measurements in the engine. Results appear after 5 seconds and refresh every 2 seconds. |
+| **Stop** | Ends the measurement. The last results stay on screen and can still be saved. |
+| **Save Trace** | Saves the current results as a **text report** (summary, driver table, core table, advice for ELEVATED/HIGH drivers) or a **CSV** (one row per driver and core). Pick the type in the save window's "Save as type" list. The file holds no computer or user name. |
+| **What is this, and how do I fix it?** | Shows plain-English help in place of the tables; **Back to the results** returns. |
+
+- **CPU core table**: each core's share of time spent on DPC and interrupt work, from Windows performance counters, as the highest 5-second average (the counters move in 15.6 ms clock-tick steps, so single readings are too coarse). OK under 3%, ELEVATED 3 to 10%, HIGH 10% or more.
+- **Driver table**: a real-time kernel ETW session (DPC, interrupt and image-load events, under its own session name so LatencyMon or WPR can still run) times every DPC and interrupt run and charges it to the driver whose code ran. Columns: driver file, what it is, longest single run (µs), number of runs, total ms, status. Status goes by the longest single run: OK under 500 µs, ELEVATED from 500 µs, HIGH from 2,000 µs. Hover over a driver for advice; the advice for the worst problem driver also shows under the table. If the trace can't start, the table says why and the core table keeps working.
+
+### Event Log
+
 A real-time scrolling event log showing all actions the engine has taken since it started. This is the same event log shown in the Dashboard but displayed full-screen for easier reading.
 
 Events are categorized by source:
@@ -223,7 +239,7 @@ Events are categorized by source:
 - `[GameMode]` — Game detection boost/restore events
 - `[Engine]` — Informational engine status messages
 - `[Downloader]` — Definition update events
-- `[LatencyAuditor]` — CPU cores spending 10%+ of their time on driver DPCs/interrupts
+- `[LatencyAuditor]` — audit start/stop, driver trace start (with how many drivers it found) or the reason it couldn't start, and CPU cores spending 10%+ of their time on driver DPCs/interrupts
 
 The log retains the most recent 100 entries, rotating out older ones automatically.
 
@@ -258,7 +274,7 @@ Three categories of extensive Windows configurations: System Tweaks, Desktop Twe
 | Button | What it does |
 |---|---|
 | **Auto-Search Compliance** | Scans all PCI/PCIe devices via the Windows registry and reports which are already using Message Signaled Interrupts vs. legacy line-based IRQs. Devices eligible for MSI forcing are listed. |
-| **Force MSI Tweak** | Writes MSI mode override entries to the registry for each compliant device found. Requires a system reboot to take effect. MSI eliminates interrupt sharing and significantly reduces DPC (Deferred Procedure Call) latency, which improves audio/input/GPU scheduling consistency. |
+| **Force MSI Tweak** | Writes MSI mode override entries to the registry for each compliant device found. Requires a system reboot to take effect. MSI avoids interrupt sharing for devices still on legacy line-based interrupts. Most current devices already use MSI, so this rarely changes DPC latency; use the Live Monitor's driver table to find and fix the driver instead. |
 
 ---
 
@@ -327,13 +343,17 @@ Ram Raiders TuneUp Suite/
 │   ├── RegistryVerifier.cs           # Registry structural integrity scanner
 │   ├── RegistryTweaker.cs            # Gaming registry tweak read/write
 │   ├── HardwareController.cs         # MSI interrupt compliance + provisioning
+│   ├── LatencyAuditor.cs             # Per-core DPC/interrupt load (performance counters)
+│   ├── DriverLatencyTracer.cs        # Kernel ETW trace: per-driver DPC/ISR run times
 │   ├── SystemIntegrityAgent.cs       # CBS log analysis + SFC/DISM repair
 │   ├── Winapp2Downloader.cs          # Community definitions downloader
 │   └── TuneUpService.cs              # Windows Service wrapper
 │
 ├── TuneUpUI/                         # WPF Frontend (runs as current user)
 │   ├── MainWindow.xaml               # All UI layout and tab definitions
-│   ├── MainWindow.xaml.cs            # All UI event handlers and IPC client logic
+│   ├── MainWindow.xaml.cs            # Window setup and IPC client logic
+│   ├── MainWindow.<Tab>.cs           # Event handlers, one partial file per tab
+│   ├── Presentation.cs               # Testable display logic (incl. saved DPC trace files)
 │   ├── ThemeStyles.xaml              # Global style definitions
 │   ├── App.xaml                      # Application entry + resource merging
 │   └── TrayIconHelper.cs             # System tray icon, context menu, notifications

@@ -31,7 +31,7 @@ A professional-grade, high-performance Windows system optimization and maintenan
 ### ⚡ 1. Memory Health & Auto-Purging
 * **Standby List Flusher**: Purges inactive system standby memory instantly via the low-level `NtSetSystemInformation` native API (safe and non-destructive).
 * **Standby Auto-Purger**: Checks every 5 seconds and empties the standby list only when truly free memory is below 10% of RAM while the standby cache holds at least as much (at most once a minute), logging the measured amount freed.
-* **Driver DPC & Interrupt Load**: Per-core share of CPU time spent in driver DPCs and interrupts, from Windows performance counters, with peaks and averages. (Counters can't name the responsible driver; LatencyMon can.)
+* **Driver DPC & Interrupt Load**: Per-core share of CPU time spent in driver DPCs and interrupts (Windows performance counters, 5-second peaks), plus a kernel ETW trace that names each driver and times every one of its runs, so the table shows each driver's longest single run in µs with plain-English advice. **Save Trace** writes the results to a text report or CSV, to share or to compare before and after a driver update.
 
 ### 🧠 2. CPU ProBalance & Game Booster
 * **ProBalance Governor**: Automatically throttles abusive background applications consuming excessive CPU time by temporarily lowering their scheduling priority class, giving the active foreground application 100% responsiveness.
@@ -39,7 +39,7 @@ A professional-grade, high-performance Windows system optimization and maintenan
 
 ### 🔌 3. Hardware Interrupt Tuning (MSI Mode)
 * **MSI Compliance Scanner**: Queries all PCI/PCIe hardware devices in the registry to evaluate Message Signaled Interrupts (MSI) compatibility.
-* **Force MSI Provisioner**: Writes MSI mode override entries for compliant hardware, resolving legacy line-based IRQ conflicts and significantly reducing DPC (Deferred Procedure Call) latencies.
+* **Force MSI Provisioner**: Writes MSI mode override entries for compliant hardware that still uses legacy line-based interrupts, which avoids interrupt sharing. Most current devices already use MSI, so this rarely changes DPC latency; when the DPC monitor names a driver, fixing that driver is the better step.
 
 ### 🧼 4. Rule-Based System Cleaner & Advanced Hasher
 * **Winapp2.ini Scanner**: Full support for community winapp2 rules — wildcard folders, registry `Detect` keys, numbered `DetectFile` keys, `REMOVESELF`, wildcard exclusions, all common path tokens, categories and rule warnings. Event logs, the CBS log, registry hives and the component store are never cleaned, whatever a rule says.
