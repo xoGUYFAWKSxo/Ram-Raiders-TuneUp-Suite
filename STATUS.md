@@ -6,7 +6,7 @@ _Last updated: 2026-10-12, main at 996e1fa (PR #20)._
 - The phased rework plan is complete (PRs #1 to #16).
 - End-to-end review (PR #17) and testing of the destructive features against a real engine (PR #18) are done and merged.
 - Build: 0 warnings, 278 tests pass. CI is green.
-- The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs the PR #18 build as a service.
+- The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs the PR #20 build (996e1fa) as a service; its upgrade test passed on 2026-10-12.
 
 ## Verified on a real engine
 - All read-only commands.
