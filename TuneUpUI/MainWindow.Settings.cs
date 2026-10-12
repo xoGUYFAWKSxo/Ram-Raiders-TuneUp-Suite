@@ -33,15 +33,16 @@ namespace TuneUpUI
     // Settings: persisted UI preferences, start-with-Windows and sidebar state.
     public partial class MainWindow
     {
-        // Settings variables
+        // Settings variables. Everything starts off for a new user: each one is the user's choice to
+        // turn on, not something the app opts them into. (Saved settings are kept as they are.)
         public class ApplicationSettings
         {
             public bool StartOnStartup { get; set; } = false;
             public bool LaunchUiMinimized { get; set; } = false;
-            public bool MinimizeToTrayOnClose { get; set; } = true;
-            public bool EnableTrayNotifications { get; set; } = true;
-            public bool ProBalanceToast { get; set; } = true;
-            public bool MemoryPurgeToast { get; set; } = true;
+            public bool MinimizeToTrayOnClose { get; set; } = false;
+            public bool EnableTrayNotifications { get; set; } = false;
+            public bool ProBalanceToast { get; set; } = false;
+            public bool MemoryPurgeToast { get; set; } = false;
         }
 
         private static readonly string SettingsFilePath = Path.Combine(

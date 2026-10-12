@@ -6,13 +6,14 @@ namespace TuneUpEngine
 {
     // Persists the engine's feature-toggle state so choices survive a restart. Previously the engine
     // hard-coded ProBalance=on / AutoPurge=off / GameMode=on at every launch, so a user who turned a
-    // feature off would find it back on after rebooting. These defaults match that historical
-    // behaviour for a first run (no file yet).
+    // feature off would find it back on after rebooting. On a first run (no file yet) everything is
+    // off: Game Mode changes system settings and ProBalance changes other programs' priorities, so
+    // the user switches them on rather than the install doing it for them.
     public class EngineSettings
     {
-        public bool ProBalanceEnabled { get; set; } = true;
+        public bool ProBalanceEnabled { get; set; } = false;
         public bool AutoPurgeEnabled { get; set; } = false;
-        public bool GameModeEnabled { get; set; } = true;
+        public bool GameModeEnabled { get; set; } = false;
 
         // Engine (machine-wide) settings live in ProgramData next to the change journal. Older
         // versions kept them in the engine account's LocalAppData — SYSTEM's profile once the

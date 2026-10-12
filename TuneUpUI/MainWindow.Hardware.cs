@@ -45,14 +45,16 @@ namespace TuneUpUI
                     BtnMsiScan.IsEnabled = true;
                     if (completed.Status == IpcStatus.Success)
                     {
-                        TxtMsiStatus.Text = completed.Payload;
-                        if (completed.Payload.StartsWith("Compliant"))
-                        {
-                            BtnMsiEnable.IsEnabled = true;
-                        }
+                        string result = completed.Payload ?? "";
+                        // "Compliant: ..." means a supported device isn't using MSI yet.
+                        BtnMsiEnable.IsEnabled = result.StartsWith("Compliant");
+                        TxtMsiStatus.Text = result.StartsWith("Compliant: ")
+                            ? result.Substring("Compliant: ".Length)
+                            : result;
                     }
                     else
                     {
+                        BtnMsiEnable.IsEnabled = false;
                         TxtMsiStatus.Text = "Error: " + completed.Message;
                     }
                 });
