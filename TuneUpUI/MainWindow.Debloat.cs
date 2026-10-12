@@ -76,6 +76,16 @@ namespace TuneUpUI
                                     TextWrapping = TextWrapping.Wrap,
                                     Foreground = (System.Windows.Media.Brush)FindResource("BrushTextMuted")
                                 });
+                                sp.Children.Add(new TextBlock
+                                {
+                                    Text = Presentation.ServiceStatusText.Describe(svc),
+                                    FontSize = 12,
+                                    Margin = new Thickness(0, 4, 0, 0),
+                                    // Amber while the service can still run, so an Automatic SysMain stands out.
+                                    Foreground = svc.IsDisabled
+                                        ? (System.Windows.Media.Brush)FindResource("BrushTextMuted")
+                                        : new System.Windows.Media.SolidColorBrush(WpfColor.FromRgb(0xF5, 0xB0, 0x41))
+                                });
 
                                 var toggle = new CheckBox
                                 {
@@ -83,6 +93,7 @@ namespace TuneUpUI
                                     Content = "",
                                     IsChecked = !svc.IsDisabled,
                                     Tag = svc.ServiceName,
+                                    ToolTip = svc.IsDisabled ? "Off: click to re-enable" : "On: click to stop and disable",
                                     VerticalAlignment = VerticalAlignment.Center
                                 };
                                 toggle.Click += ServiceToggle_Click;
@@ -112,6 +123,7 @@ namespace TuneUpUI
                     {
                         if (resp?.Message != null)
                             AppendMonitorEvent(resp.Message);
+                        LoadDebloatStatus(); // show the new startup type / running state
                     });
                 });
             }

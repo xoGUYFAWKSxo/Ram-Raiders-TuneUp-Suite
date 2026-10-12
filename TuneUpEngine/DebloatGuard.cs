@@ -17,6 +17,9 @@ namespace TuneUpEngine
         public bool IsRunning { get; set; }
         public bool IsDisabled { get; set; }
         public bool IsAvailable { get; set; } // Service exists on this machine
+        // Registry Start value: 2 Automatic, 3 Manual, 4 Disabled (0/1 are drivers); -1 if unreadable.
+        public int StartType { get; set; } = -1;
+        public bool IsDelayedStart { get; set; }
     }
 
     public class AppxPackageInfo
@@ -147,7 +150,9 @@ namespace TuneUpEngine
                     if (regKey != null)
                     {
                         int startType = (int)(regKey.GetValue("Start") ?? 2);
+                        svc.StartType = startType;
                         svc.IsDisabled = startType == 4; // 4 = Disabled
+                        svc.IsDelayedStart = startType == 2 && (int)(regKey.GetValue("DelayedAutostart") ?? 0) == 1;
                     }
                 }
                 catch

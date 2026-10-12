@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using TuneUpEngine;
 using Xunit;
 
@@ -51,6 +52,43 @@ namespace TuneUpEngine.Tests
             string b = CreateFile("c2.bin", head: 0xCD, tail: 0x09, headLen: OneMb, tailLen: OneMb / 4);
 
             Assert.Equal(_scanner.GetFullHash(a), _scanner.GetFullHash(b));
+        }
+
+        [Fact]
+        public void FileWalk_SkipsRepositoriesAndNodeModules()
+        {
+            string repo = Path.Combine(_dir, "projects", "MyApp");
+            Directory.CreateDirectory(Path.Combine(repo, ".git"));
+            Directory.CreateDirectory(Path.Combine(repo, "bin"));
+            File.WriteAllText(Path.Combine(repo, "bin", "app.dll"), "x");
+            Directory.CreateDirectory(Path.Combine(_dir, "web", "node_modules", "pkg"));
+            File.WriteAllText(Path.Combine(_dir, "web", "node_modules", "pkg", "index.js"), "x");
+            File.WriteAllText(Path.Combine(_dir, "web", "notes.txt"), "x");
+
+            var files = AdvancedScanner.EnumerateFilesSafe(_dir).ToList();
+
+            Assert.Contains(Path.Combine(_dir, "web", "notes.txt"), files);
+            Assert.DoesNotContain(files, f => f.Contains("MyApp") || f.Contains("node_modules"));
+        }
+
+        [Theory]
+        [InlineData(".git", true)]
+        [InlineData("node_modules", true)]
+        [InlineData("Photos", false)]
+        public void DeveloperFolder_ByName(string name, bool expected)
+        {
+            string d = Path.Combine(_dir, name);
+            Directory.CreateDirectory(d);
+            Assert.Equal(expected, AdvancedScanner.IsDeveloperFolder(d));
+        }
+
+        [Fact]
+        public void WorktreeWithGitFile_IsADeveloperFolder()
+        {
+            string d = Path.Combine(_dir, "wt");
+            Directory.CreateDirectory(d);
+            File.WriteAllText(Path.Combine(d, ".git"), "gitdir: elsewhere");
+            Assert.True(AdvancedScanner.IsDeveloperFolder(d));
         }
 
         public void Dispose()
