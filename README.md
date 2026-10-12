@@ -5,7 +5,7 @@
 [![Language](https://img.shields.io/badge/language-C%23-violet.svg)](#)
 [![Framework](https://img.shields.io/badge/framework-.NET%2011%20%7C%20WPF-red.svg)](#)
 
-A free, open-source Windows 10/11 maintenance tool. It frees standby memory, names the drivers behind DPC latency spikes, cleans junk files with community winapp2 rules, repairs broken registry entries after backing them up, and applies Windows tweaks that can be undone. **Ram Raiders TuneUp Suite** is a WPF desktop app that talks over a named pipe to a background Windows service, which does the work needing administrator rights. It is alpha software.
+A free, open-source Windows 10/11 maintenance tool. It frees standby memory, names the drivers behind DPC latency spikes, cleans junk files with community winapp2 rules, repairs broken registry entries after backing them up, and applies Windows tweaks that can be undone. **Ram Raiders TuneUp Suite** is a WPF desktop app that talks over a named pipe to a background Windows service, which does the work needing administrator rights. It is alpha software and is complete for now: every planned feature is built and tested, and no work is in progress.
 
 ```
                   ┌──────────────────────────────────────────┐
