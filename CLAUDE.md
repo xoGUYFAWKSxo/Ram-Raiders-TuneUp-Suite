@@ -21,7 +21,9 @@ dotnet test TuneUpApp.slnx -c Release --no-build
 - If a running engine locks `bin/`, build to another output folder rather than killing it. Stopping the elevated engine needs UAC.
 
 ## Workflow
-- Branch, then open a PR, then merge only when the user says to, after CI passes, with `gh pr merge N --merge`. GitHub auto-merge is disabled on this repo.
+- Work only in the public repo `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite` (remote `origin`). The private `...-archive` repo (remote `archive`) is frozen: never push to it, open PRs on it, or make it public. See STATUS.md, "Repository history".
+- Commit as `xoGUYFAWKSxo <206061236+xoGUYFAWKSxo@users.noreply.github.com>` (set in this clone's git config). Never commit with a personal email address; the repo is public.
+- Branch, then open a PR. Once the `build-and-test` check passes green, merge it yourself with `gh pr merge N --merge`; no need to ask first. Never merge a PR whose CI failed or is still running. GitHub auto-merge is disabled on this repo, so wait for the run (`gh run watch <id> --exit-status`), then merge.
 - Commit messages: write them to a file and use `git commit -F`, in UTF-8 without a BOM.
 - Update `STATUS.md` when a PR merges. Add to `DECISIONS.md` when the user makes a choice.
 

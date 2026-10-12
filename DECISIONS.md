@@ -2,6 +2,8 @@
 
 These are settled. Don't reopen them unless the user asks. Newest first.
 
+- **2026-10-12: Merge on green CI.** Claude may merge its own PRs without asking once the `build-and-test` check passes. A failed or pending check is never merged.
+- **2026-10-12: The public repo is the only active repo.** `Ram-Raiders-TuneUp-Suite` (public, GPL-3.0, noreply commit emails) is where all work happens. `Ram-Raiders-TuneUp-Suite-archive` (private) is frozen and stays private.
 - **2026-10-12: The DPC monitor explains and advises; it doesn't tweak.** Fix advice points at drivers, BIOS and chipset updates, and disabling unused devices. It warns against placebo latency tweaks (disabling HPET, timer resolution, forcing MSI mode everywhere) instead of offering them. Peaks use a 5-second window because the Processor DPC/interrupt counters are tick-quantized.
 - **2026-10-12: UI text is plain English for non-technical users.** Explain what a result means (e.g. "Windows checked its backup copy of system files and fixed all 876 problems"), not raw log lines or tool jargon. Tool names (DISM, SFC) appear only in brackets or error details. Raise an alarm only for something still unfixed.
 
