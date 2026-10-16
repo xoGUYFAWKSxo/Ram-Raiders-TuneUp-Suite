@@ -75,7 +75,7 @@ namespace TuneUpEngine
         }
     }
 
-    // The engine's log. Writes to %ProgramData%\RamRaidersTuneUpSuite\logs\engine-yyyyMMdd.log (the
+    // The engine's log. Writes to %ProgramData%\GalacticTuneUp\logs\engine-yyyyMMdd.log (the
     // folder the change journal locks down to administrators; everyone can read it, which helps
     // when reporting a problem) and echoes to the console. Debug messages — per-request chatter —
     // go to the console only, unless TUNEUP_DEBUG_LOG=1 is set.
@@ -86,8 +86,7 @@ namespace TuneUpEngine
             Environment.GetEnvironmentVariable("TUNEUP_DEBUG_LOG") == "1";
 
         public static string DefaultDirectory => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "RamRaidersTuneUpSuite", "logs");
+            AppFolders.Root(Environment.SpecialFolder.CommonApplicationData), "logs");
 
         public static string? CurrentFile => _file is { Enabled: true } f ? f.CurrentFile : null;
 

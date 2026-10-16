@@ -1,4 +1,4 @@
-# Builds publish\Installer\RamRaidersTuneUpSuite_Setup.exe.
+# Builds publish\Installer\GalacticTuneUp_Setup.exe.
 #
 # Both projects are published into publish\ReleaseSuite. Publishing only the UI is not enough: the
 # UI runs on the Windows Desktop runtime, which already contains PerformanceCounter, EventLog etc.,
@@ -43,7 +43,7 @@ if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
 
 # The installer is not code-signed, so publish its SHA-256 next to it: anyone can check the file
 # they downloaded is the one that was built. Same format as sha256sum ("<hash> *<file>").
-$setup = Get-Item 'publish\Installer\RamRaidersTuneUpSuite_Setup.exe'
+$setup = Get-Item 'publish\Installer\GalacticTuneUp_Setup.exe'
 $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 "$hash *$($setup.Name)" | Set-Content "$($setup.FullName).sha256" -Encoding ascii
 Write-Host "SHA-256: $hash"

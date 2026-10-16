@@ -1,5 +1,5 @@
 ; =====================================================================
-; Inno Setup Compiler Script for Ram Raiders TuneUp Suite
+; Inno Setup Compiler Script for Galactic Tune-Up
 ; =====================================================================
 ;
 ; BUILD PREREQUISITE — populate publish\ReleaseSuite BEFORE compiling this
@@ -24,12 +24,14 @@
 ; missing — relevant only for the framework-dependent publish.
 ; =====================================================================
 
-#define MyAppName "Ram Raiders TuneUp Suite"
+#define MyAppName "Galactic Tune-Up"
 #define MyAppVersion "1.0.0"
-#define MyAppPublisher "Ram Raiders"
+#define MyAppPublisher "xoGUYFAWKSxo"
 #define MyAppExeName "TuneUpUI.exe"
 #define EngineExeName "TuneUpEngine.exe"
 #define ServiceName "TuneUpEngineService"
+; The name before 2026-10-16. Upgrades move out of its folders (see [InstallDelete]).
+#define LegacyAppName "Ram Raiders TuneUp Suite"
 
 [Setup]
 ; Unique GUID for the app uninstaller footprint
@@ -38,6 +40,8 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
+; Upgrades from the old name install into the new folder, not the old one.
+UsePreviousAppDir=no
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 ; The app is x64 .NET only: refuse 32-bit Windows and install into the real
@@ -46,10 +50,12 @@ ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 ; Setup file output configurations
 OutputDir=publish\Installer
-OutputBaseFilename=RamRaidersTuneUpSuite_Setup
+OutputBaseFilename=GalacticTuneUp_Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+WizardImageFile=assets\wizard-large-100.bmp,assets\wizard-large-200.bmp
+WizardSmallImageFile=assets\wizard-small-100.bmp,assets\wizard-small-200.bmp
 SetupIconFile=TuneUpIcon.ico
 ; Force installer to prompt for administrative elevation on run
 PrivilegesRequired=admin
@@ -65,6 +71,13 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; are excluded — they are not needed by an installed release build.
 Source: "publish\ReleaseSuite\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; Upgrading from the old name: remove its program folder and shortcuts. The engine
+; moves its ProgramData folder (the change journal) to the new name when it starts.
+Type: filesandordirs; Name: "{commonpf}\{#LegacyAppName}"
+Type: filesandordirs; Name: "{commonprograms}\{#LegacyAppName}"
+Type: files; Name: "{commondesktop}\{#LegacyAppName}.lnk"
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
@@ -76,9 +89,9 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 ; the app no longer needs a UAC prompt on every launch or sign-in, and keeps
 ; working in the background after the window is closed. "create" fails harmlessly
 ; on an upgrade (the service already exists); "config" then refreshes its path.
-Filename: "{sys}\sc.exe"; Parameters: "create {#ServiceName} binPath= ""\""{app}\{#EngineExeName}\"" --service"" start= auto DisplayName= ""TuneUp Engine"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing the TuneUp engine service..."
-Filename: "{sys}\sc.exe"; Parameters: "config {#ServiceName} binPath= ""\""{app}\{#EngineExeName}\"" --service"" start= auto DisplayName= ""TuneUp Engine"""; Flags: runhidden waituntilterminated
-Filename: "{sys}\sc.exe"; Parameters: "description {#ServiceName} ""Ram Raiders TuneUp Suite background engine (memory, ProBalance, Game Mode and system maintenance)."""; Flags: runhidden waituntilterminated
+Filename: "{sys}\sc.exe"; Parameters: "create {#ServiceName} binPath= ""\""{app}\{#EngineExeName}\"" --service"" start= auto DisplayName= ""Galactic Tune-Up Engine"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing the TuneUp engine service..."
+Filename: "{sys}\sc.exe"; Parameters: "config {#ServiceName} binPath= ""\""{app}\{#EngineExeName}\"" --service"" start= auto DisplayName= ""Galactic Tune-Up Engine"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\sc.exe"; Parameters: "description {#ServiceName} ""Galactic Tune-Up background engine (memory, ProBalance, Game Mode and system maintenance)."""; Flags: runhidden waituntilterminated
 ; Restart automatically if it ever stops unexpectedly.
 Filename: "{sys}\sc.exe"; Parameters: "failure {#ServiceName} reset= 86400 actions= restart/5000/restart/5000/restart/30000"; Flags: runhidden waituntilterminated
 ; Windows' default service permissions, plus "start" (RP) for interactive users
@@ -106,6 +119,7 @@ Filename: "{sys}\sc.exe"; Parameters: "delete {#ServiceName}"; Flags: runhidden 
 
 [UninstallDelete]
 ; The change journal, engine settings and machine-wide backups (ProgramData).
+Type: filesandordirs; Name: "{commonappdata}\GalacticTuneUp"
 Type: filesandordirs; Name: "{commonappdata}\RamRaidersTuneUpSuite"
 
 [Code]
@@ -140,7 +154,12 @@ var
   ResultCode: Integer;
 begin
   if CurStep = ssInstall then
+  begin
     Exec(ExpandConstant('{sys}\net.exe'), 'stop {#ServiceName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    { A window open from the old-name folder would keep it locked, so it couldn't be removed. }
+    if DirExists(ExpandConstant('{commonpf}\{#LegacyAppName}')) then
+      Exec(ExpandConstant('{sys}\taskkill.exe'), '/f /im {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
 end;
 
 function InitializeSetup(): Boolean;
@@ -150,7 +169,7 @@ begin
   begin
     { Fail open: warn the user but let them proceed (e.g. for a self-contained
       build, or if detection misses a non-standard runtime location). }
-    if MsgBox('Ram Raiders TuneUp Suite requires the .NET 11 Desktop Runtime (x64),'
+    if MsgBox('Galactic Tune-Up requires the .NET 11 Desktop Runtime (x64),'
               + #13#10 + 'which does not appear to be installed on this PC.'
               + #13#10 + #13#10
               + 'Download it from:' + #13#10

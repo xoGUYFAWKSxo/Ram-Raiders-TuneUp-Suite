@@ -1,5 +1,5 @@
 @echo off
-title Ram Raiders TuneUp Launcher
+title Galactic Tune-Up Launcher
 cd /d "%~dp0"
 
 :: 1. Check for Administrator privileges
@@ -11,13 +11,13 @@ if %errorLevel% == 0 (
 )
 
 :elevate
-echo Requesting Administrator privileges to initialize the Ram Raiders TuneUp background service...
+echo Requesting Administrator privileges to initialize the Galactic Tune-Up background service...
 powershell -Command "Start-Process -FilePath '%0' -Verb RunAs"
 exit /b
 
 :init
 echo ==================================================
-echo         RAM RAIDERS TUNEUP SUITE LAUNCHER        
+echo         GALACTIC TUNE-UP LAUNCHER        
 echo ==================================================
 echo.
 
@@ -52,6 +52,6 @@ echo [Launch] Starting premium user interface...
 :: Start the UI in the foreground
 start "" "%UI_EXE%"
 
-echo [Launch] Ram Raiders TuneUp Suite is running.
+echo [Launch] Galactic Tune-Up is running.
 timeout /t 3 >nul
 exit

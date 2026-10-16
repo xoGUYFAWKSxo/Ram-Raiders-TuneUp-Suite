@@ -26,12 +26,11 @@ namespace TuneUpEngine
         // Machine-wide settings, so machine-wide backups (ProgramData). Older versions wrote them to
         // the engine account's AppData, which is still checked when reverting.
         private static string BackupDir => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "RamRaidersTuneUpSuite", "RegistryBackups");
+            AppFolders.Root(Environment.SpecialFolder.CommonApplicationData), "RegistryBackups");
 
         private static string LegacyBackupDir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "RamRaidersTuneUpSuite", "RegistryBackups");
+            AppFolders.LegacyName, "RegistryBackups");
 
         // Device setup classes. Windows records a device's class as ClassGUID; the plain "Class"
         // name the scan used to look for isn't written on current Windows, so it found nothing.

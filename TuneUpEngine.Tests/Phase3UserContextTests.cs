@@ -161,8 +161,8 @@ namespace TuneUpEngine.Tests
         [Fact]
         public void UiTrustsOnlyTheEngineNextToIt()
         {
-            var trusted = ClientVerifier.TrustedEnginePaths(@"C:\Program Files\Ram Raiders TuneUp Suite\");
-            Assert.True(ClientVerifier.IsTrustedClient(@"C:\Program Files\Ram Raiders TuneUp Suite\TuneUpEngine.exe", trusted));
+            var trusted = ClientVerifier.TrustedEnginePaths(@"C:\Program Files\Galactic Tune-Up\");
+            Assert.True(ClientVerifier.IsTrustedClient(@"C:\Program Files\Galactic Tune-Up\TuneUpEngine.exe", trusted));
             Assert.False(ClientVerifier.IsTrustedClient(@"C:\Users\x\AppData\Local\Temp\TuneUpEngine.exe", trusted));
         }
 

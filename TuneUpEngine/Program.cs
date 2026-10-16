@@ -18,7 +18,7 @@ namespace TuneUpEngine
             // Created first: it locks the ProgramData folder down before the log folder is made in it.
             var journal = ChangeJournal.CreateDefault();
 
-            // Log to %ProgramData%\RamRaidersTuneUpSuite\logs, and make sure a crash is recorded
+            // Log to %ProgramData%\GalacticTuneUp\logs, and make sure a crash is recorded
             // there instead of vanishing (a service has no console to show it).
             EngineLog.Initialize();
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>

@@ -70,7 +70,7 @@ namespace TuneUpUI
                 {
                     _shownOtherCopyWarning = true;
                     UiLog.Warn($"[UI] {problem}");
-                    MessageBox.Show(problem, "Ram Raiders TuneUp Suite", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(problem, "Galactic Tune-Up", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
                 return;
             }
@@ -146,7 +146,7 @@ namespace TuneUpUI
                                     proBalanceToasts: _settings.ProBalanceToast,
                                     memoryToasts: _settings.MemoryPurgeToast))
                             {
-                                _trayIcon?.ShowNotification("Ram Raiders TuneUp Engine", latestLog, false);
+                                _trayIcon?.ShowNotification("Galactic Tune-Up Engine", latestLog, false);
                             }
                             _lastLogLine = latestLog;
                         }

@@ -67,7 +67,7 @@ namespace TuneUpUI
                     }
                     else
                     {
-                        TxtComponentStatus.Text = "Couldn't read the results. Make sure the Ram Raiders engine is running.";
+                        TxtComponentStatus.Text = "Couldn't read the results. Make sure the Galactic Tune-Up engine is running.";
                     }
                 });
             });

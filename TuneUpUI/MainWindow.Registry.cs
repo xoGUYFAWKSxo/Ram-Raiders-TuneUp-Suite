@@ -99,7 +99,7 @@ namespace TuneUpUI
 
             var confirm = MessageBox.Show(
                 $"Remove {selectedIssues.Count} registry entr{(selectedIssues.Count == 1 ? "y" : "ies")}?\n\n" +
-                "Each key is exported to a .reg backup first (in %AppData%\\RamRaidersTuneUpSuite\\RegistryBackups), " +
+                "Each key is exported to a .reg backup first (in %AppData%\\GalacticTuneUp\\RegistryBackups), " +
                 "so you can restore it by double-clicking the backup file.",
                 "Confirm Registry Repair", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (confirm != MessageBoxResult.Yes) return;

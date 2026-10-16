@@ -73,8 +73,7 @@ namespace TuneUpEngine
     public class ChangeJournal
     {
         public static string DefaultPath => System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "RamRaidersTuneUpSuite", "change_journal.json");
+            AppFolders.Root(Environment.SpecialFolder.CommonApplicationData), "change_journal.json");
 
         private readonly string? _path;
         private readonly bool _hardenAcl;

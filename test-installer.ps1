@@ -19,9 +19,9 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     throw 'Run this from an administrator PowerShell.'
 }
 
-$setup = 'publish\Installer\RamRaidersTuneUpSuite_Setup.exe'
-$appDir = Join-Path $env:ProgramFiles 'Ram Raiders TuneUp Suite'
-$dataDir = Join-Path $env:ProgramData 'RamRaidersTuneUpSuite'
+$setup = 'publish\Installer\GalacticTuneUp_Setup.exe'
+$appDir = Join-Path $env:ProgramFiles 'Galactic Tune-Up'
+$dataDir = Join-Path $env:ProgramData 'GalacticTuneUp'
 $service = 'TuneUpEngineService'
 $outDir = 'publish\InstallerTest'
 New-Item -ItemType Directory -Force $outDir | Out-Null
@@ -111,7 +111,7 @@ switch ($Phase) {
         Check 'uninstall: no TuneUp window left open' ($ui.Count -eq 0) "$($ui.Count) running"
         Check 'uninstall: program folder removed' (-not (Test-Path $appDir))
         Check 'uninstall: ProgramData folder removed' (-not (Test-Path $dataDir))
-        Check 'uninstall: no Start menu shortcut left' (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Ram Raiders TuneUp Suite"))
+        Check 'uninstall: no Start menu shortcut left' (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Galactic Tune-Up"))
         $sysMain = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\SysMain' -ErrorAction SilentlyContinue).Start
         Note "SysMain start type after uninstall: $sysMain (2 = Automatic)"
     }

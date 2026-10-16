@@ -36,20 +36,19 @@ public partial class App : Application
         UiLog.Error($"[UI] Unhandled exception: {e.Exception}");
         MessageBox.Show(
             $"Something went wrong:\n{e.Exception.Message}\n\nThe details were saved to:\n{UiLog.CurrentFile ?? UiLog.Directory}",
-            "Ram Raiders TuneUp Suite", MessageBoxButton.OK, MessageBoxImage.Warning);
+            "Galactic Tune-Up", MessageBoxButton.OK, MessageBoxImage.Warning);
         e.Handled = true;
     }
 }
 
-// The UI's log: %LocalAppData%\RamRaidersTuneUpSuite\logs\ui-yyyyMMdd.log (per user, since the UI
+// The UI's log: %LocalAppData%\GalacticTuneUp\logs\ui-yyyyMMdd.log (per user, since the UI
 // runs as the signed-in user). The engine keeps its own log in ProgramData.
 public static class UiLog
 {
     private static readonly FileLog Log = new(Directory, "ui");
 
     public static string Directory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "RamRaidersTuneUpSuite", "logs");
+        AppFolders.Root(Environment.SpecialFolder.LocalApplicationData), "logs");
 
     public static string? CurrentFile => Log.Enabled ? Log.CurrentFile : null;
 

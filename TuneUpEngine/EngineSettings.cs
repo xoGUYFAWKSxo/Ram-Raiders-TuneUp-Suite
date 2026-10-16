@@ -19,12 +19,11 @@ namespace TuneUpEngine
         // versions kept them in the engine account's LocalAppData — SYSTEM's profile once the
         // engine runs as a service — so that file is read once as a fallback.
         private static string SettingsPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "RamRaidersTuneUpSuite", "engine_settings.json");
+            AppFolders.Root(Environment.SpecialFolder.CommonApplicationData), "engine_settings.json");
 
         private static string LegacySettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "RamRaidersTuneUpSuite", "engine_settings.json");
+            AppFolders.LegacyName, "engine_settings.json");
 
         public static EngineSettings Load() => Load(SettingsPath, LegacySettingsPath);
 

@@ -1,15 +1,15 @@
-# Ram Raiders TuneUp Suite
+# Galactic Tune-Up
 
-[![Build and test](https://github.com/xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite/actions/workflows/build.yml/badge.svg)](https://github.com/xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite/actions/workflows/build.yml)
+[![Build and test](https://github.com/xoGUYFAWKSxo/galactic-tune-up/actions/workflows/build.yml/badge.svg)](https://github.com/xoGUYFAWKSxo/galactic-tune-up/actions/workflows/build.yml)
 [![Target Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg)](#)
 [![Language](https://img.shields.io/badge/language-C%23-violet.svg)](#)
 [![Framework](https://img.shields.io/badge/framework-.NET%2011%20%7C%20WPF-red.svg)](#)
 
-A free, open-source Windows 10/11 maintenance tool. It frees standby memory, names the drivers behind DPC latency spikes, cleans junk files with community winapp2 rules, repairs broken registry entries after backing them up, and applies Windows tweaks that can be undone. **Ram Raiders TuneUp Suite** is a WPF desktop app that talks over a named pipe to a background Windows service, which does the work needing administrator rights. It is alpha software and is complete for now: every planned feature is built and tested, and no work is in progress.
+A free, open-source Windows 10/11 maintenance tool. It frees standby memory, names the drivers behind DPC latency spikes, cleans junk files with community winapp2 rules, repairs broken registry entries after backing them up, and applies Windows tweaks that can be undone. **Galactic Tune-Up** is a WPF desktop app that talks over a named pipe to a background Windows service, which does the work needing administrator rights. It is alpha software and is complete for now: every planned feature is built and tested, and no work is in progress.
 
 ```
                   ┌──────────────────────────────────────────┐
-                  │          Ram Raiders TuneUp Suite        │
+                  │          Galactic Tune-Up        │
                   │              (WPF Frontend)              │
                   │           Runs at User Privilege         │
                   └────────────────────┬─────────────────────┘
@@ -18,7 +18,7 @@ A free, open-source Windows 10/11 maintenance tool. It frees standby memory, nam
                             "TuneUpEnginePipe"
                                        │
                   ┌────────────────────▼─────────────────────┘
-                  │          Ram Raiders TuneUp Engine       │
+                  │          Galactic Tune-Up Engine       │
                   │             (Elevated Backend)           │
                   │     Windows service (LocalSystem)        │
                   └──────────────────────────────────────────┘
@@ -74,7 +74,7 @@ A free, open-source Windows 10/11 maintenance tool. It frees standby memory, nam
 ## Project Structure
 
 ```
-Ram Raiders TuneUp Suite/
+Galactic Tune-Up/
 ├── TuneUpEngine/                     # Elevated Backend Engine
 │   ├── Program.cs                    # Main entry point & service wrappers
 │   ├── IpcServer.cs                  # Named Pipe server & JSON serializers
@@ -90,6 +90,7 @@ Ram Raiders TuneUp Suite/
 │
 ├── TuneUpEngine.Tests/              # xUnit unit tests for engine logic
 ├── docs/                            # Static project web page (GitHub Pages)
+├── assets/                          # App icon source (make_icon.py: galaxy + knight) and installer artwork
 ├── Start-TuneUp.bat                  # Developer launcher batch script
 ├── TuneUpApp.slnx                    # Solution manifest
 ├── TuneUp_Documentation.md           # Deep application technical documentation
@@ -102,14 +103,14 @@ Ram Raiders TuneUp Suite/
 
 ## Installing
 
-Run **`RamRaidersTuneUpSuite_Setup.exe`**. It needs the [.NET 11 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/11.0) and asks for administrator rights, because it installs the engine as a Windows service.
+Run **`GalacticTuneUp_Setup.exe`**. It needs the [.NET 11 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/11.0) and asks for administrator rights, because it installs the engine as a Windows service.
 
 **"Windows protected your PC"**: the installer isn't code-signed (a signing certificate costs money every year), so Windows SmartScreen shows this warning and lists the publisher as unknown. Click **More info → Run anyway** to continue.
 
-**Checking your download**: every installer comes with a `RamRaidersTuneUpSuite_Setup.exe.sha256` file holding its SHA-256 checksum. To confirm your copy is the one that was built and hasn't been altered, run this in PowerShell in the download folder and compare the result with the hash in that file (case doesn't matter):
+**Checking your download**: every installer comes with a `GalacticTuneUp_Setup.exe.sha256` file holding its SHA-256 checksum. To confirm your copy is the one that was built and hasn't been altered, run this in PowerShell in the download folder and compare the result with the hash in that file (case doesn't matter):
 
 ```powershell
-(Get-FileHash .\RamRaidersTuneUpSuite_Setup.exe -Algorithm SHA256).Hash
+(Get-FileHash .\GalacticTuneUp_Setup.exe -Algorithm SHA256).Hash
 ```
 
 If they differ, don't run it.
@@ -135,4 +136,4 @@ This is the active, public repository; all development happens here. Development
 
 ## License
 
-Ram Raiders TuneUp Suite is free software, licensed under the [GNU General Public License v3.0](LICENSE). You may use, study, share and modify it; if you distribute a modified version, it must also be released under GPL-3.0 with its source code.
+Galactic Tune-Up is free software, licensed under the [GNU General Public License v3.0](LICENSE). You may use, study, share and modify it; if you distribute a modified version, it must also be released under GPL-3.0 with its source code.

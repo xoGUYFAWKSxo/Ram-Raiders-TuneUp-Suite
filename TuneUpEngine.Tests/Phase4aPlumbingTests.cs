@@ -70,7 +70,7 @@ namespace TuneUpEngine.Tests
         {
             // Same server, but the client only trusts an engine at a different path — exactly what
             // happens when an older test copy of the app is still running.
-            var client = new EngineClient(new[] { @"C:\Program Files\Ram Raiders TuneUp Suite\TuneUpEngine.exe" }, StartServer());
+            var client = new EngineClient(new[] { @"C:\Program Files\Galactic Tune-Up\TuneUpEngine.exe" }, StartServer());
             Assert.Null(client.Send(IpcCommands.GetEngineStats));
             Assert.Equal(IpcStatus.Error, client.SendStreaming(IpcCommands.ScanJunk, null, null).Status);
             Assert.StartsWith("A different copy of the TuneUp engine is running", client.LastConnectionProblem);

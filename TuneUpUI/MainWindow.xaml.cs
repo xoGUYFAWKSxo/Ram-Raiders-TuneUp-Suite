@@ -51,6 +51,7 @@ namespace TuneUpUI
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             LoadSettings();
+            if (_settings.StartOnStartup) ApplyStartupRegistry(true);  // rewrites a pre-rename Run entry
 
             // Initialize system tray icon helper
             _trayIcon = new TrayIconHelper(this);
@@ -301,7 +302,7 @@ namespace TuneUpUI
                 {
                     Dispatcher.Invoke(() => MessageBox.Show(
                         $"The TuneUp engine service isn't running and couldn't be started:\n{ex.Message}\n\n" +
-                        "You can start \"TuneUp Engine\" from Windows Services, or reinstall the app.",
+                        "You can start \"Galactic Tune-Up Engine\" from Windows Services, or reinstall the app.",
                         "Engine Link Warning", MessageBoxButton.OK, MessageBoxImage.Warning));
                     return;
                 }
@@ -372,7 +373,7 @@ namespace TuneUpUI
                 this.Hide();
                 if (_settings.EnableTrayNotifications)
                 {
-                    _trayIcon?.ShowNotification("Ram Raiders TuneUp Suite Active", "Ram Raiders TuneUp Suite continues guarding your system from the tray.", false);
+                    _trayIcon?.ShowNotification("Galactic Tune-Up Active", "Galactic Tune-Up continues guarding your system from the tray.", false);
                 }
             }
         }

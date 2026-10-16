@@ -125,7 +125,7 @@ namespace TuneUpEngine.Tests
     public class ServiceVerificationTests
     {
         [Theory]
-        [InlineData(@"""C:\Program Files\Ram Raiders TuneUp Suite\TuneUpEngine.exe"" --service", @"C:\Program Files\Ram Raiders TuneUp Suite\TuneUpEngine.exe")]
+        [InlineData(@"""C:\Program Files\Galactic Tune-Up\TuneUpEngine.exe"" --service", @"C:\Program Files\Galactic Tune-Up\TuneUpEngine.exe")]
         [InlineData(@"C:\Apps\TuneUpEngine.exe --service", @"C:\Apps\TuneUpEngine.exe")]
         [InlineData("", null)]
         [InlineData("\"", null)]
