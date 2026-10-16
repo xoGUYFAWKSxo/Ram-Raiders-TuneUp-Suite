@@ -67,7 +67,7 @@ A free, open-source Windows 10/11 maintenance tool. It frees standby memory, nam
 * **It doesn't fix drivers.** The DPC monitor names the slow driver; updating, rolling back or removing it is up to you.
 * **No telemetry, accounts or ads.** The only network access is the cleaner-rules update you start yourself, which downloads `winapp2.ini` from GitHub.
 * **Not code-signed**, so Windows SmartScreen warns about an unknown publisher (see [Installing](#installing)).
-* **No published release yet.** Build it from source (see below).
+* **Download:** the installer is on the [Releases page](https://github.com/xoGUYFAWKSxo/galactic-tune-up/releases/latest). You can also build it from source (see below).
 
 ---
 
