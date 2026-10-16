@@ -55,8 +55,8 @@ namespace TuneUpUI
                                                (settings?.TcpNoDelay == true && settings.TcpAckFrequencyOne ? "on" : "off");
                             bool optimal = settings?.IsOptimal == true;
                             TxtNetSummary.Text = optimal
-                                ? "✔ All optimizations are active."
-                                : "Not optimized yet — Apply Optimizations sets the values above (Revert restores your previous ones).";
+                                ? "✔ All of these settings are applied."
+                                : "Not all applied yet. Apply These Settings sets the values above (Revert restores your previous ones).";
                             TxtNetSummary.Foreground = optimal
                                 ? (System.Windows.Media.Brush)FindResource("BrushAccentGreen")
                                 : (System.Windows.Media.Brush)FindResource("BrushTextMuted");
@@ -78,7 +78,7 @@ namespace TuneUpUI
                 Dispatcher.Invoke(() =>
                 {
                     BtnNetApply.IsEnabled = true;
-                    BtnNetApply.Content = "\u26A1 Apply Optimizations";
+                    BtnNetApply.Content = "Apply These Settings";
                     AppendMonitorEvent(resp?.Message ?? "[NetOptimizer] Applied.");
                     RefreshNetworkStatus();
                 });

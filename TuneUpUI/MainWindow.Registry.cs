@@ -123,7 +123,7 @@ namespace TuneUpUI
                     ProgRegistry.Visibility = Visibility.Collapsed;
                     if (completed.Status == IpcStatus.Success)
                     {
-                        MessageBox.Show($"Registry repair complete.\n{selectedIssues.Count} selected entr{(selectedIssues.Count == 1 ? "y was" : "ies were")} backed up and removed.", "Registry Restored", MessageBoxButton.OK, MessageBoxImage.Information);
+                        MessageBox.Show($"Registry repair complete.\n{selectedIssues.Count} selected entr{(selectedIssues.Count == 1 ? "y was" : "ies were")} backed up and removed.", "Registry Repair", MessageBoxButton.OK, MessageBoxImage.Information);
                         TxtRegistryStatus.Text = "Registry cleaned and backed up.";
                         LvwRegistryIssues.ItemsSource = null;
                         _scannedRegistryIssues.Clear();
