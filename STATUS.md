@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-16, public repo PR #12._
+_Last updated: 2026-10-16, public repo PR #13._
 
 **Project status: complete for now (paused 2026-10-12).** Every planned feature is built, tested and merged, and the installed app on the dev PC matches main. Nothing is in progress. If work resumes, start from "If work resumes" below.
 
@@ -13,6 +13,7 @@ _Last updated: 2026-10-16, public repo PR #12._
 - The phased rework plan is complete (PRs #1 to #16).
 - End-to-end review (PR #17) and testing of the destructive features against a real engine (PR #18) are done and merged.
 - 2026-10-16: renamed from "Ram Raiders TuneUp Suite" to **Galactic Tune-Up**, with a new icon (the CPU knight on the Galactic Macro galaxy, built by `assets/make_icon.py`). Upgrading moves the install folder, the data folders (change journal included) and the startup entry to the new name.
+- 2026-10-16: first release, [v1.0.0](https://github.com/xoGUYFAWKSxo/galactic-tune-up/releases/tag/v1.0.0), from main at 386f2c9: `GalacticTuneUp_Setup.exe` (SHA-256 c017a800…60e3b) with its `.sha256` file. It is the same installer that upgraded the dev PC, and `test-installer.ps1` passed on it.
 - Build: 0 warnings, 304 tests pass. CI is green.
 - The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs main as a service, installed with `update-installed.ps1` after each merge.
 
@@ -36,7 +37,6 @@ _Last updated: 2026-10-16, public repo PR #12._
 - Running as a real SYSTEM service on a clean PC that isn't the dev machine.
 
 ## If work resumes
-- Publish a first release: build the installer with `build-installer.ps1` and attach it with its `.sha256` file. There is no GitHub release yet.
 - Turn on GitHub Pages for `docs/` if the project web page should go live. It isn't published yet.
 - Test on a clean PC that isn't the dev machine (see "Not verified live").
 
@@ -47,7 +47,8 @@ _Last updated: 2026-10-16, public repo PR #12._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #12 | (this PR) | Renamed to Galactic Tune-Up: new galaxy + knight icon and installer artwork; data folders, install folder and startup entry move to the new name on upgrade |
+| public #13 | (this PR) | README and STATUS: v1.0.0 released |
+| public #12 | 386f2c9 | Renamed to Galactic Tune-Up: new galaxy + knight icon and installer artwork; data folders, install folder and startup entry move to the new name on upgrade |
 | public #11 | cea6393 | Project marked complete for now; unused waitlist styles removed from the web page's stylesheet |
 | public #10 | f4fe335 | Plain-language pass: the project web page drops the fake waitlist (invented seat counter, sign-ups that stayed in the visitor's browser), pricing survey and hype, and says plainly what the app does and doesn't do; README gains a "What It Doesn't Do" section |
 | public #9 | 5d3c749 | README and TuneUp_Documentation describe the driver table and Save Trace; MSI wording matches DECISIONS |
