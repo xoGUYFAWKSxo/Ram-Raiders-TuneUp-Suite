@@ -132,8 +132,10 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <StackPanel Orientation="Horizontal" Background="Transparent">
-                        <Grid x:Name="grid" Width="44" Height="22" Margin="0,0,10,0">
+                    <!-- DockPanel, not a horizontal StackPanel: the label gets the width left after the
+                         switch, so long text wraps instead of running off the right edge. -->
+                    <DockPanel Background="Transparent" LastChildFill="True">
+                        <Grid x:Name="grid" DockPanel.Dock="Left" Width="44" Height="22" Margin="0,0,10,0">
                             <Border x:Name="BackgroundBorder" 
                                     Background="#2E2E3A" 
                                     CornerRadius="11" 
@@ -151,7 +153,7 @@
                             </Ellipse>
                         </Grid>
                         <ContentPresenter VerticalAlignment="Center" TextElement.Foreground="White"/>
-                    </StackPanel>
+                    </DockPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="BackgroundBorder" Property="Background" Value="{StaticResource BrushNeonAccent}"/>

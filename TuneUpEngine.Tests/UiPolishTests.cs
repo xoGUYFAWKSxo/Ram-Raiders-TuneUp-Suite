@@ -70,6 +70,42 @@ namespace TuneUpEngine.Tests
             thread.Join();
             Assert.True(failure == null, failure?.ToString());
         }
+
+        // Regression: the switch template used a horizontal StackPanel, which gave the label
+        // unlimited width, so the Dashboard's Auto-Purge description ran off the card.
+        [Fact]
+        public void PremiumToggle_WrapsLongLabels()
+        {
+            System.Exception? failure = null;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    var dict = (System.Windows.ResourceDictionary)System.Windows.Application.LoadComponent(
+                        new System.Uri("/TuneUpUI;component/ThemeStyles.xaml", System.UriKind.Relative));
+                    var label = new System.Windows.Controls.TextBlock
+                    {
+                        Text = string.Join(" ", System.Linq.Enumerable.Repeat("standby list", 40)),
+                        TextWrapping = System.Windows.TextWrapping.Wrap
+                    };
+                    var toggle = new System.Windows.Controls.CheckBox
+                    {
+                        Style = (System.Windows.Style)dict["PremiumToggle"],
+                        Content = label
+                    };
+                    toggle.Measure(new System.Windows.Size(300, double.PositiveInfinity));
+                    toggle.Arrange(new System.Windows.Rect(toggle.DesiredSize));
+                    Assert.True(toggle.DesiredSize.Width <= 300, $"toggle wants {toggle.DesiredSize.Width}px");
+                    Assert.True(label.ActualWidth <= 300 - 54, $"label is {label.ActualWidth}px wide");
+                    Assert.True(label.ActualHeight > 3 * label.FontSize, "label did not wrap");
+                }
+                catch (System.Exception ex) { failure = ex; }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+            Assert.True(failure == null, failure?.ToString());
+        }
     }
 
     public class FirstRunDefaultsTests
