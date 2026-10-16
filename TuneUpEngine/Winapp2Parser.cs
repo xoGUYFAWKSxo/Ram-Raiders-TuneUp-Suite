@@ -18,10 +18,13 @@ namespace TuneUpEngine
         public bool IsDefault { get; set; }
         public bool IsExternal { get; set; } // Loaded from winapp2.ini (replaced wholesale on reload)
         public string? Warning { get; set; } // winapp2 "Warning=" — shown before cleaning
+        public JunkScanGroup Group { get; set; } // Which Cleaner switch covers it (None: always scanned)
     }
 
     // A parsed winapp2 ExcludeKey. Files matching one of a rule's exclusions are never scanned or
     // cleaned — the rule author uses these to protect settings/state that lives next to the cache.
+    public enum JunkScanGroup { None, TempFiles, WindowsUpdate, BrowserCache }
+
     public record ExcludeRule(bool IsPathRule, string Directory, string? Pattern);
 
     public class ScanItem : System.ComponentModel.INotifyPropertyChanged
@@ -97,6 +100,7 @@ namespace TuneUpEngine
             _rules.Add(new CleanRule
             {
                 Name = "Google Chrome - Cache",
+                Group = JunkScanGroup.BrowserCache,
                 Category = "Web Browsers",
                 IsDefault = true,
                 DetectPaths = new List<string> { "%LocalAppData%\\Google\\Chrome\\User Data" },
@@ -111,6 +115,7 @@ namespace TuneUpEngine
             _rules.Add(new CleanRule
             {
                 Name = "Microsoft Edge - Cache",
+                Group = JunkScanGroup.BrowserCache,
                 Category = "Web Browsers",
                 IsDefault = true,
                 DetectPaths = new List<string> { "%LocalAppData%\\Microsoft\\Edge\\User Data" },
@@ -124,6 +129,7 @@ namespace TuneUpEngine
             _rules.Add(new CleanRule
             {
                 Name = "Windows Temporary Files",
+                Group = JunkScanGroup.TempFiles,
                 Category = "System",
                 IsDefault = true,
                 FileKeys = new List<string>
@@ -135,6 +141,7 @@ namespace TuneUpEngine
             _rules.Add(new CleanRule
             {
                 Name = "Windows Error Reporting & Logs",
+                Group = JunkScanGroup.TempFiles,
                 Category = "System",
                 IsDefault = true,
                 FileKeys = new List<string>
@@ -153,6 +160,7 @@ namespace TuneUpEngine
             _rules.Add(new CleanRule
             {
                 Name = "DirectX Shader Cache",
+                Group = JunkScanGroup.TempFiles,
                 Category = "System",
                 IsDefault = true,
                 FileKeys = new List<string>
@@ -164,6 +172,7 @@ namespace TuneUpEngine
             _rules.Add(new CleanRule
             {
                 Name = "Prefetch Data",
+                Group = JunkScanGroup.TempFiles,
                 Category = "System",
                 IsDefault = false,
                 DetectPaths = new List<string> { "%WinDir%\\Prefetch" },
@@ -176,6 +185,7 @@ namespace TuneUpEngine
             _rules.Add(new CleanRule
             {
                 Name = "Delivery Optimization Files",
+                Group = JunkScanGroup.WindowsUpdate,
                 Category = "System",
                 IsDefault = true,
                 FileKeys = new List<string>
@@ -533,7 +543,10 @@ namespace TuneUpEngine
             Scan(ClientContext.ForCurrentProcess(), progressCallback);
 
         // ct: cancels the scan (throws OperationCanceledException between rules).
-        public List<ScanItem> Scan(ClientContext ctx, Action<string, int>? progressCallback = null, CancellationToken ct = default)
+        // groups: the Cleaner switches that are on; null scans every group. Rules with no group
+        // (Recycle Bin, winapp2 entries) are always scanned.
+        public List<ScanItem> Scan(ClientContext ctx, Action<string, int>? progressCallback = null, CancellationToken ct = default,
+            ScanJunkRequest? groups = null)
         {
             var results = new List<ScanItem>();
             int count = 0;
@@ -546,7 +559,7 @@ namespace TuneUpEngine
             List<CleanRule> rules;
             lock (_rulesLock)
             {
-                rules = new List<CleanRule>(_rules);
+                rules = _rules.Where(r => IsGroupOn(r.Group, groups)).ToList();
             }
 
             foreach (var rule in rules)
@@ -641,6 +654,14 @@ namespace TuneUpEngine
             IgnoreInaccessible = true,
             AttributesToSkip = FileAttributes.ReparsePoint,
             MatchType = MatchType.Win32
+        };
+
+        private static bool IsGroupOn(JunkScanGroup group, ScanJunkRequest? groups) => groups == null || group switch
+        {
+            JunkScanGroup.TempFiles => groups.TempFiles,
+            JunkScanGroup.WindowsUpdate => groups.WindowsUpdate,
+            JunkScanGroup.BrowserCache => groups.BrowserCache,
+            _ => true,
         };
 
         private static void CollectFiles(string dir, string pattern, bool recurse, List<ExcludeRule> excludes,

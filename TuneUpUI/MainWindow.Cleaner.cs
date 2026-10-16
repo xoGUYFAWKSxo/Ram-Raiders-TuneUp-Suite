@@ -52,7 +52,9 @@ namespace TuneUpUI
             bool scanDups = ChkDuplicateFiles.IsChecked == true;
             var ct = BeginCleanerOperation();
 
-            SendAsyncIpcRequest(IpcCommands.ScanJunk, "",
+            var groups = new ScanJunkRequest(ChkTempFiles.IsChecked == true, ChkWinUpdate.IsChecked == true,
+                ChkBrowserCache.IsChecked == true);
+            SendAsyncIpcRequest(IpcCommands.ScanJunk, IpcPayload.Serialize(groups),
                 (progress) =>
                 {
                     TxtCleanerStatus.Text = progress.Message;
