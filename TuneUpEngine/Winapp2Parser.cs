@@ -84,7 +84,8 @@ namespace TuneUpEngine
         // winapp2's per-browser groups (checked against Winapp2.ini version 260915): Edge, Firefox,
         // Opera, Chrome/Chromium, CCleaner Browser, Vivaldi, Brave, Opera GX, Avast, AVG, Arc,
         // Norton and Avira. 3030 (Thunderbird) and 3036 (Spotify) are not browsers. Other browsers
-        // are marked with a "Section=<name> Web Browser" line instead.
+        // are marked with a "Section=<name> Web Browser" line instead, and a few one-entry browsers
+        // (Lynx, NetSurf, 32bit) sit in the general Internet group with a name ending in "Browser".
         private static readonly HashSet<string> BrowserLangSecRefs = new()
         {
             "3006", "3026", "3027", "3029", "3032", "3033", "3034", "3035", "3037", "3038", "3039", "3043", "3044",
@@ -281,7 +282,9 @@ namespace TuneUpEngine
                                 // A Section= line (more specific) wins over the generic group.
                                 if (currentRule.Category == "Third-Party Apps" && LangSecRefCategories.TryGetValue(val, out var cat))
                                     currentRule.Category = cat;
-                                if (BrowserLangSecRefs.Contains(val)) currentRule.Group = JunkScanGroup.BrowserCache;
+                                if (BrowserLangSecRefs.Contains(val)
+                                    || (val == "3022" && currentRule.Name.TrimEnd(' ', '*').EndsWith("Browser", StringComparison.OrdinalIgnoreCase)))
+                                    currentRule.Group = JunkScanGroup.BrowserCache;
                             }
                             else if (key.StartsWith("FileKey", StringComparison.OrdinalIgnoreCase))
                             {

@@ -56,7 +56,8 @@ namespace TuneUpEngine.Tests
         }
 
         // Entries modelled on Winapp2.ini 260915: a per-browser LangSecRef group, a browser named by
-        // its Section line, and two entries that must stay outside the switch.
+        // its Section line, a one-entry browser in the Internet group, and entries that must stay
+        // outside the switch.
         [Fact]
         public void BrowserSwitch_CoversWinapp2BrowserEntries()
         {
@@ -68,7 +69,9 @@ namespace TuneUpEngine.Tests
                 File.WriteAllText(ini, string.Join(Environment.NewLine,
                     "[Google Chrome Caches *]", "LangSecRef=3029", $"FileKey1={dir}|*.tmp",
                     "[Zen Caches *]", "Section=Zen Web Browser", $"FileKey1={dir}|*.tmp",
+                    "[NetSurf Browser *]", "LangSecRef=3022", $"FileKey1={dir}|*.tmp",
                     "[Thunderbird Caches *]", "LangSecRef=3030", $"FileKey1={dir}|*.tmp",
+                    "[DB Browser for SQLite *]", "LangSecRef=3024", $"FileKey1={dir}|*.tmp",
                     "[Some App Logs *]", "LangSecRef=3021", $"FileKey1={dir}|*.log"));
                 var parser = new Winapp2Parser(includeBuiltInRules: false);
                 parser.LoadExternalWinapp2Ini(ini);
@@ -81,8 +84,9 @@ namespace TuneUpEngine.Tests
                     return names;
                 }
 
-                Assert.Equal(new[] { "Google Chrome Caches *", "Zen Caches *", "Thunderbird Caches *", "Some App Logs *" }, Scanned(true));
-                Assert.Equal(new[] { "Thunderbird Caches *", "Some App Logs *" }, Scanned(false));
+                Assert.Equal(new[] { "Google Chrome Caches *", "Zen Caches *", "NetSurf Browser *", "Thunderbird Caches *",
+                    "DB Browser for SQLite *", "Some App Logs *" }, Scanned(true));
+                Assert.Equal(new[] { "Thunderbird Caches *", "DB Browser for SQLite *", "Some App Logs *" }, Scanned(false));
             }
             finally { try { Directory.Delete(dir, recursive: true); } catch { } }
         }

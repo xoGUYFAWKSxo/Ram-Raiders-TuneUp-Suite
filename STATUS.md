@@ -44,12 +44,11 @@ _Last updated: 2026-10-16, public repo PR #21._
 ## Open items / ideas
 - A full MVVM conversion of the UI was not done (it is split into per-tab partials instead).
 - The UI's appearance has not been checked by screenshot after the UI polish PR (#10).
-- Cleaner: a few single-entry winapp2 browsers filed under the general Internet group (Lynx, NetSurf, "32bit Web Browser") aren't covered by the "Scan Browser Cache" switch.
 
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #21 | (this PR) | Cleaner: "Scan Browser Cache" also covers winapp2's browser entries (its per-browser LangSecRef groups and "Section=... Web Browser" lines, checked against Winapp2.ini 260915); Thunderbird and Spotify stay outside |
+| public #21 | (this PR) | Cleaner: "Scan Browser Cache" also covers winapp2's browser entries (its per-browser LangSecRef groups and "Section=... Web Browser" lines, plus Lynx, NetSurf and 32bit in the Internet group; checked against Winapp2.ini 260915); Thunderbird and Spotify stay outside |
 | public #20 | 2536e2c | Switch labels wrap instead of running off the card (the Dashboard's Auto-Purge description was cut off): the shared switch style lays out with a DockPanel, so the label gets the width left after the switch; web page screenshots retaken (?v=5) |
 | public #19 | 1350169 | Cleaner: the "Scan Temp Files", "Scan Windows Update Cache" and "Scan Browser Cache" switches now choose which built-in rules the junk scan runs (they were never read before) and start switched on; Recycle Bin and winapp2 entries always run |
 | public #18 | e197bf4 | Web page screenshots retaken from the installed app after #17 (image links bumped to ?v=4); sidebar engine label shortened to "Background service" so it isn't cut off |
