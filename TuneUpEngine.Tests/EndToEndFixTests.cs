@@ -214,4 +214,59 @@ namespace TuneUpEngine.Tests
             Assert.Equal(legacy, AppFolders.Resolve(_dir));
         }
     }
+
+    // The Storage Tools subtitle once showed three garbled characters for an em dash: a UTF-8 file was read as Windows-1252
+    // and saved back. Every source file must be valid UTF-8 with none of those leftovers.
+    public class SourceEncodingTests
+    {
+        private static readonly string[] Extensions =
+            { ".cs", ".xaml", ".iss", ".md", ".ps1", ".bat", ".html", ".css", ".js", ".json", ".yml", ".csproj" };
+
+        // Escaped so this file stays ASCII and can't trip the check itself.
+        private static readonly System.Text.RegularExpressions.Regex DoubleEncoded = new(
+            "\u00E2\u20AC|\u00C3[\u0080-\u00BF\u0152-\u2122]|\u00C2[\u00A0-\u00BF]|\u00F0\u0178|\u00EF\u00BB\u00BF|\uFFFD");
+
+        private static string RepoRoot()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "TuneUpApp.slnx"))) dir = dir.Parent;
+            return dir?.FullName ?? throw new DirectoryNotFoundException("TuneUpApp.slnx not found above " + AppContext.BaseDirectory);
+        }
+
+        [Fact]
+        public void NoSourceFileHasDoubleEncodedText()
+        {
+            var strictUtf8 = new System.Text.UTF8Encoding(false, throwOnInvalidBytes: true);
+            var problems = new List<string>();
+            int scanned = 0;
+            string root = RepoRoot();
+            foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                string rel = Path.GetRelativePath(root, file);
+                if (rel.Split(Path.DirectorySeparatorChar).Any(p => p is "bin" or "obj" or "publish" or ".git" or ".vs"))
+                    continue;
+                if (!Extensions.Contains(Path.GetExtension(file).ToLowerInvariant())) continue;
+                scanned++;
+                byte[] bytes = File.ReadAllBytes(file);
+                int start = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+                string text;
+                try { text = strictUtf8.GetString(bytes, start, bytes.Length - start); }
+                catch (System.Text.DecoderFallbackException) { problems.Add($"{rel}: not valid UTF-8"); continue; }
+                string[] lines = text.Split('\n');
+                for (int i = 0; i < lines.Length; i++)
+                    if (DoubleEncoded.IsMatch(lines[i])) problems.Add($"{rel}:{i + 1}: {lines[i].Trim()}");
+            }
+            Assert.True(scanned > 50, $"Only {scanned} source files found under {root}");
+            Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+        }
+
+        [Fact]
+        public void CheckCatchesTheOldStorageSubtitle()
+        {
+            string broken = System.Text.Encoding.Latin1.GetString(System.Text.Encoding.UTF8.GetBytes("links \u2014 launchers"))
+                .Replace('\u0080', '\u20AC').Replace('\u0094', '\u201D');
+            Assert.Matches(DoubleEncoded, broken);
+            Assert.DoesNotMatch(DoubleEncoded, "links \u2014 launchers, 5 \u00B5s, \u2713 Ready, \u26A0\uFE0F");
+        }
+    }
 }
