@@ -42,7 +42,7 @@ namespace TuneUpUI
         {
             var dialog = new System.Windows.Forms.FolderBrowserDialog
             {
-                Description = "Select the game directory to migrate",
+                Description = "Pick the game folder to move",
                 ShowNewFolderButton = false
             };
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
@@ -57,7 +57,7 @@ namespace TuneUpUI
         {
             var dialog = new System.Windows.Forms.FolderBrowserDialog
             {
-                Description = "Select the destination parent folder (e.g., D:\\Games)",
+                Description = "Pick the folder on the other drive to move it into (for example D:\\Games)",
                 ShowNewFolderButton = true
             };
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
@@ -93,7 +93,7 @@ namespace TuneUpUI
                             var analysis = JsonSerializer.Deserialize<MigrationAnalysis>(resp.Payload);
                             string msg = analysis?.SourceExists == true
                                 ? $"Source: {FormatBytes(analysis.SourceSizeBytes)} | " +
-                                  (analysis.IsAlreadySymlink ? "⚠️ Already a symbolic link" : "✓ Ready to migrate")
+                                  (analysis.IsAlreadySymlink ? "⚠️ This folder is already a link to another drive" : "✓ Ready to move")
                                 : $"⚠️ {analysis?.Error ?? "Source not accessible"}";
 
                             TxtMigAnalysis.Text = msg;
@@ -110,8 +110,8 @@ namespace TuneUpUI
             if (string.IsNullOrEmpty(_migSource) || string.IsNullOrEmpty(_migDest)) return;
 
             var result = MessageBox.Show(
-                $"This will permanently move:\n{_migSource}\n\nTo:\n{_migDest}\n\nA symbolic link will be created at the original path. Continue?",
-                "Confirm Migration", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                $"Move this folder:\n{_migSource}\n\nInto:\n{_migDest}\n\nA link is left at the old path so games and launchers still find the files. You can undo this later. Continue?",
+                "Move Folder", MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
             if (result != MessageBoxResult.Yes) return;
 
@@ -150,13 +150,13 @@ namespace TuneUpUI
                         // Clear paths
                         _migSource = null;
                         _migDest = null;
-                        TxtMigSource.Text = "No directory selected...";
-                        TxtMigDest.Text = "No destination selected...";
+                        TxtMigSource.Text = "No folder selected...";
+                        TxtMigDest.Text = "No folder selected...";
                         UpdateMigButtons();
                     }
                     else
                     {
-                        AppendMonitorEvent($"[StorageMigrator] ⚠️ {resp?.Message ?? "Migration failed"}");
+                        AppendMonitorEvent($"[StorageMigrator] ⚠️ {resp?.Message ?? "The folder could not be moved"}");
                     }
                 });
             });
@@ -201,8 +201,8 @@ namespace TuneUpUI
 
             if (MessageBox.Show(
                     $"Move this folder back to its original location?\n\n{originalPath}\n\n" +
-                    "The files are copied back and checked before the link is removed, and the migrated copy is deleted afterwards.",
-                    "Undo Migration", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                    "The files are copied back and checked before the link is removed, and the moved copy is deleted afterwards.",
+                    "Undo Move", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
             btn.IsEnabled = false;

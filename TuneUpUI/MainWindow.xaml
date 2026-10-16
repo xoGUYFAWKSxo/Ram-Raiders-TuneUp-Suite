@@ -1272,27 +1272,27 @@
                                                    Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,20"/>
 
                                         <!-- Source Path -->
-                                        <TextBlock Text="Source Directory" Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Game folder" Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,0,0,4"/>
                                         <Grid Margin="0,0,0,12">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <Border Grid.Column="0" Background="#12122A" BorderBrush="#333350" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,8,0">
-                                                <TextBlock x:Name="TxtMigSource" Foreground="White" FontSize="13" Text="No directory selected..."/>
+                                                <TextBlock x:Name="TxtMigSource" Foreground="White" FontSize="13" Text="No folder selected..."/>
                                             </Border>
                                             <Button Grid.Column="1" Content="Browse" Style="{StaticResource OutlineButton}" Padding="14,8" Click="BtnMigBrowseSource_Click"/>
                                         </Grid>
 
                                         <!-- Destination Path -->
-                                        <TextBlock Text="Destination Directory (on target drive)" Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Move it into (a folder on the other drive)" Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,0,0,4"/>
                                         <Grid Margin="0,0,0,12">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <Border Grid.Column="0" Background="#12122A" BorderBrush="#333350" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,8,0">
-                                                <TextBlock x:Name="TxtMigDest" Foreground="White" FontSize="13" Text="No destination selected..."/>
+                                                <TextBlock x:Name="TxtMigDest" Foreground="White" FontSize="13" Text="No folder selected..."/>
                                             </Border>
                                             <Button Grid.Column="1" Content="Browse" Style="{StaticResource OutlineButton}" Padding="14,8" Click="BtnMigBrowseDest_Click"/>
                                         </Grid>
@@ -1309,7 +1309,7 @@
                                         <StackPanel Orientation="Horizontal">
                                             <Button x:Name="BtnMigAnalyze" Content="&#xE8B0; Analyze" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource OutlineButton}"
                                                     Padding="14,8" Margin="0,0,10,0" IsEnabled="False" Click="BtnMigAnalyze_Click"/>
-                                            <Button x:Name="BtnMigrate" Content="&#xE8DE; Migrate &amp; Symlink" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource PremiumButton}"
+                                            <Button x:Name="BtnMigrate" Content="&#xE8DE; Move Folder" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource PremiumButton}"
                                                     Padding="14,8" IsEnabled="False" Click="BtnMigrate_Click"/>
                                             <Button x:Name="BtnCancelMigration" Content="Cancel" Style="{StaticResource OutlineButton}"
                                                     Padding="14,8" Margin="10,0,0,0" Visibility="Collapsed" Click="BtnCancelMigration_Click"
@@ -1326,7 +1326,7 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="Previous Migrations" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                                            <TextBlock Text="Moved Folders" Foreground="White" FontSize="16" FontWeight="Bold"/>
                                             <Button Grid.Column="1" Content="&#xE72C; Refresh" FontFamily="Segoe UI, Segoe MDL2 Assets" Style="{StaticResource OutlineButton}"
                                                     Padding="10,4" FontSize="12" Click="BtnMigRefreshHistory_Click"/>
                                         </Grid>
@@ -1367,7 +1367,7 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
 
-                                        <TextBlock x:Name="TxtNoHistory" Text="No migrations recorded yet." 
+                                        <TextBlock x:Name="TxtNoHistory" Text="No folders moved yet." 
                                                    Foreground="{StaticResource BrushTextMuted}" FontSize="13" 
                                                    HorizontalAlignment="Center" Margin="0,20" Visibility="Collapsed"/>
                                     </StackPanel>
