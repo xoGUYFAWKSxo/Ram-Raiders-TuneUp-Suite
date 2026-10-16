@@ -81,6 +81,15 @@ namespace TuneUpEngine
             ["3025"] = "Windows",
         };
 
+        // winapp2's per-browser groups (checked against Winapp2.ini version 260915): Edge, Firefox,
+        // Opera, Chrome/Chromium, CCleaner Browser, Vivaldi, Brave, Opera GX, Avast, AVG, Arc,
+        // Norton and Avira. 3030 (Thunderbird) and 3036 (Spotify) are not browsers. Other browsers
+        // are marked with a "Section=<name> Web Browser" line instead.
+        private static readonly HashSet<string> BrowserLangSecRefs = new()
+        {
+            "3006", "3026", "3027", "3029", "3032", "3033", "3034", "3035", "3037", "3038", "3039", "3043", "3044",
+        };
+
         private readonly List<CleanRule> _rules = new List<CleanRule>();
         private readonly object _rulesLock = new object();
         private readonly AdvancedScanner _hasher = new AdvancedScanner();
@@ -264,12 +273,15 @@ namespace TuneUpEngine
                             else if (key.Equals("Section", StringComparison.OrdinalIgnoreCase))
                             {
                                 if (!string.IsNullOrEmpty(val)) currentRule.Category = val;
+                                if (val.EndsWith("Browser", StringComparison.OrdinalIgnoreCase))
+                                    currentRule.Group = JunkScanGroup.BrowserCache;
                             }
                             else if (key.Equals("LangSecRef", StringComparison.OrdinalIgnoreCase))
                             {
                                 // A Section= line (more specific) wins over the generic group.
                                 if (currentRule.Category == "Third-Party Apps" && LangSecRefCategories.TryGetValue(val, out var cat))
                                     currentRule.Category = cat;
+                                if (BrowserLangSecRefs.Contains(val)) currentRule.Group = JunkScanGroup.BrowserCache;
                             }
                             else if (key.StartsWith("FileKey", StringComparison.OrdinalIgnoreCase))
                             {
@@ -544,7 +556,7 @@ namespace TuneUpEngine
 
         // ct: cancels the scan (throws OperationCanceledException between rules).
         // groups: the Cleaner switches that are on; null scans every group. Rules with no group
-        // (Recycle Bin, winapp2 entries) are always scanned.
+        // (Recycle Bin, non-browser winapp2 entries) are always scanned.
         public List<ScanItem> Scan(ClientContext ctx, Action<string, int>? progressCallback = null, CancellationToken ct = default,
             ScanJunkRequest? groups = null)
         {
