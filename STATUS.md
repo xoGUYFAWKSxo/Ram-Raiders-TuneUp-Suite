@@ -32,6 +32,7 @@ _Last updated: 2026-10-16, public repo PR #20._
 - Game Mode.
 - DISM and SFC.
 - Refusals of unsafe appx removals.
+- Cleaner switches filtering the junk scan (all on: 7 rules, 3,285.7 MB; all three off: Recycle Bin only).
 
 ## Not verified live
 - Cleaning with junk rules, and cleaning empty folders. Both share their code path with the duplicate clean, which was tested.
@@ -48,7 +49,7 @@ _Last updated: 2026-10-16, public repo PR #20._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #20 | (this PR) | Switch labels wrap instead of running off the card (the Dashboard's Auto-Purge description was cut off): the shared switch style lays out with a DockPanel, so the label gets the width left after the switch |
+| public #20 | (this PR) | Switch labels wrap instead of running off the card (the Dashboard's Auto-Purge description was cut off): the shared switch style lays out with a DockPanel, so the label gets the width left after the switch; web page screenshots retaken (?v=5) |
 | public #19 | 1350169 | Cleaner: the "Scan Temp Files", "Scan Windows Update Cache" and "Scan Browser Cache" switches now choose which built-in rules the junk scan runs (they were never read before) and start switched on; Recycle Bin and winapp2 entries always run |
 | public #18 | e197bf4 | Web page screenshots retaken from the installed app after #17 (image links bumped to ?v=4); sidebar engine label shortened to "Background service" so it isn't cut off |
 | public #17 | da91ae1 | In-app wording follows the plain-language rule: "PRO 2026" badge removed; ProBalance, Game Mode, Cleaner, Registry Guard, Tweaks, network, Live Monitor, Settings and Storage text says what the code does (checked against the engine); `UiWordingTests` blocks the removed phrases |
