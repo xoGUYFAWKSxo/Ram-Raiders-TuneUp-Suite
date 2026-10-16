@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-16, public repo PR #22._
+_Last updated: 2026-10-16, public repo PR #23._
 
 **Project status: complete for now (paused 2026-10-12).** Every planned feature is built, tested and merged, and the installed app on the dev PC matches main. Nothing is in progress. If work resumes, start from "If work resumes" below.
 
@@ -48,7 +48,7 @@ _Last updated: 2026-10-16, public repo PR #22._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #22 | (this PR) | Storage Tools: the last technical wording goes; "Migrate & Symlink" is now "Move Folder", "Previous Migrations" is "Moved Folders", the badges read "Link working" or "Link broken", and the pickers, prompts and messages say "folder" and "move" |
+| public #23 | (this PR) | Storage Tools: the last technical wording goes; "Migrate & Symlink" is now "Move Folder", "Previous Migrations" is "Moved Folders", the badges read "Link working" or "Link broken", and the pickers, prompts and messages say "folder" and "move" |
 | public #21 | e8d964f | Cleaner: "Scan Browser Cache" also covers winapp2's browser entries (its per-browser LangSecRef groups and "Section=... Web Browser" lines, plus Lynx, NetSurf and 32bit in the Internet group; checked against Winapp2.ini 260915); Thunderbird and Spotify stay outside |
 | public #20 | 2536e2c | Switch labels wrap instead of running off the card (the Dashboard's Auto-Purge description was cut off): the shared switch style lays out with a DockPanel, so the label gets the width left after the switch; web page screenshots retaken (?v=5) |
 | public #19 | 1350169 | Cleaner: the "Scan Temp Files", "Scan Windows Update Cache" and "Scan Browser Cache" switches now choose which built-in rules the junk scan runs (they were never read before) and start switched on; Recycle Bin and winapp2 entries always run |
