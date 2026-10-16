@@ -19,6 +19,52 @@ namespace TuneUpEngine
         public bool IsExternal { get; set; } // Loaded from winapp2.ini (replaced wholesale on reload)
         public string? Warning { get; set; } // winapp2 "Warning=" — shown before cleaning
         public JunkScanGroup Group { get; set; } // Which Cleaner switch covers it (None: always scanned)
+        public string? PersonalData { get; set; } // What personal data it deletes (see PersonalBrowserData); null for junk
+    }
+
+    // winapp2 entries that delete what the user would miss: saved passwords, sign-ins, open tabs,
+    // form entries and history. "Select All" leaves these unchecked and the confirmation names them.
+    // Matched on the entry name's ending, checked against Winapp2.ini 260915.
+    public static class PersonalBrowserData
+    {
+        private static readonly (string Suffix, string Kind)[] Suffixes =
+        {
+            (" Saved Usernames & Passwords", "saved passwords"),
+            (" Saved Credentials", "saved passwords"),
+            (" Cookies", "website sign-ins and cookies"),
+            (" Web Browsing Session Backups", "open tabs and sessions"),
+            (" Web Browsing Session", "open tabs and sessions"),
+            (" Synced Tabs", "synced tabs"),
+            (" Autofill Data & Search Engine Preferences", "saved form entries"),
+            (" Autofill Backups", "saved form entries"),
+            (" Autofill Data", "saved form entries"),
+            (" Autocomplete History", "saved form entries"),
+            (" Web Browsing History Backups", "browsing history"),
+            (" Web Browsing History", "browsing history"),
+            (" Download History", "browsing history"),
+        };
+
+        // The kind of personal data a winapp2 entry deletes, or null if it is junk.
+        public static string? Kind(string ruleName) => Match(ruleName)?.Kind;
+
+        // The entry name without its data-kind ending, e.g. "Google Chrome".
+        public static string AppName(string ruleName)
+        {
+            var m = Match(ruleName);
+            string name = TrimMarker(ruleName);
+            return m == null ? name : name.Substring(0, name.Length - m.Value.Suffix.Length);
+        }
+
+        private static (string Suffix, string Kind)? Match(string ruleName)
+        {
+            string name = TrimMarker(ruleName);
+            foreach (var s in Suffixes)
+                if (name.EndsWith(s.Suffix, StringComparison.OrdinalIgnoreCase)) return s;
+            return null;
+        }
+
+        // winapp2 ends every entry name with " *".
+        private static string TrimMarker(string ruleName) => ruleName.TrimEnd(' ', '*');
     }
 
     // A parsed winapp2 ExcludeKey. Files matching one of a rule's exclusions are never scanned or
@@ -37,6 +83,8 @@ namespace TuneUpEngine
         public long TotalSizeBytes { get; set; }
         // The rule author's caution (e.g. "This will also delete all app-specific settings").
         public string? Warning { get; set; }
+        // Set for saved passwords, cookies, history and other personal browser data (see PersonalBrowserData).
+        public string? PersonalData { get; set; }
 
         private bool _isSelected = false; // Unchecked by default
         public bool IsSelected
@@ -244,9 +292,10 @@ namespace TuneUpEngine
                         {
                             Name = name,
                             Category = "Third-Party Apps",
-                            IsDefault = true,
-                            IsExternal = true
+                            IsExternal = true,
+                            PersonalData = PersonalBrowserData.Kind(name)
                         };
+                        currentRule.IsDefault = currentRule.PersonalData == null;
                     }
                     else if (currentRule != null)
                     {
@@ -589,7 +638,8 @@ namespace TuneUpEngine
                 {
                     RuleName = rule.Name,
                     Category = rule.Category,
-                    Warning = rule.Warning
+                    Warning = rule.Warning,
+                    PersonalData = rule.PersonalData
                 };
 
                 var excludes = rule.ExcludeKeys

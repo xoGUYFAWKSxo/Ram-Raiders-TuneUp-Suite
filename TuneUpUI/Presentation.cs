@@ -97,7 +97,26 @@ namespace TuneUpUI.Presentation
             if (warnings.Count > 0)
                 text += "\n\nPlease note:\n" + string.Join("\n", warnings);
 
+            var personal = selected
+                .Where(i => i.PersonalData != null)
+                .GroupBy(i => i.PersonalData!)
+                .Select(g => $"• This deletes {g.Key} for: " + string.Join(", ", g.Select(i => PersonalBrowserData.AppName(i.RuleName)).Distinct()))
+                .ToList();
+            if (personal.Count > 0)
+                text += "\n\nYou picked personal data, not just junk:\n" + string.Join("\n", personal);
+
             return text;
+        }
+    }
+
+    public static class JunkSelection
+    {
+        // "Select All" ticks only junk. Saved passwords, cookies, history and other personal data
+        // stay unchecked unless the user ticks them by hand. "Deselect All" clears everything.
+        public static void SetAll(IEnumerable<ScanItem> items, bool select)
+        {
+            foreach (var item in items)
+                item.IsSelected = select && item.PersonalData == null;
         }
     }
 
