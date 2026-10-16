@@ -157,7 +157,7 @@
                             <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#EF4444" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock x:Name="TxtStatus" Text="Engine Offline" Foreground="{StaticResource BrushTextMain}" FontSize="11" FontWeight="SemiBold"/>
                         </StackPanel>
-                        <TextBlock Text="Background service that makes the changes" Foreground="{StaticResource BrushTextMuted}" FontSize="9"/>
+                        <TextBlock Text="Background service" Foreground="{StaticResource BrushTextMuted}" FontSize="9"/>
                     </StackPanel>
                 </Border>
             </Grid>
