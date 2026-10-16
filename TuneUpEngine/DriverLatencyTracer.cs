@@ -183,7 +183,7 @@ namespace TuneUpEngine
     {
         // A private name (Windows 8+ allows several kernel sessions), so it doesn't take the one
         // "NT Kernel Logger" slot that LatencyMon or WPR may be using.
-        private const string SessionName = "RamRaidersDriverLatency";
+        private const string SessionName = "GalacticTuneUpDriverLatency";
         private const ulong KernelSpaceStart = 0xFFFF800000000000UL;
 
         private TraceEventSession? _session;

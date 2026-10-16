@@ -2,6 +2,7 @@
 
 These are settled. Don't reopen them unless the user asks. Newest first.
 
+- **2026-10-16: The app is called Galactic Tune-Up.** The repo is `xoGUYFAWKSxo/galactic-tune-up` and the publisher is `xoGUYFAWKSxo`. The icon is the CPU knight (`assets/knight.png`) on the Galactic Macro galaxy, in the same layout as the Galactic Macro icon. The data folders are named `GalacticTuneUp`, and the old `RamRaidersTuneUpSuite` folders are moved, never left behind (they hold the change journal). Internal names (`TuneUpUI.exe`, `TuneUpEngine.exe`, `TuneUpEngineService`, the pipe) stay the same, so upgrades and the client check keep working.
 - **2026-10-12: The project is complete for now.** No work is in progress. New work starts only when the user asks; see STATUS.md, "If work resumes".
 - **2026-10-12: Plain language, no marketing.** The README, docs and web page say what the app does and doesn't do. No invented numbers, counters or performance promises. The web page's waitlist was removed: its seat count was made up and sign-ups never left the visitor's browser.
 - **2026-10-12: Test in the installed app, not dev folders.** Every build the user tests is installed with `update-installed.ps1`, and main is reinstalled after each merge. No `publish/DevTest*` folders: the installed service won't talk to a UI outside Program Files.

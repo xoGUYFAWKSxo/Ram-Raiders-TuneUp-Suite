@@ -214,12 +214,12 @@ namespace TuneUpEngine.Tests
         [Fact]
         public void InstalledLayout_TrustsOnlyTheUiNextToTheEngine()
         {
-            var trusted = ClientVerifier.TrustedClientPaths(@"C:\Program Files\Ram Raiders TuneUp Suite\");
+            var trusted = ClientVerifier.TrustedClientPaths(@"C:\Program Files\Galactic Tune-Up\");
 
-            Assert.True(ClientVerifier.IsTrustedClient(@"C:\Program Files\Ram Raiders TuneUp Suite\TuneUpUI.exe", trusted));
-            Assert.True(ClientVerifier.IsTrustedClient(@"c:\program files\ram raiders tuneup suite\tuneupui.exe", trusted));
+            Assert.True(ClientVerifier.IsTrustedClient(@"C:\Program Files\Galactic Tune-Up\TuneUpUI.exe", trusted));
+            Assert.True(ClientVerifier.IsTrustedClient(@"c:\program files\galactic tune-up\tuneupui.exe", trusted));
             Assert.False(ClientVerifier.IsTrustedClient(@"C:\Users\x\Downloads\TuneUpUI.exe", trusted));
-            Assert.False(ClientVerifier.IsTrustedClient(@"C:\Program Files\Ram Raiders TuneUp Suite\other.exe", trusted));
+            Assert.False(ClientVerifier.IsTrustedClient(@"C:\Program Files\Galactic Tune-Up\other.exe", trusted));
             Assert.False(ClientVerifier.IsTrustedClient(null, trusted));
         }
 

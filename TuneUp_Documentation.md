@@ -1,4 +1,4 @@
-# Ram Raiders TuneUp Suite — Application Technical Documentation
+# Galactic Tune-Up — Application Technical Documentation
 
 > A Windows maintenance tool: a WPF desktop app that talks over a named pipe to a background Windows service, which does the work needing administrator rights.
 
@@ -24,7 +24,7 @@
 
 ## Architecture Overview
 
-**Ram Raiders TuneUp Suite** is split into two separate processes that communicate in real-time:
+**Galactic Tune-Up** is split into two separate processes that communicate in real-time:
 
 ```
 ┌──────────────────────────────┐        Named Pipe IPC         ┌──────────────────────────────┐
@@ -44,7 +44,7 @@
 
 ## How to Launch
 
-**Installed copy:** the installer registers the engine as an automatically starting Windows service (**TuneUp Engine**, `TuneUpEngineService`). Just open **Ram Raiders TuneUp Suite** — there is no UAC prompt, and the engine keeps working in the background after you close the window.
+**Installed copy:** the installer registers the engine as an automatically starting Windows service (**TuneUp Engine**, `TuneUpEngineService`). Just open **Galactic Tune-Up** — there is no UAC prompt, and the engine keeps working in the background after you close the window.
 
 1. `TuneUpUI.exe` starts as you (never elevated).
 2. It connects to the engine's pipe, first checking that the pipe belongs to the genuine `TuneUpEngine.exe` installed next to it.
@@ -176,7 +176,7 @@ Runs the structural integrity scan. Broken keys are listed in the results table 
 ### Repair Registry
 
 For each selected issue, the engine:
-1. Creates an automatic backup of the key to `%APPDATA%\RamRaidersTuneUpSuite\RegistryBackups\` with a timestamp.
+1. Creates an automatic backup of the key to `%APPDATA%\GalacticTuneUp\RegistryBackups\` with a timestamp.
 2. Deletes the orphaned registry key.
 
 A confirmation dialog reports how many keys were repaired. The backup folder can be used to manually restore any key if needed.
@@ -250,7 +250,7 @@ The log retains the most recent 100 entries, rotating out older ones automatical
 **Navigation label:** Settings gear icon (top-right title bar)  
 **Tab index:** 5
 
-Persistent application preferences, saved to `%LOCALAPPDATA%\RamRaidersTuneUpSuite\settings.json`.
+Persistent application preferences, saved to `%LOCALAPPDATA%\GalacticTuneUp\settings.json`.
 
 ### Behavior Settings
 
@@ -315,14 +315,14 @@ Allows users to analyze their directories and migrate large folders (such as gam
 |---|---|
 | **Process isolation** | The UI runs at user privileges; only the engine runs elevated. This means a bug in the UI cannot directly manipulate the system. |
 | **No auto-deletion** | The System Cleaner and Advanced Scanner never delete anything automatically. Items must be explicitly selected and confirmed. |
-| **Registry backups** | All Registry Guard repairs create timestamped backups in `%APPDATA%\RamRaidersTuneUpSuite\RegistryBackups\` before deletion. |
+| **Registry backups** | All Registry Guard repairs create timestamped backups in `%APPDATA%\GalacticTuneUp\RegistryBackups\` before deletion. |
 | **User-folder scoping** | The Advanced Scanner (duplicates, empty folders) is strictly scoped to your personal folders under `%USERPROFILE%` (Documents, Pictures, Videos, Music, Desktop, Downloads, OneDrive — not AppData) — it will never touch `System32`, `Program Files`, or other system directories. |
 | **MSI warning gate** | The MSI Force button requires explicit confirmation after a compliance scan and displays a warning dialog about BSOD risk before proceeding. |
 | **Engine pipe access** | Only the account that launched the engine (plus the account the UI vouches for with `--allow-sid`, for over-the-shoulder UAC) can open `TuneUpEnginePipe`. The engine refuses to start if another process already owns the pipe name, and it only answers a `TuneUpUI.exe` located next to the engine (or, for development builds, the UI built from the same solution). |
 | **Act on scan results only** | Cleaning and registry repair send back only the IDs of items the engine's own scan found — never file paths or registry keys — so the engine cannot be asked to delete arbitrary data. Each ID can be used once. |
 | **Duplicate re-verification** | Before deleting an extra copy of a duplicate, the engine re-hashes it and the kept copy; if the kept copy is missing or the files no longer match, nothing in that set is deleted. |
 | **Allowlists** | Service changes are limited to the services listed in OS Tweaks, AppX removal to the curated/OEM package list, and Storage Migrator refuses drive roots, Windows, `Program Files`/`ProgramData`/`Users` themselves, your profile root, and destinations inside the source. |
-| **Change journal (exact undo)** | Before changing any system setting — registry tweaks, Game Mode's MMCSS/timer/boot settings, the power plan, TCP settings, service start types, MSI mode — the engine records the original value in `%ProgramData%\RamRaidersTuneUpSuite\change_journal.json` (writable only by Administrators/SYSTEM). Switching a feature off restores the values you actually had, even after a crash or reboot. A setting shared by two features is restored only when both are off. |
+| **Change journal (exact undo)** | Before changing any system setting — registry tweaks, Game Mode's MMCSS/timer/boot settings, the power plan, TCP settings, service start types, MSI mode — the engine records the original value in `%ProgramData%\GalacticTuneUp\change_journal.json` (writable only by Administrators/SYSTEM). Switching a feature off restores the values you actually had, even after a crash or reboot. A setting shared by two features is restored only when both are off. |
 | **Crash recovery** | Changes meant to last only while a game is boosted (the power plan) are undone automatically on the next engine start if the engine stopped unexpectedly. Closing the app hands back the boosted game's priority, the power plan and any processes ProBalance throttled. |
 | **Full revert** | `TuneUpEngine.exe --revert-all` (run as administrator, with the engine stopped) undoes every change the app has recorded. |
 
@@ -331,7 +331,7 @@ Allows users to analyze their directories and migrate large folders (such as gam
 ## File & Folder Structure
 
 ```
-Ram Raiders TuneUp Suite/
+Galactic Tune-Up/
 ├── TuneUpEngine/                     # Backend service (runs elevated)
 │   ├── Program.cs                    # Entry point; initializes all modules
 │   ├── IpcServer.cs                  # Named pipe server; routes all UI commands
@@ -366,9 +366,9 @@ Ram Raiders TuneUp Suite/
 
 | File | Location |
 |---|---|
-| User settings | `%LOCALAPPDATA%\RamRaidersTuneUpSuite\settings.json` |
-| Registry backups | `%APPDATA%\RamRaidersTuneUpSuite\RegistryBackups\` |
+| User settings | `%LOCALAPPDATA%\GalacticTuneUp\settings.json` |
+| Registry backups | `%APPDATA%\GalacticTuneUp\RegistryBackups\` |
 | Winapp2 definitions | Same directory as `TuneUpEngine.exe` (`winapp2.ini`) |
-| Engine log | `%PROGRAMDATA%\RamRaidersTuneUpSuite\logs\engine-YYYYMMDD.log` (7 days kept, 10 MB/day cap; set `TUNEUP_DEBUG_LOG=1` to also record every request) |
-| UI log | `%LOCALAPPDATA%\RamRaidersTuneUpSuite\logs\ui-YYYYMMDD.log` |
-| Change journal, engine settings, MSI backups, migration history | `%PROGRAMDATA%\RamRaidersTuneUpSuite\` (administrators only) |
+| Engine log | `%PROGRAMDATA%\GalacticTuneUp\logs\engine-YYYYMMDD.log` (7 days kept, 10 MB/day cap; set `TUNEUP_DEBUG_LOG=1` to also record every request) |
+| UI log | `%LOCALAPPDATA%\GalacticTuneUp\logs\ui-YYYYMMDD.log` |
+| Change journal, engine settings, MSI backups, migration history | `%PROGRAMDATA%\GalacticTuneUp\` (administrators only) |

@@ -113,7 +113,7 @@ namespace TuneUpUI.Presentation
         {
             var inv = System.Globalization.CultureInfo.InvariantCulture;
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("Ram Raiders TuneUp Suite: DPC & interrupt trace");
+            sb.AppendLine("Galactic Tune-Up: DPC & interrupt trace");
             sb.AppendLine($"Saved:          {savedAt.ToString("yyyy-MM-dd HH:mm:ss", inv)}");
             sb.AppendLine($"Windows:        {windowsVersion}");
             sb.AppendLine($"Measured for:   {report.SampleCount} seconds{(report.IsRunning ? " (still running when saved)" : "")}");

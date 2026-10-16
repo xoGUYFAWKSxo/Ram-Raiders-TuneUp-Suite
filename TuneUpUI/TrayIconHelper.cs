@@ -91,7 +91,7 @@ namespace TuneUpUI
                 uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
                 uCallbackMessage = TRAY_MESSAGE,
                 hIcon = hIcon,
-                szTip = "Ram Raiders TuneUp Suite"
+                szTip = "Galactic Tune-Up"
             };
 
             _isRegistered = Shell_NotifyIcon(NIM_ADD, ref _nid);

@@ -1,18 +1,19 @@
 # Status
 
-_Last updated: 2026-10-12, main after public repo PR #11._
+_Last updated: 2026-10-16, public repo PR #12._
 
 **Project status: complete for now (paused 2026-10-12).** Every planned feature is built, tested and merged, and the installed app on the dev PC matches main. Nothing is in progress. If work resumes, start from "If work resumes" below.
 
 ## Repository history
-- **Active repo:** `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite` (public, GPL-3.0). All work happens here: branches, PRs, CI and releases.
+- **Active repo:** `xoGUYFAWKSxo/galactic-tune-up` (public, GPL-3.0; named `Ram-Raiders-TuneUp-Suite` until 2026-10-16, and the old URL redirects). All work happens here: branches, PRs, CI and releases.
 - **Archive (frozen):** `xoGUYFAWKSxo/Ram-Raiders-TuneUp-Suite-archive` (private). It is the pre-2026-10-12 history, with PRs #1 to #23 and their discussions. It is no longer modified: don't push to it, open PRs on it, or make it public (its PRs contain personal email addresses). Read it only to look up old PR discussions.
 - 2026-10-12: the active repo was created fresh from the archive's main, with commit emails rewritten to the GitHub noreply address. The file contents are identical. PR numbers and commit hashes in the table below (up to #23) refer to the archive; PR numbers in the active repo start again at #1.
 
 ## Current state
 - The phased rework plan is complete (PRs #1 to #16).
 - End-to-end review (PR #17) and testing of the destructive features against a real engine (PR #18) are done and merged.
-- Build: 0 warnings, 301 tests pass. CI is green.
+- 2026-10-16: renamed from "Ram Raiders TuneUp Suite" to **Galactic Tune-Up**, with a new icon (the CPU knight on the Galactic Macro galaxy, built by `assets/make_icon.py`). Upgrading moves the install folder, the data folders (change journal included) and the startup entry to the new name.
+- Build: 0 warnings, 304 tests pass. CI is green.
 - The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs main as a service, installed with `update-installed.ps1` after each merge.
 
 ## Verified on a real engine
@@ -46,7 +47,8 @@ _Last updated: 2026-10-12, main after public repo PR #11._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #11 | (this PR) | Project marked complete for now; unused waitlist styles removed from the web page's stylesheet |
+| public #12 | (this PR) | Renamed to Galactic Tune-Up: new galaxy + knight icon and installer artwork; data folders, install folder and startup entry move to the new name on upgrade |
+| public #11 | cea6393 | Project marked complete for now; unused waitlist styles removed from the web page's stylesheet |
 | public #10 | f4fe335 | Plain-language pass: the project web page drops the fake waitlist (invented seat counter, sign-ups that stayed in the visitor's browser), pricing survey and hype, and says plainly what the app does and doesn't do; README gains a "What It Doesn't Do" section |
 | public #9 | 5d3c749 | README and TuneUp_Documentation describe the driver table and Save Trace; MSI wording matches DECISIONS |
 | public #8 | aeb41a5 | STATUS: record public PRs #6 and #7 |

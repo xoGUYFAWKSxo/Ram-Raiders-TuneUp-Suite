@@ -72,7 +72,7 @@ namespace TuneUpEngine.Tests
             if (problems.Count == 0)
             {
                 Assert.Null(key.GetValue("dead"));
-                Assert.Single(Directory.GetFiles(Path.Combine(_dir, "RamRaidersTuneUpSuite", "RegistryBackups"), "*.reg"));
+                Assert.Single(Directory.GetFiles(Path.Combine(_dir, "GalacticTuneUp", "RegistryBackups"), "*.reg"));
             }
             else
             {
@@ -168,6 +168,50 @@ namespace TuneUpEngine.Tests
 
             Assert.False(s.ProBalanceEnabled);
             Assert.False(File.Exists(Legacy));
+        }
+    }
+
+    // The app was renamed on 2026-10-16. Its old data folder holds the change journal, so it must
+    // move to the new name rather than be left behind (uninstall would no longer undo those changes).
+    public class AppFolderRenameTests : IDisposable
+    {
+        private readonly string _dir = Path.Combine(Path.GetTempPath(), "tuneup-folders-" + Guid.NewGuid().ToString("N"));
+
+        public AppFolderRenameTests() => Directory.CreateDirectory(_dir);
+        public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
+        [Fact]
+        public void OldFolderIsMovedToTheNewName()
+        {
+            string legacy = Path.Combine(_dir, AppFolders.LegacyName);
+            Directory.CreateDirectory(legacy);
+            File.WriteAllText(Path.Combine(legacy, "change_journal.json"), "[]");
+
+            string root = AppFolders.Resolve(_dir);
+
+            Assert.Equal(Path.Combine(_dir, AppFolders.Name), root);
+            Assert.True(File.Exists(Path.Combine(root, "change_journal.json")));
+            Assert.False(Directory.Exists(legacy));
+        }
+
+        [Fact]
+        public void ExistingNewFolderIsNeverOverwritten()
+        {
+            Directory.CreateDirectory(Path.Combine(_dir, AppFolders.LegacyName));
+            Directory.CreateDirectory(Path.Combine(_dir, AppFolders.Name));
+
+            Assert.Equal(Path.Combine(_dir, AppFolders.Name), AppFolders.Resolve(_dir));
+            Assert.True(Directory.Exists(Path.Combine(_dir, AppFolders.LegacyName)));
+        }
+
+        [Fact]
+        public void LockedOldFolderIsUsedAsItIs()
+        {
+            string legacy = Path.Combine(_dir, AppFolders.LegacyName);
+            Directory.CreateDirectory(legacy);
+            using var open = File.Open(Path.Combine(legacy, "engine.log"), FileMode.Create, FileAccess.Write, FileShare.None);
+
+            Assert.Equal(legacy, AppFolders.Resolve(_dir));
         }
     }
 }

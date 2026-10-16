@@ -323,12 +323,12 @@ namespace TuneUpEngine
         {
             var problems = new List<string>();
             int count = 0;
-            string backupDir = Path.Combine(ctx.Folders.RoamingAppData, "RamRaidersTuneUpSuite", "RegistryBackups");
+            string backupDir = Path.Combine(AppFolders.Root(ctx.Folders.RoamingAppData), "RegistryBackups");
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var manifest = new System.Text.StringBuilder();
             var exports = new List<(string FileName, byte[] Content)>();
 
-            manifest.AppendLine($"; Ram Raiders TuneUp Registry Repair - Executed {DateTime.Now}");
+            manifest.AppendLine($"; Galactic Tune-Up Registry Repair - Executed {DateTime.Now}");
             manifest.AppendLine("; Each repaired key was exported to a .reg file in this folder before deletion.");
             manifest.AppendLine("; To undo a repair, double-click the matching .reg file to re-import the key.");
             manifest.AppendLine();
@@ -450,8 +450,7 @@ namespace TuneUpEngine
         private static byte[] ExportKeyToReg(string fullKeyPath)
         {
             string tempDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "RamRaidersTuneUpSuite", "tmp");
+                AppFolders.Root(Environment.SpecialFolder.CommonApplicationData), "tmp");
             string tempFile = Path.Combine(tempDir, Guid.NewGuid().ToString("N") + ".reg");
             try
             {

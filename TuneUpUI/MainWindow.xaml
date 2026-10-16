@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:TuneUpUI"
         mc:Ignorable="d"
-        Title="Ram Raiders TuneUp Suite" 
+        Title="Galactic Tune-Up" 
         Icon="/TuneUpIcon.ico"
         Height="680" Width="1040"
         MinHeight="560" MinWidth="900"
@@ -51,7 +51,7 @@
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="10" Height="10" Fill="{StaticResource BrushNeonAccent}" Margin="0,0,10,0"/>
-                    <TextBlock Text="RAM RAIDERS TUNEUP SUITE" Foreground="{StaticResource BrushTextMain}" 
+                    <TextBlock Text="GALACTIC TUNE-UP" Foreground="{StaticResource BrushTextMain}" 
                                FontWeight="Bold" FontSize="12"/>
                     <Border CornerRadius="4" Background="#1D2A3A" Margin="10,0" Padding="6,2">
                         <TextBlock Text="PRO 2026" Foreground="{StaticResource BrushAccentCyan}" 
@@ -865,7 +865,7 @@
                                         <CheckBox x:Name="ChkStartOnStartup" Style="{StaticResource PremiumToggle}" Margin="0,0,0,15" Checked="SettingToggle_Changed" Unchecked="SettingToggle_Changed">
                                             <StackPanel Margin="5,0,0,0">
                                                 <TextBlock Text="Start on Startup" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
-                                                <TextBlock Text="Automatically launch Ram Raiders TuneUp Suite when Windows starts" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                                <TextBlock Text="Automatically launch Galactic Tune-Up when Windows starts" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
                                             </StackPanel>
                                         </CheckBox>
                                         

@@ -41,8 +41,7 @@ namespace TuneUpEngine
         // Machine-wide (migrations move machine folders such as game installs), next to the change
         // journal. The engine's own AppData would be SYSTEM's profile when running as a service.
         private static readonly string HistoryFile = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "RamRaidersTuneUpSuite", "migration_history.json");
+            AppFolders.Root(Environment.SpecialFolder.CommonApplicationData), "migration_history.json");
 
         // ── Path safety ─────────────────────────────────────────────────────────
 

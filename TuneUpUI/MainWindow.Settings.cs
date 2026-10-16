@@ -46,8 +46,7 @@ namespace TuneUpUI
         }
 
         private static readonly string SettingsFilePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
-            "RamRaidersTuneUpSuite", 
+            AppFolders.Root(Environment.SpecialFolder.LocalApplicationData), 
             "settings.json"
         );
 
@@ -106,13 +105,15 @@ namespace TuneUpUI
                 {
                     if (key != null)
                     {
+                        // The entry's name before the rename (2026-10-16); it also points at the old folder.
+                        key.DeleteValue(AppFolders.LegacyName, false);
                         if (enable)
                         {
-                            key.SetValue("RamRaidersTuneUpSuite", $"\"{exePath}\" --minimized");
+                            key.SetValue(AppFolders.Name, $"\"{exePath}\" --minimized");
                         }
                         else
                         {
-                            key.DeleteValue("RamRaidersTuneUpSuite", false);
+                            key.DeleteValue(AppFolders.Name, false);
                         }
                     }
                 }

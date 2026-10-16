@@ -17,7 +17,7 @@ namespace TuneUpEngine
         {
             _httpClient = new HttpClient();
             // User-Agent is required by GitHub API/content endpoints to prevent 403 Forbidden
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RamRaidersTuneUp/2026");
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) GalacticTuneUp/2026");
             _httpClient.Timeout = TimeSpan.FromSeconds(15);
         }
 
