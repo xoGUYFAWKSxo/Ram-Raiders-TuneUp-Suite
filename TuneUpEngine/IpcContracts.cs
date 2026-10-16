@@ -96,6 +96,9 @@ namespace TuneUpEngine
     public record SetTweakRequest(string Name, bool Enable);
     public record SetServiceRequest(string Name, bool Disable);
     public record MigrateRequest(string Source, string Destination);
+    // The Cleaner tab's switches. Rules outside these groups (Recycle Bin, winapp2 entries) are
+    // always scanned. A missing payload scans every group.
+    public record ScanJunkRequest(bool TempFiles, bool WindowsUpdate, bool BrowserCache);
 
     public static class IpcPayload
     {

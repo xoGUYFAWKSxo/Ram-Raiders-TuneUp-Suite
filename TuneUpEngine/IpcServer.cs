@@ -633,6 +633,7 @@ namespace TuneUpEngine
                     break;
 
                 case IpcCommands.ScanJunk:
+                    var junkGroups = IpcPayload.Deserialize<ScanJunkRequest>(request.Payload);
                     RunInBackground(request, writer, jobs, "Junk scan", ct =>
                     {
                         Send(new IpcResponse { Status = IpcStatus.Progress, ProgressPercent = 5.0, Message = "Scanning file structures..." });
@@ -644,7 +645,7 @@ namespace TuneUpEngine
                                 ProgressPercent = percent,
                                 Message = $"Scanning {ruleName}..."
                             });
-                        }, ct);
+                        }, ct, junkGroups);
 
                         _scanResults.Replace("junk", scanResults, ctx.Sid);
                         Send(new IpcResponse

@@ -301,9 +301,9 @@
                                        Foreground="{StaticResource BrushTextMuted}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,12"/>
                             <!-- Scan type toggles -->
                             <WrapPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <CheckBox x:Name="ChkTempFiles" Style="{StaticResource PremiumToggle}" Content="Scan Temp Files" Margin="0,0,20,0" ToolTip="Your Temp folder, Windows error reports, the DirectX shader cache and Prefetch data."/>
-                                <CheckBox x:Name="ChkWinUpdate" Style="{StaticResource PremiumToggle}" Content="Scan Windows Update Cache" Margin="0,0,20,0" ToolTip="The Delivery Optimization cache: update files Windows has already downloaded and keeps to share with other PCs."/>
-                                <CheckBox x:Name="ChkBrowserCache" Style="{StaticResource PremiumToggle}" Content="Scan Browser Cache" Margin="0,0,20,0" ToolTip="Cache files from Chrome and Edge. Other browsers are covered if the winapp2 list has an entry for them."/>
+                                <CheckBox x:Name="ChkTempFiles" Style="{StaticResource PremiumToggle}" IsChecked="True" Content="Scan Temp Files" Margin="0,0,20,0" ToolTip="Your Temp folder, Windows error reports, the DirectX shader cache and Prefetch data."/>
+                                <CheckBox x:Name="ChkWinUpdate" Style="{StaticResource PremiumToggle}" IsChecked="True" Content="Scan Windows Update Cache" Margin="0,0,20,0" ToolTip="The Delivery Optimization cache: update files Windows has already downloaded and keeps to share with other PCs."/>
+                                <CheckBox x:Name="ChkBrowserCache" Style="{StaticResource PremiumToggle}" IsChecked="True" Content="Scan Browser Cache" Margin="0,0,20,0" ToolTip="Cache files from Chrome and Edge. Browser entries from the winapp2 list are scanned whether this is on or off."/>
                                 <CheckBox x:Name="ChkEmptyFolders" Style="{StaticResource PremiumToggle}" Content="Scan Empty User Folders" Margin="0,0,20,0" ToolTip="Empty folders in your Documents, Pictures, Videos, Music, Desktop, Downloads and OneDrive folders."/>
                                 <CheckBox x:Name="ChkDuplicateFiles" Style="{StaticResource PremiumToggle}" Content="Scan Duplicate User Files" ToolTip="Files with identical content in those same folders. One copy of each set is always kept."/>
                             </WrapPanel>
