@@ -79,7 +79,7 @@ namespace TuneUpUI
         public static readonly BoolToSymlinkLabelConverter Instance = new();
 
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            => value is bool b && b ? "✓ Active" : "✗ Broken";
+            => value is bool b && b ? "✓ Link working" : "✗ Link broken";
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();
