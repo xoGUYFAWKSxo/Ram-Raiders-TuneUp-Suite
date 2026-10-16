@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-16, public repo PR #21._
+_Last updated: 2026-10-16, public repo PR #24._
 
 **Project status: complete for now (paused 2026-10-12).** Every planned feature is built, tested and merged, and the installed app on the dev PC matches main. Nothing is in progress. If work resumes, start from "If work resumes" below.
 
@@ -15,7 +15,7 @@ _Last updated: 2026-10-16, public repo PR #21._
 - 2026-10-16: renamed from "Ram Raiders TuneUp Suite" to **Galactic Tune-Up**, with a new icon (the CPU knight on the Galactic Macro galaxy, built by `assets/make_icon.py`). Upgrading moves the install folder, the data folders (change journal included) and the startup entry to the new name.
 - 2026-10-16: first release, [v1.0.0](https://github.com/xoGUYFAWKSxo/galactic-tune-up/releases/tag/v1.0.0), from main at 386f2c9: `GalacticTuneUp_Setup.exe` (SHA-256 c017a800…60e3b) with its `.sha256` file. It is the same installer that upgraded the dev PC, and `test-installer.ps1` passed on it.
 - 2026-10-16: GitHub Pages is on, serving `docs/` from main at https://xoguyfawksxo.github.io/galactic-tune-up/ (also the repo's homepage link). The page has a "Download for Windows" button to the latest release; the "Alpha" badge was removed.
-- Build: 0 warnings, 313 tests pass. CI is green.
+- Build: 0 warnings, 317 tests pass. CI is green.
 - The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs main as a service, installed with `update-installed.ps1` after each merge.
 
 ## Verified on a real engine
@@ -48,7 +48,9 @@ _Last updated: 2026-10-16, public repo PR #21._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #21 | (this PR) | Cleaner: "Scan Browser Cache" also covers winapp2's browser entries (its per-browser LangSecRef groups and "Section=... Web Browser" lines, plus Lynx, NetSurf and 32bit in the Internet group; checked against Winapp2.ini 260915); Thunderbird and Spotify stay outside |
+| public #24 | (this PR) | STATUS: record #21 and #22 |
+| public #22 | 8226b9b | Cleaner: "Select All" leaves personal browser data unticked (saved passwords, cookies, sessions, autofill, history; 440 winapp2 entries in 260915), and the delete prompt names any that are ticked by hand, e.g. "This deletes saved passwords for: Google Chrome" |
+| public #21 | e8d964f | Cleaner: "Scan Browser Cache" also covers winapp2's browser entries (its per-browser LangSecRef groups and "Section=... Web Browser" lines, plus Lynx, NetSurf and 32bit in the Internet group; checked against Winapp2.ini 260915); Thunderbird and Spotify stay outside |
 | public #20 | 2536e2c | Switch labels wrap instead of running off the card (the Dashboard's Auto-Purge description was cut off): the shared switch style lays out with a DockPanel, so the label gets the width left after the switch; web page screenshots retaken (?v=5) |
 | public #19 | 1350169 | Cleaner: the "Scan Temp Files", "Scan Windows Update Cache" and "Scan Browser Cache" switches now choose which built-in rules the junk scan runs (they were never read before) and start switched on; Recycle Bin and winapp2 entries always run |
 | public #18 | e197bf4 | Web page screenshots retaken from the installed app after #17 (image links bumped to ?v=4); sidebar engine label shortened to "Background service" so it isn't cut off |
