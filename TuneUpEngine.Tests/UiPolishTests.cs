@@ -132,4 +132,37 @@ namespace TuneUpEngine.Tests
         public void ServiceCommandLine_YieldsTheExecutable(string commandLine, string? expected) =>
             Assert.Equal(expected, ClientVerifier.ExecutableFromCommandLine(commandLine));
     }
+
+    // DECISIONS.md 2026-10-12: user-facing text says what a feature does, without hype or
+    // performance promises. These phrases were in the UI once and must not come back.
+    public class UiWordingTests
+    {
+        private static readonly string[] Banned =
+        {
+            "PRO 2026", "massive", "high-speed", "Intelligent", "maximum", "minimum input lag",
+            "Prevents system lag", "fully optimized", "placebo registry", "powerful",
+            "Safely deleted", "reclaim gigabytes", "launchers never know", "transparent symbolic",
+            "Apply Optimizations", "Booster",
+        };
+
+        private static string UiFolder()
+        {
+            var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+            while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "TuneUpApp.slnx"))) dir = dir.Parent;
+            return System.IO.Path.Combine(dir?.FullName ?? throw new System.IO.DirectoryNotFoundException("TuneUpApp.slnx"), "TuneUpUI");
+        }
+
+        [Fact]
+        public void UiText_HasNoMarketingPhrases()
+        {
+            var files = System.IO.Directory.GetFiles(UiFolder(), "*.xaml")
+                .Concat(System.IO.Directory.GetFiles(UiFolder(), "*.cs"));
+            var hits = (from f in files
+                        let text = System.IO.File.ReadAllText(f)
+                        from phrase in Banned
+                        where text.Contains(phrase, System.StringComparison.OrdinalIgnoreCase)
+                        select $"{System.IO.Path.GetFileName(f)}: {phrase}").ToList();
+            Assert.Empty(hits);
+        }
+    }
 }

@@ -35,7 +35,7 @@ A free, open-source Windows 10/11 maintenance tool. It frees standby memory, nam
 
 ### 🧠 2. CPU ProBalance & Game Booster
 * **ProBalance Governor**: Automatically throttles abusive background applications consuming excessive CPU time by temporarily lowering their scheduling priority class, so they compete less with the program you're using, then restores it.
-* **Game Mode Booster**: Detects the active game and raises its priority to High. Following Microsoft's guidance for games, it does not hard-pin games on ordinary CPUs; on hybrid CPUs with at least three performance cores it keeps the game on the performance cores (detected from Windows' own core efficiency classes).
+* **Game Mode**: Detects the active game and raises its priority to High. Following Microsoft's guidance for games, it does not hard-pin games on ordinary CPUs; on hybrid CPUs with at least three performance cores it keeps the game on the performance cores (detected from Windows' own core efficiency classes).
 
 ### 🔌 3. Hardware Interrupt Tuning (MSI Mode)
 * **MSI Compliance Scanner**: Queries all PCI/PCIe hardware devices in the registry to evaluate Message Signaled Interrupts (MSI) compatibility.

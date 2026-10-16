@@ -53,10 +53,6 @@
                     <Ellipse Width="10" Height="10" Fill="{StaticResource BrushNeonAccent}" Margin="0,0,10,0"/>
                     <TextBlock Text="GALACTIC TUNE-UP" Foreground="{StaticResource BrushTextMain}" 
                                FontWeight="Bold" FontSize="12"/>
-                    <Border CornerRadius="4" Background="#1D2A3A" Margin="10,0" Padding="6,2">
-                        <TextBlock Text="PRO 2026" Foreground="{StaticResource BrushAccentCyan}" 
-                                   FontWeight="Bold" FontSize="9"/>
-                    </Border>
                 </StackPanel>
 
                 <!-- Window Control Buttons -->
@@ -161,7 +157,7 @@
                             <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#EF4444" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock x:Name="TxtStatus" Text="Engine Offline" Foreground="{StaticResource BrushTextMain}" FontSize="11" FontWeight="SemiBold"/>
                         </StackPanel>
-                        <TextBlock Text="Named Pipe Local Server" Foreground="{StaticResource BrushTextMuted}" FontSize="9"/>
+                        <TextBlock Text="Background service that makes the changes" Foreground="{StaticResource BrushTextMuted}" FontSize="9"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -246,21 +242,21 @@
                                     <!-- ProBalance CPU card -->
                                     <Border Style="{StaticResource GlassCard}" Margin="0,0,0,15">
                                         <StackPanel>
-                                            <TextBlock Text="ProBalance CPU Priority Governor" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,5"/>
-                                            <TextBlock Text="Prevents system lag during background tasks. When a background thread spikes a CPU core above 95% for more than 2 seconds, the engine dynamically lowers its priority class to Below Normal." 
+                                            <TextBlock Text="ProBalance (background CPU priority)" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,5"/>
+                                            <TextBlock Text="When a program you aren't using keeps one CPU core more than 95% busy for 2 seconds, its priority is lowered to Below Normal, so the program in front gets the CPU first. On CPUs with efficiency cores it is also moved to those cores. Its priority goes back once its load drops." 
                                                        Foreground="{StaticResource BrushTextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,15"/>
                                             <CheckBox x:Name="ToggleProBalance" Style="{StaticResource PremiumToggle}" Content="Enable ProBalance Monitoring" 
                                                       Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" Checked="ToggleProBalance_Checked" Unchecked="ToggleProBalance_Unchecked"/>
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- Game Mode Booster card -->
+                                    <!-- Game Mode card -->
                                     <Border Style="{StaticResource GlassCard}">
                                         <StackPanel>
-                                            <TextBlock Text="Game Mode Booster" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,5"/>
-                                            <TextBlock Text="Intelligent foreground detection. When a game process takes focus, the governor raises its priority class to High and dynamically throttles background services to ensure minimum input lag and maximum frame rate." 
+                                            <TextBlock Text="Game Mode" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,5"/>
+                                            <TextBlock Text="When a game is the window in front (recognised by its program name, or because it is in a game library folder such as Steam's), its priority is raised to High and the Ultimate Performance power plan is switched on until you leave it. On CPUs with at least 3 performance cores and some efficiency cores, the game is kept on the performance cores. Turning Game Mode on also changes a few Windows timer and scheduling settings for games; turning it off restores your previous values." 
                                                        Foreground="{StaticResource BrushTextMuted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,15"/>
-                                            <CheckBox x:Name="ToggleGameMode" Style="{StaticResource PremiumToggle}" Content="Enable Game Mode Booster" 
+                                            <CheckBox x:Name="ToggleGameMode" Style="{StaticResource PremiumToggle}" Content="Enable Game Mode" 
                                                       Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" Checked="ToggleGameMode_Checked" Unchecked="ToggleGameMode_Unchecked"/>
                                         </StackPanel>
                                     </Border>
@@ -300,16 +296,16 @@
 
                         <!-- Header -->
                         <StackPanel Grid.Row="0" Margin="0,0,0,10">
-                            <TextBlock Text="Advanced System Cleaner" Foreground="White" FontSize="20" FontWeight="Bold"/>
-                            <TextBlock Text="Locate and clean massive application caches, temporary structures, and logs using our custom, high-speed scanner engine." 
-                                       Foreground="{StaticResource BrushTextMuted}" FontSize="13" Margin="0,4,0,12"/>
+                            <TextBlock Text="System Cleaner" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="Finds temporary files, caches and logs that Windows and your programs rebuild on their own, plus program caches from the community winapp2 list. You see each item and its size, and choose what to delete. Deleted files don't go to the Recycle Bin." 
+                                       Foreground="{StaticResource BrushTextMuted}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,12"/>
                             <!-- Scan type toggles -->
                             <WrapPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <CheckBox x:Name="ChkTempFiles" Style="{StaticResource PremiumToggle}" Content="Scan Temp Files" Margin="0,0,20,0" ToolTip="Removes temporary system and application files to free up disk space and reduce clutter."/>
-                                <CheckBox x:Name="ChkWinUpdate" Style="{StaticResource PremiumToggle}" Content="Scan Windows Update Cache" Margin="0,0,20,0" ToolTip="Clears old, residual Windows Update downloaded files to reclaim gigabytes of storage."/>
-                                <CheckBox x:Name="ChkBrowserCache" Style="{StaticResource PremiumToggle}" Content="Scan Browser Cache" Margin="0,0,20,0" ToolTip="Wipes internet history and cache from major browsers to improve privacy and free up space."/>
-                                <CheckBox x:Name="ChkEmptyFolders" Style="{StaticResource PremiumToggle}" Content="Scan Empty User Folders" Margin="0,0,20,0" ToolTip="Identifies and safely removes empty, leftover folders from uninstalled applications."/>
-                                <CheckBox x:Name="ChkDuplicateFiles" Style="{StaticResource PremiumToggle}" Content="Scan Duplicate User Files" ToolTip="Finds duplicate files across your user directory to help you eliminate redundant data."/>
+                                <CheckBox x:Name="ChkTempFiles" Style="{StaticResource PremiumToggle}" Content="Scan Temp Files" Margin="0,0,20,0" ToolTip="Your Temp folder, Windows error reports, the DirectX shader cache and Prefetch data."/>
+                                <CheckBox x:Name="ChkWinUpdate" Style="{StaticResource PremiumToggle}" Content="Scan Windows Update Cache" Margin="0,0,20,0" ToolTip="The Delivery Optimization cache: update files Windows has already downloaded and keeps to share with other PCs."/>
+                                <CheckBox x:Name="ChkBrowserCache" Style="{StaticResource PremiumToggle}" Content="Scan Browser Cache" Margin="0,0,20,0" ToolTip="Cache files from Chrome and Edge. Other browsers are covered if the winapp2 list has an entry for them."/>
+                                <CheckBox x:Name="ChkEmptyFolders" Style="{StaticResource PremiumToggle}" Content="Scan Empty User Folders" Margin="0,0,20,0" ToolTip="Empty folders in your Documents, Pictures, Videos, Music, Desktop, Downloads and OneDrive folders."/>
+                                <CheckBox x:Name="ChkDuplicateFiles" Style="{StaticResource PremiumToggle}" Content="Scan Duplicate User Files" ToolTip="Files with identical content in those same folders. One copy of each set is always kept."/>
                             </WrapPanel>
                         </StackPanel>
 
@@ -461,8 +457,8 @@
 
                         <!-- Header -->
                         <StackPanel Grid.Row="0" Margin="0,0,0,15">
-                            <TextBlock Text="Registry Integrity Guard" Foreground="White" FontSize="20" FontWeight="Bold"/>
-                            <TextBlock Text="Ditch placebo registry sweepers. We scan exclusively for structural integrity defects: dead startup links, missing approved shell extensions, and broken COM/OLE servers that cause Windows Explorer lag." 
+                            <TextBlock Text="Registry Guard" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="Finds registry entries that point to programs or files that no longer exist: startup entries, File Explorer shell extensions, and COM components registered for your account. Each entry you remove is saved to a .reg backup file first." 
                                        Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
                         </StackPanel>
 
@@ -614,8 +610,8 @@
 
                         <!-- Header -->
                         <StackPanel Grid.Row="0" Margin="0,0,0,15">
-                            <TextBlock Text="Active Resource Monitoring Console" Foreground="White" FontSize="20" FontWeight="Bold"/>
-                            <TextBlock Text="View full real-time event notifications from the background ProBalance governor and memory standby list manager." 
+                            <TextBlock Text="Live Monitor" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="What the engine does as it happens: ProBalance priority changes, Game Mode, and standby memory purges. The driver audit below times how long drivers hold the CPU." 
                                        Foreground="{StaticResource BrushTextMuted}" FontSize="13" Margin="0,4,0,0"/>
                         </StackPanel>
 
@@ -816,7 +812,7 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Grid.Row="0" Text="Live Engine Output Stream" Foreground="White" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
+                                <TextBlock Grid.Row="0" Text="Engine log" Foreground="White" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
                                 <ListBox Grid.Row="1" x:Name="LstMonitorEvents" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Foreground="{StaticResource BrushTextMain}" FontSize="12">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
@@ -844,7 +840,7 @@
                         <!-- Header -->
                         <StackPanel Grid.Row="0" Margin="0,0,0,15">
                             <TextBlock Text="Application Preferences" Foreground="White" FontSize="20" FontWeight="Bold"/>
-                            <TextBlock Text="Configure startup preferences, notification behaviors, and low-level system tray integration." 
+                            <TextBlock Text="Choose how Galactic Tune-Up starts, what closing the window does, and when it notifies you." 
                                        Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
                         </StackPanel>
                         
@@ -896,7 +892,7 @@
                                         <CheckBox x:Name="ChkEnableNotifications" Style="{StaticResource PremiumToggle}" Margin="0,0,0,15" Checked="SettingToggle_Changed" Unchecked="SettingToggle_Changed">
                                             <StackPanel Margin="5,0,0,0">
                                                 <TextBlock Text="Enable Tray Notifications" Foreground="{StaticResource BrushTextMain}" FontWeight="SemiBold" FontSize="13"/>
-                                                <TextBlock Text="Display system tray notifications for background optimizations" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
+                                                <TextBlock Text="While the window is hidden, show a tray notification for the events below" Foreground="{StaticResource BrushTextMuted}" FontSize="11" TextWrapping="Wrap"/>
                                             </StackPanel>
                                         </CheckBox>
                                         
@@ -941,7 +937,7 @@
                         <!-- Header -->
                         <StackPanel Grid.Row="0" Margin="0,0,0,15">
                             <TextBlock Text="Gaming &amp; OS Tweaks" Foreground="White" FontSize="28" FontWeight="Bold"/>
-                            <TextBlock Text="Fine-tune your Windows environment for maximum gaming performance and low latency." 
+                            <TextBlock Text="Windows settings you can switch on and off. The previous value is saved first, so switching a tweak off puts it back." 
                                        Foreground="{StaticResource BrushTextMuted}" FontSize="14" Margin="0,4,0,0"/>
                         </StackPanel>
 
@@ -1006,7 +1002,7 @@
                                         <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
                                         
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Close unresponsive processes to avoid system crashes" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Close hung apps sooner (wait 2 seconds instead of 5, and 2 instead of 20 at shutdown)" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglCloseUnresponsive" Tag="CloseUnresponsive" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid x:Name="RowDisableSecurityWarning" Visibility="Collapsed" Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -1034,7 +1030,7 @@
                                             <CheckBox Grid.Column="1" x:Name="TglDisableUAC" Tag="DisableUAC" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Enable Anti-Adware feature in Windows Defender" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Turn on Windows Defender's blocking of potentially unwanted apps" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglEnableAntiAdware" Tag="EnableAntiAdware" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -1054,11 +1050,11 @@
                                         <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
                                         
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Speed up mouse hover action" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Shorten the mouse hover delay (400 ms to 10 ms)" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglSpeedUpMouseHover" Tag="SpeedUpMouseHover" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Speed up desktop and folders loading (icon cache)" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Raise the icon cache limit to 4,096 icons" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglSpeedUpDesktopLoading" Tag="SpeedUpDesktopLoading" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -1114,15 +1110,15 @@
                                         <Separator Background="#33FFFFFF" Margin="0,0,0,15"/>
                                         
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Speed up Aero Snap" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Turn on Snap (arrange windows by dragging them to a screen edge)" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglSpeedUpAeroSnap" Tag="SpeedUpAeroSnap" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Boost display speed of Windows Peek" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Shorten the Peek at desktop delay (1 second to 0.1 seconds)" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglSpeedUpWindowsPeek" Tag="SpeedUpWindowsPeek" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Speed up Windows menus cascading delay" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
+                                            <StackPanel Grid.Column="0" Margin="0,0,20,0"><TextBlock Text="Shorten the menu open delay (400 ms to 10 ms)" Foreground="White" FontWeight="SemiBold" FontSize="14"/></StackPanel>
                                             <CheckBox Grid.Column="1" x:Name="TglSpeedUpMenus" Tag="SpeedUpMenus" Style="{StaticResource PremiumToggle}" Click="TweakToggle_Click" VerticalAlignment="Center"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -1179,7 +1175,7 @@
                                             <!-- Dynamically populated AppX packages -->
                                         </ItemsControl>
 
-                                        <TextBlock Text="Network Stack Optimizer" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,15,0,10"/>
+                                        <TextBlock Text="TCP Network Settings" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,15,0,10"/>
                                         <TextBlock x:Name="TxtNetAutoTune" Text="AutoTune: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
                                         <TextBlock x:Name="TxtNetEcn" Text="ECN: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
                                         <TextBlock x:Name="TxtNetTimestamps" Text="Timestamps: Unknown" Foreground="{StaticResource BrushTextMuted}"/>
@@ -1188,8 +1184,8 @@
                                         <TextBlock x:Name="TxtNetSummary" Text="" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,10"/>
                                         
                                         <StackPanel Orientation="Horizontal">
-                                            <Button x:Name="BtnNetApply" Content="&#x26A1; Apply Optimizations" Style="{StaticResource OutlineButton}" Click="BtnNetApply_Click" Margin="0,0,10,0"/>
-                                            <Button x:Name="BtnNetRevert" Content="Revert Net Opt" Style="{StaticResource OutlineButton}" Click="BtnNetRevert_Click" Margin="0,0,10,0"/>
+                                            <Button x:Name="BtnNetApply" Content="Apply These Settings" Style="{StaticResource OutlineButton}" Click="BtnNetApply_Click" Margin="0,0,10,0"/>
+                                            <Button x:Name="BtnNetRevert" Content="Revert Network Settings" Style="{StaticResource OutlineButton}" Click="BtnNetRevert_Click" Margin="0,0,10,0"/>
                                             <Button x:Name="BtnNetRefresh" Style="{StaticResource OutlineButton}" Click="BtnNetRefresh_Click">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" Margin="0,0,5,0" VerticalAlignment="Center"/>
@@ -1215,7 +1211,7 @@
                         <Border Grid.Row="0" Style="{StaticResource GlassCard}" Margin="0,0,0,20">
                             <StackPanel>
                                 <TextBlock Text="Windows Resources" Foreground="White" FontSize="28" FontWeight="Bold" Margin="0,0,0,8"/>
-                                <TextBlock Text="Quick access to powerful built-in Windows management utilities." Foreground="{StaticResource BrushTextMuted}" FontSize="14"/>
+                                <TextBlock Text="Shortcuts to the management tools built into Windows." Foreground="{StaticResource BrushTextMuted}" FontSize="14"/>
                             </StackPanel>
                         </Border>
 
@@ -1262,7 +1258,7 @@
                         <!-- Header -->
                         <StackPanel Grid.Row="0" Margin="0,0,0,15">
                             <TextBlock Text="Storage Tools" Foreground="White" FontSize="28" FontWeight="Bold"/>
-                            <TextBlock Text="Move game directories to secondary drives using NTFS symbolic links &#x2014; launchers never know the files moved." 
+                            <TextBlock Text="Move a game folder to another drive. A link is left at the old path, so launchers and games still find the files there." 
                                        Foreground="{StaticResource BrushTextMuted}" FontSize="14" Margin="0,4,0,0"/>
                         </StackPanel>
 
@@ -1271,8 +1267,8 @@
                                 <!-- Migrator Card -->
                                 <Border Style="{StaticResource GlassCard}" Margin="0,0,0,20">
                                     <StackPanel>
-                                        <TextBlock Text="NTFS Symlink Game Migrator" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
-                                        <TextBlock Text="Select a source game directory and a destination on another drive. The engine will move the files, verify integrity, then create a transparent symbolic link at the original path." 
+                                        <TextBlock Text="Game Folder Mover" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
+                                        <TextBlock Text="Pick a game folder and a destination on another drive. The engine copies the files, checks that every file arrived at the same size, deletes the original folder, then puts a symbolic link at the original path. Undo moves the folder back." 
                                                    Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,20"/>
 
                                         <!-- Source Path -->

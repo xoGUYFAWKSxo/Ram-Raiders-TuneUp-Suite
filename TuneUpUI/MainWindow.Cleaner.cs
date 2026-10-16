@@ -313,8 +313,8 @@ namespace TuneUpUI
                     if (completed.Status == IpcStatus.Success)
                     {
                         long cleanedBytes = long.Parse(completed.Payload ?? "0");
-                        MessageBox.Show($"File Clean Complete!\nSafely deleted {cleanedBytes / (1024.0 * 1024.0):F1} MB of cached files.", "System Cleaned", MessageBoxButton.OK, MessageBoxImage.Information);
-                        TxtCleanerStatus.Text = "System fully optimized.";
+                        MessageBox.Show($"Clean complete.\nDeleted {cleanedBytes / (1024.0 * 1024.0):F1} MB of files.", "Clean Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                        TxtCleanerStatus.Text = "Clean finished.";
                         LvwJunkItems.ItemsSource = null;
                         _scannedJunkItems.Clear();
                         StatsTimer_Tick(null, EventArgs.Empty); // Refresh stats

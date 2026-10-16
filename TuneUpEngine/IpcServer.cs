@@ -571,7 +571,7 @@ namespace TuneUpEngine
                     _gameMode.IsEnabled = gameEnabled;
                     _settings.GameModeEnabled = gameEnabled;
                     _settings.Save();
-                    LogEvent($"Game Mode Booster set to: {(gameEnabled ? "ENABLED" : "DISABLED")}");
+                    LogEvent($"Game Mode turned {(gameEnabled ? "on" : "off")}.");
                     Send(new IpcResponse { Status = IpcStatus.Success });
                     break;
 
