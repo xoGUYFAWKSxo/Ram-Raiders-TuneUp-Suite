@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-16, public repo PR #14._
+_Last updated: 2026-10-16, public repo PR #16._
 
 **Project status: complete for now (paused 2026-10-12).** Every planned feature is built, tested and merged, and the installed app on the dev PC matches main. Nothing is in progress. If work resumes, start from "If work resumes" below.
 
@@ -15,7 +15,7 @@ _Last updated: 2026-10-16, public repo PR #14._
 - 2026-10-16: renamed from "Ram Raiders TuneUp Suite" to **Galactic Tune-Up**, with a new icon (the CPU knight on the Galactic Macro galaxy, built by `assets/make_icon.py`). Upgrading moves the install folder, the data folders (change journal included) and the startup entry to the new name.
 - 2026-10-16: first release, [v1.0.0](https://github.com/xoGUYFAWKSxo/galactic-tune-up/releases/tag/v1.0.0), from main at 386f2c9: `GalacticTuneUp_Setup.exe` (SHA-256 c017a800…60e3b) with its `.sha256` file. It is the same installer that upgraded the dev PC, and `test-installer.ps1` passed on it.
 - 2026-10-16: GitHub Pages is on, serving `docs/` from main at https://xoguyfawksxo.github.io/galactic-tune-up/ (also the repo's homepage link). The page has a "Download for Windows" button to the latest release; the "Alpha" badge was removed.
-- Build: 0 warnings, 304 tests pass. CI is green.
+- Build: 0 warnings, 306 tests pass. CI is green.
 - The installer has been tested for install, upgrade and uninstall (`test-installer.ps1`). The dev PC runs main as a service, installed with `update-installed.ps1` after each merge.
 
 ## Verified on a real engine
@@ -47,7 +47,9 @@ _Last updated: 2026-10-16, public repo PR #14._
 ## Recent PRs
 | PR | Merge | What |
 |----|-------|------|
-| public #14 | (this PR) | Web page: Download button, Alpha badge removed; STATUS records GitHub Pages |
+| public #16 | (this PR) | Test fails the build if any source file isn't valid UTF-8 or has double-encoded text (like the garbled dash once in the Storage Tools subtitle); web page screenshots retaken from the installed app (the old ones predated that fix and the rename) |
+| public #15 | 2888296 | Web page: hero text and buttons stay readable when a browser's dark mode strips gradients |
+| public #14 | 0207c87 | Web page: Download button, Alpha badge removed; STATUS records GitHub Pages |
 | public #13 | 0dd4554 | README and STATUS: v1.0.0 released |
 | public #12 | 386f2c9 | Renamed to Galactic Tune-Up: new galaxy + knight icon and installer artwork; data folders, install folder and startup entry move to the new name on upgrade |
 | public #11 | cea6393 | Project marked complete for now; unused waitlist styles removed from the web page's stylesheet |
