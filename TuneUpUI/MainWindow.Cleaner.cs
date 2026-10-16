@@ -149,10 +149,7 @@ namespace TuneUpUI
             if (_scannedJunkItems == null || _scannedJunkItems.Count == 0) return;
 
             _junkAllSelected = !_junkAllSelected;
-            foreach (var item in _scannedJunkItems)
-            {
-                item.IsSelected = _junkAllSelected;
-            }
+            Presentation.JunkSelection.SetAll(_scannedJunkItems, _junkAllSelected);
 
             BtnToggleSelectJunk.Content = _junkAllSelected ? "✕ Deselect All" : "✓ Select All";
             LvwJunkItems.Items.Refresh();

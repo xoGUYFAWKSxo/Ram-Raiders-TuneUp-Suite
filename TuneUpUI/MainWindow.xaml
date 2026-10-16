@@ -435,7 +435,7 @@
 
                                 <!-- WrapPanel: on a narrow window the buttons move to a second line instead of being cut off. -->
                                 <WrapPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                    <Button x:Name="BtnToggleSelectJunk" Content="&#x2713; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False"/>
+                                    <Button x:Name="BtnToggleSelectJunk" Content="&#x2713; Select All" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Click="BtnToggleSelectJunk_Click" IsEnabled="False" ToolTip="Select All leaves saved passwords, cookies, history and other personal browser data unticked. Tick those by hand if you want them deleted." ToolTipService.ShowOnDisabled="True"/>
                                     <Button x:Name="BtnCancelCleaner" Content="Cancel" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" Padding="15,5" Visibility="Collapsed" Click="BtnCancelCleaner_Click"/>
                                     <Button Content="Scan for Junk Files" Style="{StaticResource OutlineButton}" Margin="0,0,10,6" MinWidth="160" Click="BtnScanJunk_Click"/>
                                     <Button x:Name="BtnCleanJunk" Content="Empty Junk Files" Style="{StaticResource PremiumButton}" Margin="0,0,0,6" MinWidth="160" IsEnabled="False" Click="BtnCleanJunk_Click"/>
