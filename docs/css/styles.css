@@ -34,6 +34,7 @@
 }
 
 html {
+    color-scheme: dark;
     scroll-behavior: smooth;
     font-size: 16px;
     background-color: var(--bg-deep);
@@ -126,12 +127,11 @@ a:hover {
     padding: 0 2rem;
 }
 
+/* Solid colour, not a gradient clipped to the text: browser dark modes and dark-mode
+   extensions strip the gradient and leave the text transparent, so it vanished. */
 .glow-text {
-    background: var(--grad-neon);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    color: transparent;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 24px rgba(0, 240, 255, 0.35);
     display: inline-block;
 }
 
@@ -210,7 +210,8 @@ header {
 }
 
 .btn-premium {
-    background: var(--grad-neon);
+    background-color: var(--accent-indigo);
+    background-image: var(--grad-neon);
     color: #FFF;
     position: relative;
     overflow: hidden;
@@ -245,7 +246,7 @@ header {
 .btn-outline {
     background: transparent;
     color: var(--text-main);
-    border: 1px solid #3D3D4E;
+    border: 1px solid rgba(255, 255, 255, 0.28);
 }
 
 .btn-outline:hover {
